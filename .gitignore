@@ -1,2 +1,33 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+.venv/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# 环境与数据
+.env
+data/       # Settings.memory_base_path 默认 "./data/memory"
+repo/       # Settings.repo_path 默认 "./repo"
+
+# 测试与覆盖率
+.pytest_cache/
+htmlcov/
+.coverage
+
+# 前端
+web/node_modules/
+web/dist/
+
+# Docker
+pgdata/
+
+# 项目临时文件
 .superpowers/
 temp/

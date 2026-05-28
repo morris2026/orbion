@@ -39,7 +39,7 @@
 
 严格顺序依赖，每步TDD。
 
-### - [ ] 步骤 1：项目脚手架与开发环境
+### - [x] 步骤 1：项目脚手架与开发环境
 
 **增量**：FastAPI应用入口、pyproject.toml（uv管理）、docker-compose.yml（PostgreSQL only）、目录结构（app/hub/ + app/biz/）、Settings配置类、gitignore、hub/channels/static.py骨架（Vite SPA 静态文件挂载预留点）
 
