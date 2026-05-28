@@ -51,7 +51,7 @@
 
 ---
 
-### - [ ] 步骤 2：数据库schema与核心模型定义
+### - [x] 步骤 2：数据库schema与核心模型定义
 
 **增量**：migrations/001_initial.sql（8张MVP表+索引）、Event Pydantic模型、EventType枚举（8个MVP事件）、EventPayload schema（8种payload结构）、User/Project/Thread/Member/Plan/Output/Agent等全部Pydantic模型
 
