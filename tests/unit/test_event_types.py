@@ -53,6 +53,48 @@ class TestEventModel:
                 correlation_id="corr-001",
             )
 
+    def test_tc2_2_event_varchar_max_length(self) -> None:
+        """TC-2.2：VARCHAR字段超长报错（与event_log表约束对齐）"""
+        from app.hub.events.types import (
+            EVENT_PARTICIPANT_ID_MAX_LEN,
+            EVENT_PROJECT_ID_MAX_LEN,
+            EVENT_TYPE_MAX_LEN,
+            Event,
+        )
+
+        with pytest.raises(ValidationError):
+            Event(
+                event_id="evt-001",
+                project_id="x" * (EVENT_PROJECT_ID_MAX_LEN + 1),
+                event_type="DiscussionMessageCreated",
+                participant_id="user-001",
+                participant_type="human",
+                payload={},
+                correlation_id="corr-001",
+            )
+
+        with pytest.raises(ValidationError):
+            Event(
+                event_id="evt-001",
+                project_id="proj-1",
+                event_type="x" * (EVENT_TYPE_MAX_LEN + 1),
+                participant_id="user-001",
+                participant_type="human",
+                payload={},
+                correlation_id="corr-001",
+            )
+
+        with pytest.raises(ValidationError):
+            Event(
+                event_id="evt-001",
+                project_id="proj-1",
+                event_type="DiscussionMessageCreated",
+                participant_id="x" * (EVENT_PARTICIPANT_ID_MAX_LEN + 1),
+                participant_type="human",
+                payload={},
+                correlation_id="corr-001",
+            )
+
     def test_tc2_2_event_payload_default_empty_dict(self) -> None:
         """TC-2.2：payload默认为空dict"""
         from app.hub.events.types import Event

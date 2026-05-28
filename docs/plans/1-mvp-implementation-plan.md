@@ -77,7 +77,7 @@
 
 ---
 
-### - [ ] 步骤 4：Event Store PostgreSQL持久化
+### - [x] 步骤 4：Event Store PostgreSQL持久化
 
 **增量**：EventStore类（append、get_events_by_correlation、get_events_by_project）
 
