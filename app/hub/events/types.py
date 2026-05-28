@@ -2,9 +2,15 @@
 
 from datetime import datetime
 from enum import StrEnum
-from typing import Any, Literal
+from typing import Any, Final, Literal
 
 from pydantic import BaseModel, Field
+
+# Event模型VARCHAR长度约束（与migrations/001_initial.sql event_log表对齐）
+EVENT_PROJECT_ID_MAX_LEN: Final[int] = 64
+EVENT_PARTICIPANT_ID_MAX_LEN: Final[int] = 64
+EVENT_TYPE_MAX_LEN: Final[int] = 64
+EVENT_PARTICIPANT_TYPE_MAX_LEN: Final[int] = 8
 
 
 class EventType(StrEnum):
@@ -24,10 +30,10 @@ class Event(BaseModel):
     """事件模型，与event_log表字段一一对应"""
 
     event_id: str
-    project_id: str
-    event_type: str
-    participant_id: str
-    participant_type: Literal["human", "agent"]
+    project_id: str = Field(max_length=EVENT_PROJECT_ID_MAX_LEN)
+    event_type: str = Field(max_length=EVENT_TYPE_MAX_LEN)
+    participant_id: str = Field(max_length=EVENT_PARTICIPANT_ID_MAX_LEN)
+    participant_type: Literal["human", "agent"] = Field(max_length=EVENT_PARTICIPANT_TYPE_MAX_LEN)
     payload: dict[str, Any] = Field(default_factory=dict)
     correlation_id: str
     causation_id: str | None = None
