@@ -21,11 +21,12 @@ class EventBus(Protocol):
         self,
         event_type: str,
         handler: Handler,
-    ) -> str: ...
+    ) -> str: ...  # 返回subscription_id，用于unsubscribe取消订阅
     def unsubscribe(self, subscription_id: str) -> None: ...
 
 
 async def _safe_run(handler: Handler, payload: dict[str, Any]) -> None:
+    """handler异常隔离：一个handler失败不阻塞其他handler，异常仅记录日志"""
     try:
         await handler(payload)
     except Exception:

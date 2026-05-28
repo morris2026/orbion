@@ -33,12 +33,12 @@ class EventStore:
             "(event_id, project_id, event_type, participant_id, participant_type, "
             "payload, correlation_id, causation_id) "
             "VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, $8)",
-            UUID(event.event_id),
+            UUID(event.event_id),  # asyncpg要求UUID列用Python UUID对象
             event.project_id,
             event.event_type,
             event.participant_id,
             event.participant_type,
-            json.dumps(event.payload),
+            json.dumps(event.payload),  # asyncpg要求JSONB列先序列化再::jsonb cast
             UUID(event.correlation_id),
             UUID(event.causation_id) if event.causation_id else None,
         )
