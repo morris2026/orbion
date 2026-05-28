@@ -65,7 +65,7 @@
 
 ---
 
-### - [ ] 步骤 3：EventBus抽象接口与进程内实现
+### - [x] 步骤 3：EventBus抽象接口与进程内实现
 
 **增量**：EventBus Protocol定义、InProcessEventBus实现（asyncio.create_task调度handler）
 
