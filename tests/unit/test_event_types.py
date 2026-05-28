@@ -113,8 +113,8 @@ class TestEventModel:
 class TestEventTypeEnum:
     """TC-2.3：EventType枚举完整性"""
 
-    def test_tc2_3_all_8_event_types_exist(self) -> None:
-        """TC-2.3：8个MVP事件类型全部存在"""
+    def test_tc2_3_all_9_event_types_exist(self) -> None:
+        """TC-2.3：9个MVP事件类型全部存在"""
         from app.hub.events.types import EventType
 
         expected_types = [
@@ -126,6 +126,7 @@ class TestEventTypeEnum:
             "TaskOutputGenerated",
             "TaskOutputApproved",
             "TaskOutputRevisionRequested",
+            "MemberAdded",
         ]
         actual_names = [e.value for e in EventType]
         assert set(expected_types) == set(actual_names), f"缺少事件类型: {set(expected_types) - set(actual_names)}"
@@ -482,3 +483,89 @@ class TestTaskOutputRevisionRequestedPayload:
                 output_id="o-1",
                 task_id="task-1",
             )
+
+
+class TestMemberAddedPayload:
+    """TC-2.4.9：MemberAdded payload"""
+
+    def test_tc2_4_9_valid_creation(self) -> None:
+        """TC-2.4.9：正常创建"""
+        from app.hub.events.types import MemberAddedPayload
+
+        payload = MemberAddedPayload(
+            participant_id="user-1",
+            project_id="proj-1",
+            participant_type="human",
+            display_name="张三",
+        )
+        assert payload.participant_id == "user-1"
+        assert payload.project_id == "proj-1"
+        assert payload.participant_type == "human"
+        assert payload.display_name == "张三"
+        assert payload.roles == []
+
+    def test_tc2_4_9_participant_id_required(self) -> None:
+        """TC-2.4.9：participant_id缺失报错"""
+        from app.hub.events.types import MemberAddedPayload
+
+        with pytest.raises(ValidationError):
+            MemberAddedPayload(  # type: ignore[call-arg]
+                project_id="proj-1",
+                participant_type="human",
+                display_name="张三",
+            )
+
+    def test_tc2_4_9_project_id_required(self) -> None:
+        """TC-2.4.9：project_id缺失报错"""
+        from app.hub.events.types import MemberAddedPayload
+
+        with pytest.raises(ValidationError):
+            MemberAddedPayload(  # type: ignore[call-arg]
+                participant_id="user-1",
+                participant_type="human",
+                display_name="张三",
+            )
+
+    def test_tc2_4_9_display_name_required(self) -> None:
+        """TC-2.4.9：display_name缺失报错"""
+        from app.hub.events.types import MemberAddedPayload
+
+        with pytest.raises(ValidationError):
+            MemberAddedPayload(  # type: ignore[call-arg]
+                participant_id="user-1",
+                project_id="proj-1",
+                participant_type="human",
+            )
+
+    def test_tc2_4_9_participant_type_invalid(self) -> None:
+        """TC-2.4.9：participant_type非法值报错"""
+        from app.hub.events.types import MemberAddedPayload
+
+        with pytest.raises(ValidationError):
+            MemberAddedPayload(
+                participant_id="user-1",
+                project_id="proj-1",
+                participant_type="robot",  # type: ignore[arg-type]
+                display_name="张三",
+            )
+
+    def test_tc2_4_9_roles_default_empty_list(self) -> None:
+        """TC-2.4.9：roles默认空列表"""
+        from app.hub.events.types import MemberAddedPayload
+
+        payload = MemberAddedPayload(
+            participant_id="user-1",
+            project_id="proj-1",
+            participant_type="human",
+            display_name="张三",
+        )
+        assert payload.roles == []
+
+        payload_with_roles = MemberAddedPayload(
+            participant_id="user-1",
+            project_id="proj-1",
+            participant_type="human",
+            display_name="张三",
+            roles=["owner"],
+        )
+        assert payload_with_roles.roles == ["owner"]

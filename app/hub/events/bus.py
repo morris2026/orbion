@@ -38,11 +38,19 @@ class InProcessEventBus:
 
     def __init__(self) -> None:
         self._handlers: dict[str, list[tuple[str, Handler]]] = defaultdict(list)
+        self._pending: set[asyncio.Task[None]] = set()
 
     async def publish(self, event_type: str, payload: dict[str, Any]) -> None:
         handlers = self._handlers.get(event_type, [])
         for _sub_id, handler in handlers:
-            asyncio.create_task(_safe_run(handler, payload))
+            task = asyncio.create_task(_safe_run(handler, payload))
+            self._pending.add(task)
+            task.add_done_callback(self._pending.discard)
+
+    async def wait_for_pending(self) -> None:
+        """等待所有通过publish调度的handler完成"""
+        if self._pending:
+            await asyncio.gather(*self._pending)
 
     def subscribe(
         self,
