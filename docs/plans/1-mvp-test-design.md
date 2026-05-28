@@ -58,7 +58,7 @@
 
 - **类型**：UT
 - **主体流程**：遍历 EventType 枚举成员
-- **检查项**：8个MVP事件类型全部存在（DiscussionMessageCreated、DiscussionSummaryGenerated、ExecutionPlanProposed、ExecutionPlanApproved、ExecutionPlanRejected、TaskOutputGenerated、TaskOutputApproved、TaskOutputRevisionRequested）；值与字符串名称一致
+- **检查项**：9个MVP事件类型全部存在（DiscussionMessageCreated、DiscussionSummaryGenerated、ExecutionPlanProposed、ExecutionPlanApproved、ExecutionPlanRejected、TaskOutputGenerated、TaskOutputApproved、TaskOutputRevisionRequested、MemberAdded）；值与字符串名称一致
 
 ### TC-2.4 EventPayload schema结构与字段级验证
 
@@ -111,6 +111,12 @@
 - **类型**：UT
 - **主体流程**：创建 TaskOutputRevisionRequested 实例（output_id, task_id, issues, suggestions）→ 测试字段缺失
 - **检查项**：正常创建成功；output_id/task_id（str）必填；issues（list[str]）/suggestions（list[str]）必填
+
+#### TC-2.4.9 MemberAdded payload
+
+- **类型**：UT
+- **主体流程**：创建 MemberAdded 实例（participant_id, project_id, participant_type, display_name, roles）→ 测试字段缺失 → 测试默认值
+- **检查项**：正常创建成功；participant_id/project_id/display_name（str）必填；participant_type 限定 human/agent；roles（list[str]）默认空列表
 
 ### TC-2.5 User模型校验
 
@@ -262,10 +268,10 @@
 - **主体流程**：分别publish TaskOutputApproved和TaskOutputRevisionRequested → 投影更新 → 查询
 - **检查项**：Approved后状态为"approved"；RevisionRequested后状态为"revision_requested"
 
-### TC-5.8 人类注册/成员添加 → project_members投影
+### TC-5.8 MemberAdded → project_members投影
 
 - **类型**：集成
-- **主体流程**：publish成员添加事件 → 投影更新project_members → 查询
+- **主体流程**：publish MemberAdded事件 → 投影更新project_members → 查询
 - **检查项**：成员信息正确（participant_id/project_id/type/display_name/roles）
 
 ### TC-5.9 投影查询返回结构化数据
@@ -540,11 +546,11 @@
 - **主体流程**：建立SSE连接 → 触发Agent产出摘要 → 等待SSE推送
 - **检查项**：SSE收到event=summary_generated
 
-### TC-10.4 所有8种业务事件+agent_status_changed通过SSE推送
+### TC-10.4 所有9种业务事件+agent_status_changed通过SSE推送
 
 - **类型**：集成
-- **主体流程**：建立SSE连接 → 分别触发8种业务事件和1种Agent状态事件 → 等待SSE推送
-- **检查项**：每种事件都有对应SSE推送（共9种SSE event类型）
+- **主体流程**：建立SSE连接 → 分别触发9种业务事件和1种Agent状态事件 → 等待SSE推送
+- **检查项**：每种事件都有对应SSE推送（共10种SSE event类型）
 
 ### TC-10.5 无JWT→连接拒绝
 

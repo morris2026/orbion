@@ -14,7 +14,7 @@ EVENT_PARTICIPANT_TYPE_MAX_LEN: Final[int] = 8
 
 
 class EventType(StrEnum):
-    """8个MVP事件类型"""
+    """MVP事件类型"""
 
     DiscussionMessageCreated = "DiscussionMessageCreated"
     DiscussionSummaryGenerated = "DiscussionSummaryGenerated"
@@ -24,6 +24,7 @@ class EventType(StrEnum):
     TaskOutputGenerated = "TaskOutputGenerated"
     TaskOutputApproved = "TaskOutputApproved"
     TaskOutputRevisionRequested = "TaskOutputRevisionRequested"
+    MemberAdded = "MemberAdded"
 
 
 class Event(BaseModel):
@@ -122,3 +123,13 @@ class TaskOutputRevisionRequestedPayload(BaseModel):
     task_id: str
     issues: list[str]
     suggestions: list[str]
+
+
+class MemberAddedPayload(BaseModel):
+    """MemberAdded payload"""
+
+    participant_id: str
+    project_id: str
+    participant_type: Literal["human", "agent"]
+    display_name: str
+    roles: list[str] = Field(default_factory=list)

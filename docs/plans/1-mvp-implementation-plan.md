@@ -53,7 +53,7 @@
 
 ### - [x] 步骤 2：数据库schema与核心模型定义
 
-**增量**：migrations/001_initial.sql（8张MVP表+索引）、Event Pydantic模型、EventType枚举（8个MVP事件）、EventPayload schema（8种payload结构）、User/Project/Thread/Member/Plan/Output/Agent等全部Pydantic模型
+**增量**：migrations/001_initial.sql（8张MVP表+索引）、Event Pydantic模型、EventType枚举（9个MVP事件）、EventPayload schema（9种payload结构）、User/Project/Thread/Member/Plan/Output/Agent等全部Pydantic模型
 
 > 本步包含 8 张表 SQL + 16+ Pydantic 模型类，工作量约为其他基础层步骤的 2-3 倍。
 
@@ -89,9 +89,9 @@
 
 ---
 
-### - [ ] 步骤 5：CQRS投影更新与查询
+### - [x] 步骤 5：CQRS投影更新与查询
 
-**增量**：EventProjections类（4个MVP投影的更新和查询方法）、投影作为EventBus subscriber注册。触发事件来源：thread_messages投影由DiscussionMessageCreated/DiscussionSummaryGenerated触发、execution_plans投影由ExecutionPlanProposed/Approved/Rejected触发、task_outputs投影由TaskOutputGenerated/Approved/RevisionRequested触发、project_members投影由成员添加（含创建者自动成为Owner）和Agent注册触发
+**增量**：EventProjections类（4个MVP投影的更新和查询方法）、投影作为EventBus subscriber注册。触发事件来源：thread_messages投影由DiscussionMessageCreated/DiscussionSummaryGenerated触发、execution_plans投影由ExecutionPlanProposed/Approved/Rejected触发、task_outputs投影由TaskOutputGenerated/Approved/RevisionRequested触发、project_members投影由MemberAdded触发
 
 **依赖**：步骤3（EventBus）、步骤4（EventStore）
 
@@ -155,7 +155,7 @@
 
 ### - [ ] 步骤 10：SSE推送与事件流端点
 
-**增量**：channels模块（ChannelAdapter Protocol、SSEChannel实现）、GET /events/stream端点、SSE连接管理（按project_id分组）、SSE推送9种事件类型
+**增量**：channels模块（ChannelAdapter Protocol、SSEChannel实现）、GET /events/stream端点、SSE连接管理（按project_id分组）、SSE推送10种事件类型（9业务+agent_status_changed）
 
 **依赖**：步骤9（消息API，SSE推送消息事件）
 
@@ -318,7 +318,7 @@
 | 设计文档 | 覆盖内容 | 对应步骤 |
 |---------|---------|---------|
 | 1.1 MVP总体设计 | 单服务架构、模块划分(hub/biz)、模块间通信(EventBus)、外部依赖、启动流程、开发环境、测试策略、部署、CI/CD(MVP不做)、static.py骨架 | 1, 3, 8-16, 17(static.py配置), 20-21 |
-| 1.2 事件基础设施 | EventBus Protocol、InProcessEventBus、EventStore、CQRS投影(4视图)、EventPayload Schema(8种)、correlation_id/causation_id、ChannelAdapter Protocol、SSEChannel | 2-5, 10(ChannelAdapter+SSE), 12 |
+| 1.2 事件基础设施 | EventBus Protocol、InProcessEventBus、EventStore、CQRS投影(4视图)、EventPayload Schema(9种)、correlation_id/causation_id、ChannelAdapter Protocol、SSEChannel | 2-5, 10(ChannelAdapter+SSE), 12 |
 | 1.3 数据模型 | 8张MVP表+索引、全部Pydantic模型、迁移策略、项目边界硬隔离、读写分离 | 2, 4-5, 8-9, 14-15 |
 | 1.4 权限模型 | HumanPermission/AgentPermission bitmask、角色映射(4人类+3Agent)、compute_permissions、require_permission依赖、各端点权限要求 | 7, 8-15 |
 | 1.5 API与认证 | JWT认证流程、18个REST端点+1个SSE流、FastAPI路由组织、错误响应格式 | 6, 8-10, 11, 14-15 |
