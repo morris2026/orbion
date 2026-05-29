@@ -1,8 +1,13 @@
 """TC-1.1~TC-1.3：FastAPI应用启动与Settings配置测试"""
 
-import sys
+import json
+from pathlib import Path
+from tempfile import NamedTemporaryFile
 
+import pytest
 from pytest import MonkeyPatch
+
+from app.config import OrbionConfigSchema, PostgresConfigSchema, Settings
 
 
 def test_tc1_1_app_exists_and_title() -> None:
@@ -15,31 +20,93 @@ def test_tc1_1_app_exists_and_title() -> None:
 
 def test_tc1_2_settings_defaults() -> None:
     """TC-1.2：无环境变量时Settings默认值正确"""
-    from app.config import Settings
-
     s = Settings()
-    assert s.postgres_url == "postgresql://orbion:orbion_dev@localhost:5432/orbion"
+    assert s.postgres.url == "postgresql://orbion:orbion_dev@localhost:5432/orbion"
     assert s.jwt_secret == "orbion-dev-secret"
     assert s.anthropic_api_key == ""
     assert s.repo_path == "./repo"
     assert s.memory_base_path == "./data/memory"
+    assert s.event_store == "postgres"
+    assert s.event_projections == "postgres"
+    assert s.postgres.host == "localhost"
+    assert s.postgres.port == 5432
+    assert s.postgres.db == "orbion"
+    assert s.postgres.user == "orbion"
+    assert s.postgres.password == "orbion_dev"
 
 
 def test_tc1_3_settings_env_override(monkeypatch: MonkeyPatch) -> None:
     """TC-1.3：环境变量覆盖Settings对应字段"""
-    monkeypatch.setenv("ORBION_POSTGRES_URL", "postgresql://test:test@localhost:5432/testdb")
+    monkeypatch.setenv("ORBION_POSTGRES__HOST", "testhost")
+    monkeypatch.setenv("ORBION_POSTGRES__PORT", "5433")
+    monkeypatch.setenv("ORBION_POSTGRES__DB", "testdb")
+    monkeypatch.setenv("ORBION_POSTGRES__USER", "testuser")
+    monkeypatch.setenv("ORBION_POSTGRES__PASSWORD", "testpass")
     monkeypatch.setenv("ORBION_JWT_SECRET", "my-secret")
     monkeypatch.setenv("ORBION_ANTHROPIC_API_KEY", "sk-test-key")
     monkeypatch.setenv("ORBION_REPO_PATH", "/tmp/repo")
     monkeypatch.setenv("ORBION_MEMORY_BASE_PATH", "/tmp/memory")
 
-    # 清除模块缓存，确保环境变量在构造时生效
-    sys.modules.pop("app.config", None)
-    from app.config import Settings
-
     s = Settings()
-    assert s.postgres_url == "postgresql://test:test@localhost:5432/testdb"
+    assert s.postgres.url == "postgresql://testuser:testpass@testhost:5433/testdb"
     assert s.jwt_secret == "my-secret"
     assert s.anthropic_api_key == "sk-test-key"
     assert s.repo_path == "/tmp/repo"
     assert s.memory_base_path == "/tmp/memory"
+
+
+def test_orbion_config_schema_forbid_secrets() -> None:
+    """OrbionConfigSchema extra='forbid' 阻止密钥字段出现在配置中"""
+    with pytest.raises(Exception, match="Extra inputs are not permitted"):
+        OrbionConfigSchema.model_validate({"jwt_secret": "secret"})
+    with pytest.raises(Exception, match="Extra inputs are not permitted"):
+        OrbionConfigSchema.model_validate({"anthropic_api_key": "sk-key"})
+
+
+def test_postgres_config_schema_forbid_password() -> None:
+    """PostgresConfigSchema extra='forbid' 阻止密码出现在外部配置中"""
+    with pytest.raises(Exception, match="Extra inputs are not permitted"):
+        PostgresConfigSchema.model_validate({"password": "secret"})
+
+
+def test_orbion_config_schema_defaults() -> None:
+    """OrbionConfigSchema 空输入返回完整默认值"""
+    config = OrbionConfigSchema.model_validate({})
+    assert config.event_store == "postgres"
+    assert config.postgres.host == "localhost"
+    assert config.postgres.port == 5432
+
+
+def test_config_file_parser_no_file_fallback() -> None:
+    """无配置文件时回退到 OrbionConfigSchema 默认值"""
+    from app.config import OrbionConfigFileParser
+
+    monkeypatch = MonkeyPatch()
+    monkeypatch.setenv("ORBION_CONFIG_PATH", "/nonexistent/orbion.json")
+    source = OrbionConfigFileParser(Settings)
+    data = source()
+    assert data["postgres"]["host"] == "localhost"
+    assert data["event_store"] == "postgres"
+    monkeypatch.undo()
+
+
+def test_config_file_parser_reads_file() -> None:
+    """配置文件存在时正确加载并校验"""
+    from app.config import OrbionConfigFileParser
+
+    with NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
+        json.dump({"postgres": {"host": "custom-host", "port": 5433}}, f)
+        f.flush()
+        config_path = f.name
+
+    monkeypatch = MonkeyPatch()
+    monkeypatch.setenv("ORBION_CONFIG_PATH", config_path)
+    try:
+        source = OrbionConfigFileParser(Settings)
+        data = source()
+        assert data["postgres"]["host"] == "custom-host"
+        assert data["postgres"]["port"] == 5433
+        assert data["postgres"]["db"] == "orbion"  # 默认值填充
+    finally:
+        monkeypatch.undo()
+        Path(config_path).unlink()

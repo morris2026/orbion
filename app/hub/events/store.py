@@ -1,89 +1,58 @@
-"""EventStore PostgreSQL持久化"""
+"""EventStoreProtocol定义与注册表"""
 
-import json
-from typing import Any
-from uuid import UUID
-
-import asyncpg
+import importlib
+from abc import ABC, abstractmethod
 
 from app.hub.events.types import Event
 
 
-class EventStore:
-    """事件持久化存储，PostgreSQL event_log表"""
+class EventStoreProtocol(ABC):
+    """事件持久化存储抽象接口"""
 
-    def __init__(self, postgres_url: str) -> None:
-        self._url = postgres_url
-        self._pool: asyncpg.Pool | None = None
-
-    async def connect(self) -> None:
-        self._pool = await asyncpg.create_pool(self._url, min_size=2, max_size=10)
-
-    async def close(self) -> None:
-        if self._pool:
-            await self._pool.close()
-
-    _MSG_NOT_CONNECTED = "EventStore未连接，请先调用connect()"
-
-    async def append(self, event: Event) -> None:
-        if self._pool is None:
-            raise RuntimeError(self._MSG_NOT_CONNECTED)
-        await self._pool.execute(
-            "INSERT INTO event_log "
-            "(event_id, project_id, event_type, participant_id, participant_type, "
-            "payload, correlation_id, causation_id) "
-            "VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, $8)",
-            UUID(event.event_id),  # asyncpg要求UUID列用Python UUID对象
-            event.project_id,
-            event.event_type,
-            event.participant_id,
-            event.participant_type,
-            json.dumps(event.payload),  # asyncpg要求JSONB列先序列化再::jsonb cast
-            UUID(event.correlation_id),
-            UUID(event.causation_id) if event.causation_id else None,
-        )
-
-    async def get_events_by_correlation(self, correlation_id: str, limit: int = 100) -> list[Event]:
-        if self._pool is None:
-            raise RuntimeError(self._MSG_NOT_CONNECTED)
-        rows = await self._pool.fetch(
-            "SELECT * FROM event_log WHERE correlation_id = $1 ORDER BY created_at ASC LIMIT $2",
-            UUID(correlation_id),
-            limit,
-        )
-        return [_row_to_event(row) for row in rows]
-
+    @abstractmethod
+    async def connect(self) -> None: ...
+    @abstractmethod
+    async def close(self) -> None: ...
+    @abstractmethod
+    async def append(self, event: Event) -> None: ...
+    @abstractmethod
+    async def get_events_by_correlation(self, correlation_id: str, limit: int = 100) -> list[Event]: ...
+    @abstractmethod
     async def get_events_by_project(
         self, project_id: str, event_type: str | None = None, limit: int = 50
-    ) -> list[Event]:
-        if self._pool is None:
-            raise RuntimeError(self._MSG_NOT_CONNECTED)
-        if event_type is not None:
-            rows = await self._pool.fetch(
-                "SELECT * FROM event_log WHERE project_id = $1 AND event_type = $2 ORDER BY created_at DESC LIMIT $3",
-                project_id,
-                event_type,
-                limit,
-            )
-        else:
-            rows = await self._pool.fetch(
-                "SELECT * FROM event_log WHERE project_id = $1 ORDER BY created_at DESC LIMIT $2",
-                project_id,
-                limit,
-            )
-        return [_row_to_event(row) for row in rows]
+    ) -> list[Event]: ...
 
 
-def _row_to_event(row: asyncpg.Record) -> Event:
-    record: dict[str, Any] = dict(row)
-    # asyncpg返回UUID对象，转换为str以匹配Event模型
-    for key in ("event_id", "correlation_id", "causation_id"):
-        if record.get(key) is not None:
-            record[key] = str(record[key])
-    # asyncpg返回JSONB为str，反序列化为dict；若未来版本直接返回dict则无需转换
-    payload = record.get("payload")
-    if isinstance(payload, str):
-        record["payload"] = json.loads(payload)
-    elif isinstance(payload, dict):
-        pass
-    return Event(**record)
+# 注册表：实现名 → 模块路径.类名
+STORE_IMPLEMENTATIONS = {
+    "postgres": "app.hub.events.postgres_store.PostgresEventStore",
+}
+
+
+def load_store_impl(name: str) -> type[EventStoreProtocol]:
+    """按注册表动态加载EventStore实现类
+
+    Args:
+        name: 注册表中的实现名，如 "postgres"
+
+    Returns:
+        实现类（未实例化），保证为 EventStoreProtocol 的子类
+
+    Raises:
+        ValueError: 实现名未在注册表中注册，或加载的类未继承 EventStoreProtocol
+    """
+    impl_path = STORE_IMPLEMENTATIONS.get(name)
+    if impl_path is None:
+        raise ValueError(f"未注册的EventStore实现: {name}，可选: {list(STORE_IMPLEMENTATIONS.keys())}")
+    module_path, class_name = impl_path.rsplit(".", 1)
+    try:
+        module = importlib.import_module(module_path)
+    except ModuleNotFoundError as e:
+        raise ValueError(f"注册表引用的实现模块不存在: {module_path}") from e
+    try:
+        impl_cls = getattr(module, class_name)
+    except AttributeError as e:
+        raise ValueError(f"模块 {module_path} 中不存在类 {class_name}") from e
+    if not isinstance(impl_cls, type) or not issubclass(impl_cls, EventStoreProtocol):
+        raise ValueError(f"实现类 {class_name} 未继承 EventStoreProtocol")
+    return impl_cls

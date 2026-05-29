@@ -1,29 +1,35 @@
-"""TC-2.1：数据库迁移执行集成测试"""
+"""PostgreSQL基础设施验证：连接 + migration"""
 
 import asyncpg
-import pytest
 
 from app.config import Settings
 
 
-@pytest.mark.asyncio
-async def test_tc2_1_migration_creates_tables_and_indexes() -> None:
-    """TC-2.1：执行migrations/001_initial.sql，验证8张表和所有索引创建成功"""
+async def test_postgres_connection() -> None:
+    """asyncpg连接 postgres.url，SELECT 1成功"""
     settings = Settings()
-    conn = await asyncpg.connect(settings.postgres_url)
+    conn = await asyncpg.connect(settings.postgres.url)
     try:
-        # 清理已有表，确保迁移在干净数据库上执行
+        result = await conn.fetchval("SELECT 1")
+        assert result == 1
+    finally:
+        await conn.close()
+
+
+async def test_postgres_migration_creates_tables_and_indexes() -> None:
+    """执行migrations/001_initial.sql，验证8张表和所有索引创建成功"""
+    settings = Settings()
+    conn = await asyncpg.connect(settings.postgres.url)
+    try:
         await conn.execute(
             "DROP TABLE IF EXISTS task_outputs, execution_plans, thread_messages, "
             "threads, project_members, projects, users, event_log CASCADE"
         )
 
-        # 读取迁移文件并执行
         with open("migrations/001_initial.sql") as f:
             migration_sql = f.read()
         await conn.execute(migration_sql)
 
-        # 验证8张表全部创建成功
         tables = await conn.fetch("SELECT tablename FROM pg_tables WHERE schemaname = 'public'")
         table_names = {row["tablename"] for row in tables}
         expected_tables = {
@@ -38,7 +44,6 @@ async def test_tc2_1_migration_creates_tables_and_indexes() -> None:
         }
         assert expected_tables <= table_names, f"缺少表: {expected_tables - table_names}"
 
-        # 验证所有索引创建成功
         indexes = await conn.fetch("SELECT indexname FROM pg_indexes WHERE schemaname = 'public'")
         index_names = {row["indexname"] for row in indexes}
         expected_indexes = {

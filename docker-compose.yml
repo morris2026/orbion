@@ -10,5 +10,22 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql/data
 
+  orbion:
+    build: .
+    environment:
+      ORBION_JWT_SECRET: ${ORBION_JWT_SECRET:-orbion-dev-secret}
+      ORBION_ANTHROPIC_API_KEY: ${ORBION_ANTHROPIC_API_KEY:-}
+      ORBION_POSTGRES__PASSWORD: ${ORBION_POSTGRES__PASSWORD:-orbion_dev}
+      ORBION_POSTGRES__HOST: postgres
+      ORBION_CONFIG_PATH: /app/orbion.json
+    volumes:
+      - ./orbion.json:/app/orbion.json:ro
+      - ./repo:/app/repo
+      - ./data:/app/data
+    ports:
+      - "8000:8000"
+    depends_on:
+      - postgres
+
 volumes:
   pgdata:
