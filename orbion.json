@@ -1,0 +1,12 @@
+{
+  "event_store": "postgres",
+  "event_projections": "postgres",
+  "postgres": {
+    "host": "localhost",
+    "port": 5432,
+    "db": "orbion",
+    "user": "orbion"
+  },
+  "repo_path": "./repo",
+  "memory_base_path": "./data/memory"
+}

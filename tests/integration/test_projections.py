@@ -1,4 +1,4 @@
-"""TC-5.1–TC-5.11: CQRS投影更新与查询"""
+"""TC-5.1–TC-5.11: EventProjections能力验证 — 遍历配套组合"""
 
 from collections.abc import AsyncGenerator
 from typing import Any, Literal
@@ -7,20 +7,15 @@ from uuid import UUID, uuid4
 import asyncpg
 import pytest
 
-from app.config import Settings
 from app.hub.events.bus import InProcessEventBus
-from app.hub.events.projections import EventProjections
-from app.hub.events.store import EventStore
+from app.hub.events.projections import EventProjectionsProtocol, load_projections_impl
+from app.hub.events.store import EventStoreProtocol, load_store_impl
 from app.hub.events.types import Event
 
-
-@pytest.fixture
-async def db_pool() -> AsyncGenerator[asyncpg.Pool, None]:
-    """创建数据库连接池"""
-    settings = Settings()
-    pool = await asyncpg.create_pool(settings.postgres_url, min_size=2, max_size=10)
-    yield pool
-    await pool.close()
+# 测试中定义的配套组合：projections实现 → 配套store实现
+TEST_PROJECTION_STORE_PAIRING = {
+    "postgres": "postgres",
+}
 
 
 @pytest.fixture
@@ -29,28 +24,22 @@ async def event_bus() -> InProcessEventBus:
     return InProcessEventBus()
 
 
-@pytest.fixture
-async def event_store(db_pool: asyncpg.Pool) -> EventStore:
-    """创建已连接的EventStore"""
-    store = EventStore(Settings().postgres_url)
+@pytest.fixture(params=list(TEST_PROJECTION_STORE_PAIRING.keys()))
+async def event_store(request: pytest.FixtureRequest) -> AsyncGenerator[EventStoreProtocol, None]:
+    """创建已连接的EventStore，按配套组合与projections配对"""
+    store_name = TEST_PROJECTION_STORE_PAIRING[request.param]
+    store_cls = load_store_impl(store_name)
+    store: EventStoreProtocol = store_cls()
     await store.connect()
-    return store
+    yield store
+    await store.close()
 
 
-@pytest.fixture
-async def projections(event_bus: InProcessEventBus, db_pool: asyncpg.Pool) -> AsyncGenerator[EventProjections, None]:
-    """创建EventProjections实例，注册为EventBus subscriber"""
-    settings = Settings()
-    proj = EventProjections(event_bus, settings.postgres_url)
-    await proj.connect()
-    yield proj
-    await proj.close()
-
-
-@pytest.fixture
-async def clean_tables(db_pool: asyncpg.Pool) -> asyncpg.Pool:
-    """清空投影表和event_log，确保测试数据隔离"""
-    async with db_pool.acquire() as conn:
+@pytest.fixture(autouse=True)
+async def clean_tables(postgres_pool: asyncpg.Pool) -> AsyncGenerator[None, None]:
+    """每个测试结束后清理所有表数据"""
+    yield
+    async with postgres_pool.acquire() as conn:
         await conn.execute("DELETE FROM task_outputs")
         await conn.execute("DELETE FROM execution_plans")
         await conn.execute("DELETE FROM thread_messages")
@@ -58,7 +47,18 @@ async def clean_tables(db_pool: asyncpg.Pool) -> asyncpg.Pool:
         await conn.execute("DELETE FROM threads")
         await conn.execute("DELETE FROM projects")
         await conn.execute("DELETE FROM event_log")
-    return db_pool
+
+
+@pytest.fixture(params=list(TEST_PROJECTION_STORE_PAIRING.keys()))
+async def projections(
+    request: pytest.FixtureRequest, event_bus: InProcessEventBus
+) -> AsyncGenerator[EventProjectionsProtocol, None]:
+    """创建EventProjections实例，遍历配套组合（与event_store同params驱动）"""
+    impl_cls = load_projections_impl(request.param)
+    proj: EventProjectionsProtocol = impl_cls(event_bus)
+    await proj.connect()
+    yield proj
+    await proj.close()
 
 
 def make_event(
@@ -83,9 +83,9 @@ def make_event(
     )
 
 
-async def seed_project(db_pool: asyncpg.Pool, project_id: str, name: str = "测试项目") -> None:
+async def seed_project(postgres_pool: asyncpg.Pool, project_id: str, name: str = "测试项目") -> None:
     """向projects表插入测试项目"""
-    async with db_pool.acquire() as conn:
+    async with postgres_pool.acquire() as conn:
         await conn.execute(
             "INSERT INTO projects (id, name) VALUES ($1, $2)",
             UUID(project_id),
@@ -93,9 +93,9 @@ async def seed_project(db_pool: asyncpg.Pool, project_id: str, name: str = "测�
         )
 
 
-async def seed_thread(db_pool: asyncpg.Pool, thread_id: str, project_id: str, created_by: str = "user-1") -> None:
+async def seed_thread(postgres_pool: asyncpg.Pool, thread_id: str, project_id: str, created_by: str = "user-1") -> None:
     """向threads表插入测试线程"""
-    async with db_pool.acquire() as conn:
+    async with postgres_pool.acquire() as conn:
         await conn.execute(
             "INSERT INTO threads (id, project_id, title, created_by) VALUES ($1, $2, $3, $4)",
             UUID(thread_id),
@@ -110,16 +110,15 @@ class TestDiscussionMessageCreatedProjection:
 
     async def test_message_created_updates_thread_messages(
         self,
-        clean_tables: asyncpg.Pool,
-        db_pool: asyncpg.Pool,
+        postgres_pool: asyncpg.Pool,
         event_bus: InProcessEventBus,
-        event_store: EventStore,
-        projections: EventProjections,
+        event_store: EventStoreProtocol,
+        projections: EventProjectionsProtocol,
     ) -> None:
         project_id = str(uuid4())
         thread_id = str(uuid4())
-        await seed_project(db_pool, project_id)
-        await seed_thread(db_pool, thread_id, project_id)
+        await seed_project(postgres_pool, project_id)
+        await seed_thread(postgres_pool, thread_id, project_id)
 
         payload = {
             "thread_id": thread_id,
@@ -164,16 +163,15 @@ class TestDiscussionSummaryGeneratedProjection:
 
     async def test_summary_generated_updates_thread_messages(
         self,
-        clean_tables: asyncpg.Pool,
-        db_pool: asyncpg.Pool,
+        postgres_pool: asyncpg.Pool,
         event_bus: InProcessEventBus,
-        event_store: EventStore,
-        projections: EventProjections,
+        event_store: EventStoreProtocol,
+        projections: EventProjectionsProtocol,
     ) -> None:
         project_id = str(uuid4())
         thread_id = str(uuid4())
-        await seed_project(db_pool, project_id)
-        await seed_thread(db_pool, thread_id, project_id)
+        await seed_project(postgres_pool, project_id)
+        await seed_thread(postgres_pool, thread_id, project_id)
 
         payload = {
             "thread_id": thread_id,
@@ -219,16 +217,15 @@ class TestExecutionPlanProposedProjection:
 
     async def test_plan_proposed_creates_execution_plan(
         self,
-        clean_tables: asyncpg.Pool,
-        db_pool: asyncpg.Pool,
+        postgres_pool: asyncpg.Pool,
         event_bus: InProcessEventBus,
-        event_store: EventStore,
-        projections: EventProjections,
+        event_store: EventStoreProtocol,
+        projections: EventProjectionsProtocol,
     ) -> None:
         project_id = str(uuid4())
         thread_id = str(uuid4())
-        await seed_project(db_pool, project_id)
-        await seed_thread(db_pool, thread_id, project_id)
+        await seed_project(postgres_pool, project_id)
+        await seed_thread(postgres_pool, thread_id, project_id)
 
         plan_id = str(uuid4())
         payload = {
@@ -284,16 +281,15 @@ class TestExecutionPlanApprovedProjection:
 
     async def test_plan_approved_updates_status(
         self,
-        clean_tables: asyncpg.Pool,
-        db_pool: asyncpg.Pool,
+        postgres_pool: asyncpg.Pool,
         event_bus: InProcessEventBus,
-        event_store: EventStore,
-        projections: EventProjections,
+        event_store: EventStoreProtocol,
+        projections: EventProjectionsProtocol,
     ) -> None:
         project_id = str(uuid4())
         thread_id = str(uuid4())
-        await seed_project(db_pool, project_id)
-        await seed_thread(db_pool, thread_id, project_id)
+        await seed_project(postgres_pool, project_id)
+        await seed_thread(postgres_pool, thread_id, project_id)
 
         plan_id = str(uuid4())
         # 先创建proposed计划
@@ -369,16 +365,15 @@ class TestExecutionPlanRejectedProjection:
 
     async def test_plan_rejected_updates_status(
         self,
-        clean_tables: asyncpg.Pool,
-        db_pool: asyncpg.Pool,
+        postgres_pool: asyncpg.Pool,
         event_bus: InProcessEventBus,
-        event_store: EventStore,
-        projections: EventProjections,
+        event_store: EventStoreProtocol,
+        projections: EventProjectionsProtocol,
     ) -> None:
         project_id = str(uuid4())
         thread_id = str(uuid4())
-        await seed_project(db_pool, project_id)
-        await seed_thread(db_pool, thread_id, project_id)
+        await seed_project(postgres_pool, project_id)
+        await seed_thread(postgres_pool, thread_id, project_id)
 
         plan_id = str(uuid4())
         proposed_payload = {
@@ -451,17 +446,16 @@ class TestTaskOutputGeneratedProjection:
 
     async def test_output_generated_creates_task_output(
         self,
-        clean_tables: asyncpg.Pool,
-        db_pool: asyncpg.Pool,
+        postgres_pool: asyncpg.Pool,
         event_bus: InProcessEventBus,
-        event_store: EventStore,
-        projections: EventProjections,
+        event_store: EventStoreProtocol,
+        projections: EventProjectionsProtocol,
     ) -> None:
         project_id = str(uuid4())
         thread_id = str(uuid4())
         plan_id = str(uuid4())
-        await seed_project(db_pool, project_id)
-        await seed_thread(db_pool, thread_id, project_id)
+        await seed_project(postgres_pool, project_id)
+        await seed_thread(postgres_pool, thread_id, project_id)
 
         # 先创建proposed计划（task_outputs需要plan_id存在）
         proposed_payload = {
@@ -543,18 +537,17 @@ class TestTaskOutputApprovedRevisionRequestedProjection:
 
     async def test_output_approved_updates_status(
         self,
-        clean_tables: asyncpg.Pool,
-        db_pool: asyncpg.Pool,
+        postgres_pool: asyncpg.Pool,
         event_bus: InProcessEventBus,
-        event_store: EventStore,
-        projections: EventProjections,
+        event_store: EventStoreProtocol,
+        projections: EventProjectionsProtocol,
     ) -> None:
         project_id = str(uuid4())
         thread_id = str(uuid4())
         plan_id = str(uuid4())
         output_id = str(uuid4())
-        await seed_project(db_pool, project_id)
-        await seed_thread(db_pool, thread_id, project_id)
+        await seed_project(postgres_pool, project_id)
+        await seed_thread(postgres_pool, thread_id, project_id)
 
         # 创建proposed计划
         proposed_event = make_event(
@@ -659,18 +652,17 @@ class TestTaskOutputApprovedRevisionRequestedProjection:
 
     async def test_revision_requested_updates_status(
         self,
-        clean_tables: asyncpg.Pool,
-        db_pool: asyncpg.Pool,
+        postgres_pool: asyncpg.Pool,
         event_bus: InProcessEventBus,
-        event_store: EventStore,
-        projections: EventProjections,
+        event_store: EventStoreProtocol,
+        projections: EventProjectionsProtocol,
     ) -> None:
         project_id = str(uuid4())
         thread_id = str(uuid4())
         plan_id = str(uuid4())
         output_id = str(uuid4())
-        await seed_project(db_pool, project_id)
-        await seed_thread(db_pool, thread_id, project_id)
+        await seed_project(postgres_pool, project_id)
+        await seed_thread(postgres_pool, thread_id, project_id)
 
         # 创建proposed计划
         proposed_event = make_event(
@@ -781,14 +773,13 @@ class TestProjectMembersProjection:
 
     async def test_member_added_updates_project_members(
         self,
-        clean_tables: asyncpg.Pool,
-        db_pool: asyncpg.Pool,
+        postgres_pool: asyncpg.Pool,
         event_bus: InProcessEventBus,
-        event_store: EventStore,
-        projections: EventProjections,
+        event_store: EventStoreProtocol,
+        projections: EventProjectionsProtocol,
     ) -> None:
         project_id = str(uuid4())
-        await seed_project(db_pool, project_id)
+        await seed_project(postgres_pool, project_id)
 
         payload = {
             "participant_id": "user-1",
@@ -835,16 +826,15 @@ class TestProjectionQueryStructuredData:
 
     async def test_queries_return_structured_dicts(
         self,
-        clean_tables: asyncpg.Pool,
-        db_pool: asyncpg.Pool,
+        postgres_pool: asyncpg.Pool,
         event_bus: InProcessEventBus,
-        event_store: EventStore,
-        projections: EventProjections,
+        event_store: EventStoreProtocol,
+        projections: EventProjectionsProtocol,
     ) -> None:
         project_id = str(uuid4())
         thread_id = str(uuid4())
-        await seed_project(db_pool, project_id)
-        await seed_thread(db_pool, thread_id, project_id)
+        await seed_project(postgres_pool, project_id)
+        await seed_thread(postgres_pool, thread_id, project_id)
 
         payload = {
             "thread_id": thread_id,
@@ -891,8 +881,7 @@ class TestCorrelationIdChainTracking:
 
     async def test_correlation_chain_tracks_full_collaboration(
         self,
-        clean_tables: asyncpg.Pool,
-        event_store: EventStore,
+        event_store: EventStoreProtocol,
     ) -> None:
         correlation_id = str(uuid4())
 
@@ -947,14 +936,13 @@ class TestProjectMembersPrimaryKeyConstraint:
 
     async def test_duplicate_member_insert_is_idempotent(
         self,
-        clean_tables: asyncpg.Pool,
-        db_pool: asyncpg.Pool,
+        postgres_pool: asyncpg.Pool,
         event_bus: InProcessEventBus,
-        event_store: EventStore,
-        projections: EventProjections,
+        event_store: EventStoreProtocol,
+        projections: EventProjectionsProtocol,
     ) -> None:
         project_id = str(uuid4())
-        await seed_project(db_pool, project_id)
+        await seed_project(postgres_pool, project_id)
 
         payload = {
             "participant_id": "user-A",
