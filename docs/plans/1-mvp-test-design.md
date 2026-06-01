@@ -518,7 +518,7 @@
 
 - **类型**：UT
 - **主体流程**：计算各Agent角色的权限位组合值
-- **检查项**：SummaryAgent=4(POST_DISCUSSION)，DecomposeAgent=76(POST+GENERATE_PLAN+REQUEST_APPROVAL)，ExecuteAgent=100(GENERATE_CODE+GENERATE_DOCUMENT+REQUEST_APPROVAL)
+- **检查项**：SummaryAgent=4(POST_DISCUSSION)，DecomposeAgent=76(POST+GENERATE_PLAN+REQUEST_APPROVAL)，ExecuteAgent=112(GENERATE_CODE+GENERATE_DOCUMENT+REQUEST_APPROVAL)
 
 ### TC-8.5 compute_permissions deny胜过allow
 
