@@ -46,7 +46,7 @@
 
 - **类型**：集成
 - **主体流程**：执行 migrations/001_initial.sql
-- **检查项**：8张表全部创建成功（event_log、users、projects、project_members、threads、thread_messages、execution_plans、task_outputs），6个索引全部创建成功
+- **检查项**：8张表全部创建成功（event_log、users、projects、project_members、threads、thread_messages、execution_plans、task_outputs），7个索引全部创建成功（含idx_users_status部分索引）
 
 ### TC-2.2 Event模型校验
 
@@ -58,7 +58,7 @@
 
 - **类型**：UT
 - **主体流程**：遍历 EventType 枚举成员
-- **检查项**：9个MVP事件类型全部存在（DiscussionMessageCreated、DiscussionSummaryGenerated、ExecutionPlanProposed、ExecutionPlanApproved、ExecutionPlanRejected、TaskOutputGenerated、TaskOutputApproved、TaskOutputRevisionRequested、MemberAdded）；值与字符串名称一致
+- **检查项**：10个MVP事件类型全部存在（DiscussionMessageCreated、DiscussionSummaryGenerated、ExecutionPlanProposed、ExecutionPlanApproved、ExecutionPlanRejected、TaskOutputGenerated、TaskOutputApproved、TaskOutputRevisionRequested、MemberAdded、UserRegistered）；值与字符串名称一致
 
 ### TC-2.4 EventPayload schema结构与字段级验证
 
@@ -118,11 +118,17 @@
 - **主体流程**：创建 MemberAdded 实例（participant_id, project_id, participant_type, display_name, roles）→ 测试字段缺失 → 测试默认值
 - **检查项**：正常创建成功；participant_id/project_id/display_name（str）必填；participant_type 限定 human/agent；roles（list[str]）默认空列表
 
+#### TC-2.4.10 UserRegistered payload
+
+- **类型**：UT
+- **主体流程**：创建 UserRegisteredPayload 实例（username, display_name, status, is_admin）→ 测试字段缺失 → 测试默认值
+- **检查项**：正常创建成功；username/display_name（str）必填；status（str）限定 pending/active/rejected；is_admin（bool）默认false
+
 ### TC-2.5 User模型校验
 
 - **类型**：UT
-- **主体流程**：创建 UserRegister、UserLogin、UserResponse 实例
-- **检查项**：username 长度限制3-32、pattern限制字母数字下划线；password 最小长度8；display_name 最小长度1
+- **主体流程**：创建 UserRegister、UserLogin、UserResponse、RegistrationResponse、RegistrationDecision、PendingUserResponse、ApprovalResponse 实例
+- **检查项**：username 长度限制3-32、pattern限制字母数字下划线；password 最小长度8；display_name 最小长度1；RegistrationResponse.access_token可选（仅active状态）；RegistrationDecision.status限定pending/active
 
 ### TC-2.6 Project/Member/Thread/Message模型校验
 
@@ -322,67 +328,133 @@
 
 ---
 
-## 步骤 7：JWT认证与用户注册登录
+## 步骤 7：JWT认证与Admin审批注册
 
-### TC-7.1 用户注册成功
-
-- **类型**：API
-- **主体流程**：POST /auth/register（username/password/display_name）
-- **检查项**：返回user_id/username/display_name/access_token/token_type="bearer"；users表有新记录，password_hash为bcrypt格式
-
-### TC-7.2 用户登录成功
+### TC-7.1 用户注册成功（非首个用户，pending状态）
 
 - **类型**：API
-- **主体流程**：先注册 → POST /auth/login（username/password）
-- **检查项**：返回access_token；token内容与注册返回的一致
+- **主体流程**：先创建一个admin用户 → POST /auth/register（username/password/display_name）
+- **检查项**：返回user_id/username/display_name/status="pending"/message含"awaiting approval"；无access_token；users表有新记录，status为pending，is_admin为false，password_hash为bcrypt格式
 
-### TC-7.3 重复用户名注册
+### TC-7.2 第一个用户注册自动审批（active状态+JWT+is_admin）
+
+- **类型**：API
+- **主体流程**：空users表 → POST /auth/register（username/password/display_name）
+- **检查项**：返回user_id/username/display_name/status="active"/access_token/token_type="bearer"/message含"first admin"；users表status为active，is_admin为true；JWT payload含is_admin=true
+
+### TC-7.3 用户登录成功（active用户）
+
+- **类型**：API
+- **主体流程**：先注册并审批用户 → POST /auth/login（username/password）
+- **检查项**：返回access_token；JWT payload含sub/username/is_admin/exp/iat/iss="orbion"
+
+### TC-7.4 pending用户登录返回403
+
+- **类型**：API
+- **主体流程**：注册用户（pending状态） → POST /auth/login（username/password）
+- **检查项**：返回403，detail含"pending approval"
+
+### TC-7.5 rejected用户登录返回403
+
+- **类型**：API
+- **主体流程**：注册用户 → admin拒绝 → POST /auth/login（username/password）
+- **检查项**：返回403，detail含"rejected"
+
+### TC-7.6 重复用户名注册
 
 - **类型**：API
 - **主体流程**：注册用户A → 再用相同username注册
 - **检查项**：返回409，detail含"已存在"类信息
 
-### TC-7.4 错误密码登录
+### TC-7.7 错误密码登录
 
 - **类型**：API
-- **主体流程**：注册用户 → POST /auth/login（正确username+错误password）
+- **主体流程**：注册并审批用户 → POST /auth/login（正确username+错误password）
 - **检查项**：返回401
 
-### TC-7.5 JWT过期
+### TC-7.8 JWT过期
 
 - **类型**：UT
 - **主体流程**：创建一个exp为过去时间的JWT → 用get_current_user解码
 - **检查项**：抛出401异常
 
-### TC-7.6 get_current_user正常返回
+### TC-7.9 get_current_user正常返回
 
 - **类型**：UT
-- **主体流程**：创建有效JWT → get_current_user解码
-- **检查项**：返回User对象，id和username与JWT payload一致
+- **主体流程**：创建有效JWT（含is_admin=true） → get_current_user解码
+- **检查项**：返回User对象，id/username/is_admin与JWT payload一致
 
-### TC-7.7 注册事件写入EventStore
+### TC-7.10 require_admin拦截非管理员
+
+- **类型**：UT
+- **主体流程**：创建JWT（is_admin=false） → 调用require_admin依赖
+- **检查项**：抛出403异常，detail含"Admin required"
+
+### TC-7.11 管理员审批用户
+
+- **类型**：API
+- **主体流程**：admin注册 → 新用户注册（pending） → admin POST /auth/users/{id}/approve
+- **检查项**：返回user_id/username/status="active"；users表status变为active；被审批用户可以正常登录
+
+### TC-7.12 管理员拒绝用户
+
+- **类型**：API
+- **主体流程**：admin注册 → 新用户注册（pending） → admin POST /auth/users/{id}/reject（reason="不符合要求"）
+- **检查项**：返回user_id/username/status="rejected"/reason="不符合要求"；users表status变为rejected
+
+### TC-7.13 列出待审批用户
+
+- **类型**：API
+- **主体流程**：admin注册 → 注册2个新用户 → admin GET /auth/users/pending
+- **检查项**：返回2个pending用户，含user_id/username/display_name/status="pending"/created_at
+
+### TC-7.14 非管理员审批返回403
+
+- **类型**：API
+- **主体流程**：注册非admin用户 → 用该用户token POST /auth/users/{id}/approve
+- **检查项**：返回403
+
+### TC-7.15 注册事件写入EventStore
 
 - **类型**：集成
 - **主体流程**：注册用户 → 查询EventStore按participant_id查询事件
-- **检查项**：有UserRegistered事件记录；event_type正确；participant_id为新注册用户的user_id；participant_type="human"；project_id为空字符串（用户注册不关联项目）；payload含username/display_name
+- **检查项**：有UserRegistered事件记录；event_type正确；participant_id为新注册用户的user_id；participant_type="human"；project_id为空字符串（用户注册不关联项目）；payload含username/display_name/status
 
-### TC-7.8 JWT生成和验证
+### TC-7.16 JWT生成和验证
 
 - **类型**：UT
-- **主体流程**：jwt生成 → jwt解码验证
-- **检查项**：payload含sub/username/exp/iat/iss="orbion"；HS256算法；密钥从config读取
+- **主体流程**：jwt生成（含is_admin字段） → jwt解码验证
+- **检查项**：payload含sub/username/is_admin/exp/iat/iss="orbion"；HS256算法；密钥从config读取
 
-### TC-7.9 密码哈希与验证
+### TC-7.17 密码哈希与验证
 
 - **类型**：UT
 - **主体流程**：bcrypt哈希密码 → 验证正确密码 → 验证错误密码
 - **检查项**：正确密码验证成功；错误密码验证失败；哈希长度符合bcrypt格式
 
-### TC-7.10 无JWT访问受保护端点
+### TC-7.18 无JWT访问受保护端点
 
 - **类型**：API
 - **主体流程**：不带Authorization header请求受保护端点
 - **检查项**：返回401
+
+### TC-7.19 AdminApprovalPolicy Protocol契约验证
+
+- **类型**：UT
+- **主体流程**：创建AdminApprovalPolicy实例 → isinstance(policy, RegistrationPolicy)
+- **检查项**：返回True，Protocol契约验证通过
+
+### TC-7.20 对已active用户审批返回400
+
+- **类型**：API
+- **主体流程**：admin注册 → 第二个用户注册并审批 → admin POST /auth/users/{id}/approve（对已active用户）
+- **检查项**：返回400，detail含"already active"
+
+### TC-7.21 对不存在用户审批返回404
+
+- **类型**：API
+- **主体流程**：admin注册 → admin POST /auth/users/{不存在的id}/approve
+- **检查项**：返回404
 
 ---
 
@@ -900,31 +972,55 @@
 
 ## 步骤 19：前端登录注册与JWT管理
 
-### TC-19.1 注册表单→JWT存储→跳转工作区
+### TC-19.1 注册表单→pending状态提示
 
 - **类型**：UT（Vitest）
-- **主体流程**：填写注册表单 → 提交 → JWT存储 → 路由跳转
+- **主体流程**：填写注册表单 → 提交 → 显示"等待管理员审批"提示
+- **检查项**：响应status为pending时显示等待提示；不存储JWT；停留在注册页面或跳转至等待审批提示页
+
+### TC-19.2 第一个用户注册→自动审批→跳转工作区
+
+- **类型**：UT（Vitest）
+- **主体流程**：第一个用户注册 → status为active → JWT存储 → 路由跳转
 - **检查项**：JWT写入localStorage/sessionStorage；路由切换到/workspace
 
-### TC-19.2 登录表单→JWT存储→跳转工作区
+### TC-19.3 登录表单→JWT存储→跳转工作区
 
 - **类型**：UT（Vitest）
 - **主体流程**：填写登录表单 → 提交 → JWT存储 → 路由跳转
 - **检查项**：JWT写入存储；路由切换到/workspace
 
-### TC-19.3 JWT过期→重定向登录页
+### TC-19.4 pending用户登录→403提示
+
+- **类型**：UT（Vitest）
+- **主体流程**：pending用户尝试登录 → 收到403 → 显示"等待管理员审批"提示
+- **检查项**：不存储JWT；显示pending状态提示
+
+### TC-19.5 管理员审批面板→待审批用户列表
+
+- **类型**：UT（Vitest）
+- **主体流程**：admin登录 → 打开审批面板 → 渲染待审批用户列表
+- **检查项**：列出pending用户；每个用户有approve/reject按钮
+
+### TC-19.6 管理员审批操作→用户变为active
+
+- **类型**：UT（Vitest）
+- **主体流程**：admin点击approve按钮 → API调用 → 用户状态变为active
+- **检查项**：approve按钮触发POST /auth/users/{id}/approve；用户从待审批列表移除
+
+### TC-19.7 JWT过期→重定向登录页
 
 - **类型**：UT（Vitest）
 - **主体流程**：存储一个过期JWT → 路由守卫检查
 - **检查项**：重定向到/login
 
-### TC-19.4 未登录访问工作区→重定向登录页
+### TC-19.8 未登录访问工作区→重定向登录页
 
 - **类型**：UT（Vitest）
 - **主体流程**：无JWT → 尝试访问/workspace路由
 - **检查项**：重定向到/login
 
-### TC-19.5 登出流程
+### TC-19.9 登出流程
 
 - **类型**：UT（Vitest）
 - **主体流程**：已登录状态（JWT已存储）→ 执行登出操作 → 验证JWT清除 → 验证路由重定向
