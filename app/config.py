@@ -40,14 +40,7 @@ class OrbionConfigSchema(BaseModel):
     实现特定配置放在嵌套子模型中，不污染顶层。
     """
 
-    event_store: str = Field(default="postgres", description="EventStore 实现名，参见 STORE_IMPLEMENTATIONS 注册表")
-    event_projections: str = Field(
-        default="postgres", description="EventProjections 实现名，参见 PROJECTIONS_IMPLEMENTATIONS 注册表"
-    )
-    project_read: str = Field(default="postgres", description="ProjectRead 实现名，参见 READ_IMPLEMENTATIONS 注册表")
-    user_repo: str = Field(
-        default="postgres", description="UserRepositoryProvider 实现名，参见 REPO_PROVIDER_IMPLEMENTATIONS 注册表"
-    )
+    database: str = Field(default="postgres", description="数据库类型，各特性共用")
     postgres: PostgresConfigSchema = Field(
         default_factory=PostgresConfigSchema, description="PostgreSQL 外部配置校验 schema"
     )
@@ -65,6 +58,18 @@ class OrbionConfigFileParser(PydanticBaseSettingsSource):
 
     _config_data: dict[str, Any]
 
+    @staticmethod
+    def _expand_database(data: dict[str, Any]) -> dict[str, Any]:
+        """将 database 展开为各特性的具体字段，供 Settings 使用"""
+        db_name = data.pop("database", None)
+        if db_name is None:
+            raise ValueError("配置缺少 database 字段")
+        data["event_store"] = db_name
+        data["event_projections"] = db_name
+        data["project_read"] = db_name
+        data["user_repo"] = db_name
+        return data
+
     def __init__(self, settings_cls: type[BaseSettings]) -> None:
         super().__init__(settings_cls)
         config_path = os.environ.get("ORBION_CONFIG_PATH", "orbion.json")
@@ -72,9 +77,10 @@ class OrbionConfigFileParser(PydanticBaseSettingsSource):
         if p.exists():
             raw = json.loads(p.read_text())
             validated = OrbionConfigSchema.model_validate(raw)
-            self._config_data = validated.model_dump()
+            self._config_data = self._expand_database(validated.model_dump())
         else:
-            self._config_data = OrbionConfigSchema().model_dump()
+            defaults = OrbionConfigSchema()
+            self._config_data = self._expand_database(defaults.model_dump())
 
     def get_field_value(self, field: FieldInfo, field_name: str) -> tuple[Any, str, bool]:
         if field_name in self._config_data:
