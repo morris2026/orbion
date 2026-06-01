@@ -125,7 +125,7 @@
 
 ---
 
-### - [ ] 步骤 8：Bitmask权限位与角色映射
+### - [x] 步骤 8：Bitmask权限位与角色映射
 
 **增量**：HumanPermission/AgentPermission枚举、角色→权限位映射、compute_permissions函数、require_permission FastAPI依赖注入
 
