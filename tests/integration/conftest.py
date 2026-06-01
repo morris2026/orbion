@@ -12,28 +12,39 @@
 """
 
 import subprocess
-from collections.abc import AsyncGenerator, Generator
 import time
+from collections.abc import AsyncGenerator, Generator
 
 import asyncpg
 import pytest
 
 from app.config import get_settings
 
+settings = get_settings()
+
+
+def _wait_for_postgres() -> None:
+    """用 asyncpg 轮询等待 PostgreSQL 就绪"""
+    import asyncio
+
+    async def _try_connect() -> None:
+        conn = await asyncpg.connect(settings.postgres.url)
+        await conn.close()
+
+    for _ in range(30):
+        try:
+            asyncio.run(_try_connect())
+            return
+        except Exception:
+            time.sleep(1)
+    raise RuntimeError("PostgreSQL did not become ready within 30 seconds")
+
 
 @pytest.fixture(scope="session", autouse=True)
 def _docker_postgres() -> Generator[None, None, None]:
     """集成测试 session 级自动启停 Docker PostgreSQL"""
     subprocess.run(["docker", "compose", "up", "-d", "postgres"], check=True)
-    # 等待 PostgreSQL 就绪
-    for _ in range(30):
-        result = subprocess.run(
-            ["pg_isready", "-h", "localhost", "-p", "5432"],
-            capture_output=True,
-        )
-        if result.returncode == 0:
-            break
-        time.sleep(1)
+    _wait_for_postgres()
     yield
     subprocess.run(["docker", "compose", "down"], check=True)
 

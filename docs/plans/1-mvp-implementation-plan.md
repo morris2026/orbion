@@ -113,7 +113,7 @@
 
 ---
 
-### - [ ] 步骤 7：JWT认证与Admin审批注册
+### - [x] 步骤 7：JWT认证与Admin审批注册
 
 **增量**：auth模块（routes、models、service、dependencies、policy）、修改migrations/001_initial.sql（users表增加status/is_admin列+部分索引）、User表CRUD（含status和is_admin字段）、EventType枚举新增UserRegistered+UserRegisteredPayload、JWT签发/验证、get_current_user和require_admin FastAPI依赖、bcrypt密码哈希、RegistrationPolicy Protocol定义、AdminApprovalPolicy实现（首个用户自动审批+is_admin，后续用户pending）、3个审批端点（GET /auth/users/pending、POST /auth/users/{id}/approve、POST /auth/users/{id}/reject）、注册响应含status字段（pending/active）、登录检查用户状态（pending/rejected返回403）
 

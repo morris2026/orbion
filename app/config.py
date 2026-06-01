@@ -44,7 +44,9 @@ class OrbionConfigSchema(BaseModel):
     event_projections: str = Field(
         default="postgres", description="EventProjections 实现名，参见 PROJECTIONS_IMPLEMENTATIONS 注册表"
     )
-    postgres: PostgresConfigSchema = Field(default_factory=PostgresConfigSchema, description="PostgreSQL 外部配置校验 schema")
+    postgres: PostgresConfigSchema = Field(
+        default_factory=PostgresConfigSchema, description="PostgreSQL 外部配置校验 schema"
+    )
     repo_path: str = Field(default="./repo", description="Git 产出存放路径")
     memory_base_path: str = Field(default="./data/memory", description="Agent 记忆文件存放路径")
 

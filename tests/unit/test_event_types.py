@@ -113,8 +113,8 @@ class TestEventModel:
 class TestEventTypeEnum:
     """TC-2.3：EventType枚举完整性"""
 
-    def test_tc2_3_all_9_event_types_exist(self) -> None:
-        """TC-2.3：9个MVP事件类型全部存在"""
+    def test_tc2_3_all_10_event_types_exist(self) -> None:
+        """TC-2.3：10个MVP事件类型全部存在"""
         from app.hub.events.types import EventType
 
         expected_types = [
@@ -127,6 +127,7 @@ class TestEventTypeEnum:
             "TaskOutputApproved",
             "TaskOutputRevisionRequested",
             "MemberAdded",
+            "UserRegistered",
         ]
         actual_names = [e.value for e in EventType]
         assert set(expected_types) == set(actual_names), f"缺少事件类型: {set(expected_types) - set(actual_names)}"

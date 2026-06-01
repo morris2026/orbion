@@ -25,6 +25,7 @@ class EventType(StrEnum):
     TaskOutputApproved = "TaskOutputApproved"
     TaskOutputRevisionRequested = "TaskOutputRevisionRequested"
     MemberAdded = "MemberAdded"
+    UserRegistered = "UserRegistered"
 
 
 class Event(BaseModel):
@@ -133,3 +134,12 @@ class MemberAddedPayload(BaseModel):
     participant_type: Literal["human", "agent"]
     display_name: str
     roles: list[str] = Field(default_factory=list)
+
+
+class UserRegisteredPayload(BaseModel):
+    """UserRegistered payload — 平台级事件，project_id为空字符串"""
+
+    username: str
+    display_name: str
+    status: Literal["pending", "active", "rejected"]
+    is_admin: bool = False
