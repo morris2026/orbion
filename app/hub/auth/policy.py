@@ -3,7 +3,7 @@
 from typing import Protocol, runtime_checkable
 
 from app.hub.auth.models import RegistrationDecision, UserRegister
-from app.hub.auth.service import DbConn
+from app.hub.auth.repository import UserRepositoryProtocol
 
 
 @runtime_checkable
@@ -13,7 +13,7 @@ class RegistrationPolicy(Protocol):
     async def evaluate(
         self,
         request: UserRegister,
-        conn: DbConn,
+        repo: UserRepositoryProtocol,
     ) -> RegistrationDecision: ...
 
 
@@ -23,11 +23,9 @@ class AdminApprovalPolicy:
     async def evaluate(
         self,
         request: UserRegister,
-        conn: DbConn,
+        repo: UserRepositoryProtocol,
     ) -> RegistrationDecision:
-        # 查询是否有active用户（判断是否首个用户）
-        row = await conn.fetchrow("SELECT COUNT(*) AS cnt FROM users WHERE status = 'active'")
-        is_first_user = row["cnt"] == 0 if row else False
+        is_first_user = not await repo.has_active_users()
 
         if is_first_user:
             return RegistrationDecision(

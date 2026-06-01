@@ -10,6 +10,7 @@ import pytest
 from httpx import ASGITransport, AsyncClient
 
 from app.config import get_settings
+from app.hub.auth.repository import load_user_repo_impl
 from app.hub.events.bus import InProcessEventBus
 from app.hub.events.store import load_store_impl
 from app.main import app
@@ -41,6 +42,7 @@ async def client() -> AsyncGenerator[AsyncClient, None]:
     await event_store.connect()
     app.state.event_store = event_store
     app.state.event_bus = InProcessEventBus()
+    app.state.user_repo_cls = load_user_repo_impl("postgres")
 
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as c:
