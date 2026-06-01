@@ -141,7 +141,7 @@
 
 验证点1-2 + SSE推送能力。顺序依赖基础层全部完成。
 
-### - [ ] 步骤 9：项目与成员管理API
+### - [x] 步骤 9：项目与成员管理API
 
 **增量**：projects模块（routes、models、service）、POST/GET /projects、GET /projects/{id}、POST /projects/{id}/members、创建者自动成为Owner、项目列表只返回用户参与的项目
 

@@ -113,11 +113,12 @@ class TestEventModel:
 class TestEventTypeEnum:
     """TC-2.3：EventType枚举完整性"""
 
-    def test_tc2_3_all_10_event_types_exist(self) -> None:
-        """TC-2.3：10个MVP事件类型全部存在"""
+    def test_tc2_3_all_11_event_types_exist(self) -> None:
+        """TC-2.3：11个MVP事件类型全部存在"""
         from app.hub.events.types import EventType
 
         expected_types = [
+            "ProjectCreated",
             "DiscussionMessageCreated",
             "DiscussionSummaryGenerated",
             "ExecutionPlanProposed",
@@ -570,3 +571,113 @@ class TestMemberAddedPayload:
             roles=["owner"],
         )
         assert payload_with_roles.roles == ["owner"]
+
+
+class TestProjectCreatedPayload:
+    """ProjectCreated payload schema测试"""
+
+    def test_valid_creation(self) -> None:
+        """正常创建：全字段"""
+        from datetime import UTC, datetime
+
+        from app.hub.events.types import ProjectCreatedPayload
+
+        now = datetime(2026, 1, 1, tzinfo=UTC)
+        payload = ProjectCreatedPayload(
+            project_id="proj-1",
+            name="My Project",
+            description="A test project",
+            created_at=now,
+            creator_id="user-1",
+            creator_display_name="张三",
+        )
+        assert payload.project_id == "proj-1"
+        assert payload.name == "My Project"
+        assert payload.description == "A test project"
+        assert payload.created_at == now
+        assert payload.creator_id == "user-1"
+        assert payload.creator_display_name == "张三"
+
+    def test_creator_id_required(self) -> None:
+        """creator_id缺失报错"""
+        from datetime import UTC, datetime
+
+        from app.hub.events.types import ProjectCreatedPayload
+
+        with pytest.raises(ValidationError):
+            ProjectCreatedPayload(  # type: ignore[call-arg]
+                project_id="proj-1",
+                name="My Project",
+                created_at=datetime.now(UTC),
+                creator_display_name="张三",
+            )
+
+    def test_creator_display_name_required(self) -> None:
+        """creator_display_name缺失报错"""
+        from datetime import UTC, datetime
+
+        from app.hub.events.types import ProjectCreatedPayload
+
+        with pytest.raises(ValidationError):
+            ProjectCreatedPayload(  # type: ignore[call-arg]
+                project_id="proj-1",
+                name="My Project",
+                created_at=datetime.now(UTC),
+                creator_id="user-1",
+            )
+
+    def test_created_at_required(self) -> None:
+        """created_at缺失报错"""
+        from app.hub.events.types import ProjectCreatedPayload
+
+        with pytest.raises(ValidationError):
+            ProjectCreatedPayload(  # type: ignore[call-arg]
+                project_id="proj-1",
+                name="My Project",
+                creator_id="user-1",
+                creator_display_name="张三",
+            )
+
+    def test_project_id_required(self) -> None:
+        """project_id缺失报错"""
+        from datetime import UTC, datetime
+
+        from app.hub.events.types import ProjectCreatedPayload
+
+        with pytest.raises(ValidationError):
+            ProjectCreatedPayload(  # type: ignore[call-arg]
+                name="My Project",
+                created_at=datetime.now(UTC),
+                creator_id="user-1",
+                creator_display_name="张三",
+            )
+
+    def test_name_required(self) -> None:
+        """name缺失报错"""
+        from datetime import UTC, datetime
+
+        from app.hub.events.types import ProjectCreatedPayload
+
+        with pytest.raises(ValidationError):
+            ProjectCreatedPayload(  # type: ignore[call-arg]
+                project_id="proj-1",
+                description="desc",
+                created_at=datetime.now(UTC),
+                creator_id="user-1",
+                creator_display_name="张三",
+            )
+
+    def test_description_optional(self) -> None:
+        """description选填，默认None"""
+        from datetime import UTC, datetime
+
+        from app.hub.events.types import ProjectCreatedPayload
+
+        payload = ProjectCreatedPayload(
+            project_id="proj-1",
+            name="My Project",
+            created_at=datetime.now(UTC),
+            creator_id="user-1",
+            creator_display_name="张三",
+        )
+        assert payload.description is None

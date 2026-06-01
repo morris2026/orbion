@@ -24,3 +24,16 @@ AGENT_ROLE_BITS: dict[str, int] = {
         AgentPermission.GENERATE_CODE | AgentPermission.GENERATE_DOCUMENT | AgentPermission.REQUEST_APPROVAL
     ),  # 112
 }
+
+
+def derive_role_name(bitmask: int) -> str:
+    """从权限位掩码推导人类角色名称，单一规范定义驱动SQL和Python"""
+    if bitmask & HumanPermission.ADMINISTRATOR:
+        return "owner"
+    if bitmask == HumanPermission.all_bits() & ~HumanPermission.ADMINISTRATOR:
+        return "admin"
+    if bitmask == 31:
+        return "member"
+    if bitmask == 1:
+        return "viewer"
+    return "custom"

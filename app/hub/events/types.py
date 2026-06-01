@@ -16,6 +16,7 @@ EVENT_PARTICIPANT_TYPE_MAX_LEN: Final[int] = 8
 class EventType(StrEnum):
     """MVP事件类型"""
 
+    ProjectCreated = "ProjectCreated"
     DiscussionMessageCreated = "DiscussionMessageCreated"
     DiscussionSummaryGenerated = "DiscussionSummaryGenerated"
     ExecutionPlanProposed = "ExecutionPlanProposed"
@@ -124,6 +125,17 @@ class TaskOutputRevisionRequestedPayload(BaseModel):
     task_id: str
     issues: list[str]
     suggestions: list[str]
+
+
+class ProjectCreatedPayload(BaseModel):
+    """ProjectCreated payload — 项目创建事件，携带创建者信息"""
+
+    project_id: str
+    name: str
+    description: str | None = None
+    created_at: datetime
+    creator_id: str
+    creator_display_name: str
 
 
 class MemberAddedPayload(BaseModel):
