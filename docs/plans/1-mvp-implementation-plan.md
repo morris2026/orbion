@@ -113,15 +113,15 @@
 
 ---
 
-### - [ ] 步骤 7：JWT认证与用户注册登录
+### - [ ] 步骤 7：JWT认证与Admin审批注册
 
-**增量**：auth模块（routes、models、service、dependencies）、User表CRUD、JWT签发/验证、get_current_user FastAPI依赖、bcrypt密码哈希
+**增量**：auth模块（routes、models、service、dependencies、policy）、修改migrations/001_initial.sql（users表增加status/is_admin列+部分索引）、User表CRUD（含status和is_admin字段）、EventType枚举新增UserRegistered+UserRegisteredPayload、JWT签发/验证、get_current_user和require_admin FastAPI依赖、bcrypt密码哈希、RegistrationPolicy Protocol定义、AdminApprovalPolicy实现（首个用户自动审批+is_admin，后续用户pending）、3个审批端点（GET /auth/users/pending、POST /auth/users/{id}/approve、POST /auth/users/{id}/reject）、注册响应含status字段（pending/active）、登录检查用户状态（pending/rejected返回403）
 
 **依赖**：步骤2（User模型、users表）、步骤4（EventStore，注册事件持久化）
 
-**测试设计**：见 [1-mvp-test-design](1-mvp-test-design.md) TC-7.1–TC-7.10
+**测试设计**：见 [1-mvp-test-design](1-mvp-test-design.md) TC-7.1–TC-7.21
 
-**commit message**：`feat: JWT认证与用户注册登录`
+**commit message**：`feat: JWT认证与Admin审批注册`
 
 ---
 
@@ -275,11 +275,11 @@
 
 ### - [ ] 步骤 19：前端登录注册与JWT管理
 
-**增量**：登录表单、注册表单、JWT存储/刷新逻辑、登出流程、未登录重定向、登录后跳转工作区
+**增量**：登录表单、注册表单（含pending状态提示）、管理员审批面板（待审批用户列表+approve/reject按钮）、JWT存储/刷新逻辑、登出流程、未登录重定向、pending/rejected状态提示页、登录后跳转工作区
 
 **依赖**：步骤18（前端骨架）
 
-**测试设计**：见 [1-mvp-test-design](1-mvp-test-design.md) TC-19.1–TC-19.5
+**测试设计**：见 [1-mvp-test-design](1-mvp-test-design.md) TC-19.1–TC-19.9
 
 **commit message**：`feat: 前端登录注册与JWT管理`
 
@@ -333,7 +333,7 @@
 | 1.2 事件基础设施 | EventBus Protocol、InProcessEventBus、EventStoreProtocol+PostgresEventStore、EventProjectionsProtocol+PostgresEventProjections、CQRS投影(4视图)、EventPayload Schema(9种)、correlation_id/causation_id、ChannelAdapter Protocol、SSEChannel | 2-6, 11(ChannelAdapter+SSE), 13 |
 | 1.3 数据模型 | 8张MVP表+索引、全部Pydantic模型、迁移策略、项目边界硬隔离、读写分离 | 2, 4-5, 9-10, 15-16 |
 | 1.4 权限模型 | HumanPermission/AgentPermission bitmask、角色映射(4人类+3Agent)、compute_permissions、require_permission依赖、各端点权限要求 | 8, 9-16 |
-| 1.5 API与认证 | JWT认证流程、18个REST端点+1个SSE流、FastAPI路由组织、错误响应格式 | 7, 9-11, 12, 15-16 |
+| 1.5 API与认证 | JWT认证流程、21个REST端点+1个SSE流、FastAPI路由组织、错误响应格式 | 7, 9-11, 12, 15-16 |
 | 1.6 Agent Runtime | 3个Agent声明(含skills字段)、SkillDeclaration数据结构、ModelAdapter Protocol骨架+ClaudeAdapter、生命周期(idle/running/error)、PromptInput/ModelOutput、7步prompt组装、AgentScheduler、AgentRuntime、memory.md管理 | 12(skills+Protocol骨架), 13-14 |
 
 ## 依赖关系图

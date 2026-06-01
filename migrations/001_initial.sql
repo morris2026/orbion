@@ -22,10 +22,15 @@ CREATE INDEX idx_event_log_type       ON event_log (project_id, event_type);
 CREATE TABLE users (
     id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     username        VARCHAR(32) NOT NULL UNIQUE,
-    password_hash   VARCHAR(128) NOT NULL,
+    password_hash   VARCHAR(128) NOT NULL,  -- bcrypt hash
     display_name    VARCHAR(64) NOT NULL,
+    status          VARCHAR(16) NOT NULL DEFAULT 'pending'
+        CHECK (status IN ('pending', 'active', 'rejected')),  -- Admin审批注册
+    is_admin        BOOLEAN NOT NULL DEFAULT FALSE,  -- 第一个用户自动成为管理员
     created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+CREATE INDEX idx_users_status ON users (status) WHERE status = 'pending';  -- 管理员查询待审批用户
 
 -- 3. projects — 项目表
 CREATE TABLE projects (
