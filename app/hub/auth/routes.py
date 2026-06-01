@@ -3,7 +3,6 @@
 import uuid
 from typing import cast
 
-import asyncpg
 from fastapi import APIRouter, Depends, HTTPException, Request
 
 from app.config import Settings, get_settings
@@ -19,7 +18,7 @@ from app.hub.auth.models import (
     UserResponse,
 )
 from app.hub.auth.policy import AdminApprovalPolicy
-from app.hub.auth.repository import UserRepositoryFactory
+from app.hub.auth.repository import UserRepositoryProvider
 from app.hub.auth.service import create_access_token, hash_password, verify_password
 from app.hub.events.bus import EventBus
 from app.hub.events.store import EventStoreProtocol
@@ -31,14 +30,9 @@ router = APIRouter()
 # -- FastAPI依赖：从app.state获取共享基础设施 --
 
 
-async def _get_pool(request: Request) -> asyncpg.Pool:
-    """从app.state获取共享连接池"""
-    return cast("asyncpg.Pool", request.app.state.pool)
-
-
-async def _get_user_repo(request: Request) -> UserRepositoryFactory:
-    """从app.state获取UserRepository实现类（每次请求创建新实例）"""
-    return cast(UserRepositoryFactory, request.app.state.user_repo_cls)
+async def _get_user_repo_provider(request: Request) -> UserRepositoryProvider:
+    """从app.state获取UserRepositoryProvider（singleton，self-managed pool）"""
+    return cast(UserRepositoryProvider, request.app.state.user_repo_provider)
 
 
 async def _get_event_store(request: Request) -> EventStoreProtocol:
@@ -52,8 +46,7 @@ async def _get_event_bus(request: Request) -> EventBus:
 @router.post("/register", response_model=RegistrationResponse)
 async def register(
     request: UserRegister,
-    pool: asyncpg.Pool = Depends(_get_pool),
-    repo_cls: UserRepositoryFactory = Depends(_get_user_repo),
+    provider: UserRepositoryProvider = Depends(_get_user_repo_provider),
     settings: Settings = Depends(get_settings),
     event_store: EventStoreProtocol = Depends(_get_event_store),
     event_bus: EventBus = Depends(_get_event_bus),
@@ -61,7 +54,7 @@ async def register(
     """用户注册：首个用户自动审批+is_admin，后续用户pending"""
     # async with repo 内的 HTTPException 会触发事务 rollback；
     # 当前所有端点均在写入前抛出异常（纯读校验），故 rollback 无副作用
-    async with repo_cls(pool) as repo:
+    async with provider.scoped() as repo:
         if await repo.check_username_exists(request.username):
             raise HTTPException(status_code=409, detail="Username already exists")
 
@@ -127,12 +120,11 @@ async def register(
 @router.post("/login", response_model=UserResponse)
 async def login(
     request: UserLogin,
-    pool: asyncpg.Pool = Depends(_get_pool),
-    repo_cls: UserRepositoryFactory = Depends(_get_user_repo),
+    provider: UserRepositoryProvider = Depends(_get_user_repo_provider),
     settings: Settings = Depends(get_settings),
 ) -> UserResponse:
     """用户登录：pending/rejected返回403，密码错误返回401"""
-    async with repo_cls(pool) as repo:
+    async with provider.scoped() as repo:
         user_record = await repo.get_user_by_username(request.username)
         if user_record is None:
             raise HTTPException(status_code=401, detail="Invalid credentials")
@@ -163,12 +155,11 @@ async def login(
 @router.get("/users/pending", response_model=list[PendingUserResponse])
 async def list_pending(
     admin: User = Depends(require_admin_dependency),
-    pool: asyncpg.Pool = Depends(_get_pool),
-    repo_cls: UserRepositoryFactory = Depends(_get_user_repo),
+    provider: UserRepositoryProvider = Depends(_get_user_repo_provider),
 ) -> list[PendingUserResponse]:
     """列出待审批用户，仅is_admin可访问"""
     # read-only操作也使用事务模式，保持与写端点的repo使用模式一致
-    async with repo_cls(pool) as repo:
+    async with provider.scoped() as repo:
         rows = await repo.list_pending_users()
         return [
             PendingUserResponse(
@@ -186,11 +177,10 @@ async def list_pending(
 async def approve_user(
     user_id: str,
     admin: User = Depends(require_admin_dependency),
-    pool: asyncpg.Pool = Depends(_get_pool),
-    repo_cls: UserRepositoryFactory = Depends(_get_user_repo),
+    provider: UserRepositoryProvider = Depends(_get_user_repo_provider),
 ) -> ApprovalResponse:
     """管理员审批用户：pending→active"""
-    async with repo_cls(pool) as repo:
+    async with provider.scoped() as repo:
         user_record = await repo.get_user_by_id(user_id)
         if user_record is None:
             raise HTTPException(status_code=404, detail="User not found")
@@ -214,11 +204,10 @@ async def reject_user(
     user_id: str,
     body: RejectionRequest | None = None,
     admin: User = Depends(require_admin_dependency),
-    pool: asyncpg.Pool = Depends(_get_pool),
-    repo_cls: UserRepositoryFactory = Depends(_get_user_repo),
+    provider: UserRepositoryProvider = Depends(_get_user_repo_provider),
 ) -> ApprovalResponse:
     """管理员拒绝用户：pending→rejected"""
-    async with repo_cls(pool) as repo:
+    async with provider.scoped() as repo:
         user_record = await repo.get_user_by_id(user_id)
         if user_record is None:
             raise HTTPException(status_code=404, detail="User not found")

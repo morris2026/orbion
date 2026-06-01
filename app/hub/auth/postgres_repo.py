@@ -6,7 +6,13 @@ from typing import Any
 
 import asyncpg
 
-from app.hub.auth.repository import PendingUserRecord, UserRecord, UserRepositoryProtocol
+from app.config import get_settings
+from app.hub.auth.repository import (
+    PendingUserRecord,
+    UserRecord,
+    UserRepositoryProtocol,
+    UserRepositoryProvider,
+)
 
 
 class PostgresUserRepository(UserRepositoryProtocol):
@@ -144,3 +150,29 @@ def _row_to_pending_record(row: asyncpg.Record) -> PendingUserRecord:
         status=row["status"],
         created_at=row["created_at"],
     )
+
+
+class PostgresUserRepositoryProvider(UserRepositoryProvider):
+    """PostgreSQL UserRepositoryProvider — self-managed pool生命周期
+
+    connect()/close() 管理 asyncpg.Pool（与PostgresEventStore一致）。
+    scoped() 返回 PostgresUserRepository(pool)，每个请求独立事务作用域。
+    """
+
+    def __init__(self) -> None:
+        settings = get_settings()
+        self._url = settings.postgres.url
+        self._pool: asyncpg.Pool | None = None
+
+    async def connect(self) -> None:
+        self._pool = await asyncpg.create_pool(self._url, min_size=2, max_size=10)
+
+    async def close(self) -> None:
+        if self._pool:
+            await self._pool.close()
+            self._pool = None
+
+    def scoped(self) -> PostgresUserRepository:
+        if self._pool is None:
+            raise RuntimeError("PostgresUserRepositoryProvider未连接，请先调用connect()")
+        return PostgresUserRepository(self._pool)

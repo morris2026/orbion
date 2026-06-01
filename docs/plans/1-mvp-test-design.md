@@ -24,13 +24,13 @@
 
 - **类型**：UT
 - **主体流程**：无环境变量时创建 Settings 实例
-- **检查项**：postgres_url 为默认值，jwt_secret 为默认值，anthropic_api_key 为空字符串，repo_path 为 "./repo"，memory_base_path 为 "./data/memory"
+- **检查项**：event_store 为 "postgres"，event_projections 为 "postgres"，user_repo 为 "postgres"，jwt_secret 为默认值，anthropic_api_key 为空字符串，repo_path 为 "./repo"，memory_base_path 为 "./data/memory"，postgres 为 PostgresSettings 默认值（host=localhost, port=5432, db=orbion, user=orbion）
 
 ### TC-1.3 Settings环境变量覆盖
 
 - **类型**：UT
-- **主体流程**：设置 ORBION_POSTGRES_URL 等环境变量后创建 Settings 实例
-- **检查项**：对应字段值被环境变量覆盖
+- **主体流程**：设置 ORBION_EVENT_STORE 等环境变量后创建 Settings 实例
+- **检查项**：对应字段值被环境变量覆盖；ORBION_POSTGRES__PASSWORD 覆盖 postgres.password；ORBION_JWT_SECRET 覆盖 jwt_secret
 
 ### TC-1.4 PostgreSQL连接
 
@@ -455,6 +455,42 @@
 - **类型**：API
 - **主体流程**：admin注册 → admin POST /auth/users/{不存在的id}/approve
 - **检查项**：返回404
+
+### TC-7.22 UserRepositoryProtocol ABC契约验证
+
+- **类型**：UT
+- **主体流程**：issubclass(PostgresUserRepository, UserRepositoryProtocol)
+- **检查项**：返回True，ABC契约验证通过
+
+### TC-7.23 UserRepositoryProvider ABC契约验证
+
+- **类型**：UT
+- **主体流程**：issubclass(PostgresUserRepositoryProvider, UserRepositoryProvider)
+- **检查项**：返回True，ABC契约验证通过
+
+### TC-7.24 load_user_repo_provider注册表动态加载
+
+- **类型**：UT
+- **主体流程**：load_user_repo_provider("postgres") → 返回PostgresUserRepositoryProvider类；load_user_repo_provider("unknown") → 抛ValueError
+- **检查项**：注册表中有"postgres"映射；动态加载返回正确类；未注册名抛ValueError
+
+### TC-7.25 Provider.scoped()在未connect时抛RuntimeError
+
+- **类型**：UT
+- **主体流程**：PostgresUserRepositoryProvider() → 未调用connect → 调用scoped()
+- **检查项**：抛RuntimeError，提示未连接
+
+### TC-7.26 Provider connect/close生命周期
+
+- **类型**：UT
+- **主体流程**：mock asyncpg.create_pool → provider.connect() → 验证pool创建 → provider.close() → 验证pool关闭
+- **检查项**：connect后_pool非None；close后_pool为None
+
+### TC-7.27 RegistrationPolicy使用UserRepositoryProtocol参数
+
+- **类型**：UT
+- **主体流程**：检查AdminApprovalPolicy.evaluate签名
+- **检查项**：evaluate参数为repo:UserRepositoryProtocol而非db:AsyncConnection
 
 ---
 
