@@ -115,7 +115,7 @@
 
 ### - [x] 步骤 7：JWT认证与Admin审批注册
 
-**增量**：auth模块（routes、models、service、dependencies、policy）、修改migrations/001_initial.sql（users表增加status/is_admin列+部分索引）、User表CRUD（含status和is_admin字段）、EventType枚举新增UserRegistered+UserRegisteredPayload、JWT签发/验证、get_current_user和require_admin FastAPI依赖、bcrypt密码哈希、RegistrationPolicy Protocol定义、AdminApprovalPolicy实现（首个用户自动审批+is_admin，后续用户pending）、3个审批端点（GET /auth/users/pending、POST /auth/users/{id}/approve、POST /auth/users/{id}/reject）、注册响应含status字段（pending/active）、登录检查用户状态（pending/rejected返回403）
+**增量**：auth模块（routes、models、service、policy、repository、postgres_repo）、修改migrations/001_initial.sql（users表增加status/is_admin列+部分索引）、UserRepositoryProtocol(ABC) CRUD接口 + UserRepositoryProvider(ABC) connect/close/scoped生命周期 + REPO_PROVIDER_IMPLEMENTATIONS注册表 + load_user_repo_provider()动态加载、PostgresUserRepository + PostgresUserRepositoryProvider self-managed pool + scoped()事务模式、EventType枚举新增UserRegistered+UserRegisteredPayload、JWT签发/验证、get_current_user和require_admin FastAPI依赖（合并到routes.py）、bcrypt密码哈希、RegistrationPolicy Protocol定义（evaluate参数为repo:UserRepositoryProtocol）、AdminApprovalPolicy实现（首个用户自动审批+is_admin，后续用户pending）、3个审批端点（GET /auth/users/pending、POST /auth/users/{id}/approve、POST /auth/users/{id}/reject）、注册响应含status字段（pending/active）、登录检查用户状态（pending/rejected返回403）
 
 **依赖**：步骤2（User模型、users表）、步骤4（EventStore，注册事件持久化）
 
@@ -333,7 +333,7 @@
 | 1.2 事件基础设施 | EventBus Protocol、InProcessEventBus、EventStoreProtocol+PostgresEventStore、EventProjectionsProtocol+PostgresEventProjections、CQRS投影(4视图)、EventPayload Schema(9种)、correlation_id/causation_id、ChannelAdapter Protocol、SSEChannel | 2-6, 11(ChannelAdapter+SSE), 13 |
 | 1.3 数据模型 | 8张MVP表+索引、全部Pydantic模型、迁移策略、项目边界硬隔离、读写分离 | 2, 4-5, 9-10, 15-16 |
 | 1.4 权限模型 | HumanPermission/AgentPermission bitmask、角色映射(4人类+3Agent)、compute_permissions、require_permission依赖、各端点权限要求 | 8, 9-16 |
-| 1.5 API与认证 | JWT认证流程、21个REST端点+1个SSE流、FastAPI路由组织、错误响应格式 | 7, 9-11, 12, 15-16 |
+| 1.5 API与认证 | JWT认证流程、21个REST端点+1个SSE流、FastAPI路由组织、错误响应格式、UserRepositoryProtocol+Provider ABC+注册表+scoped()事务模式 | 7, 9-11, 12, 15-16 |
 | 1.6 Agent Runtime | 3个Agent声明(含skills字段)、SkillDeclaration数据结构、ModelAdapter Protocol骨架+ClaudeAdapter、生命周期(idle/running/error)、PromptInput/ModelOutput、7步prompt组装、AgentScheduler、AgentRuntime、memory.md管理 | 12(skills+Protocol骨架), 13-14 |
 
 ## 依赖关系图

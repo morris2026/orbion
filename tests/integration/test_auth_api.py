@@ -10,7 +10,7 @@ import pytest
 from httpx import ASGITransport, AsyncClient
 
 from app.config import get_settings
-from app.hub.auth.repository import load_user_repo_impl
+from app.hub.auth.repository import load_user_repo_provider
 from app.hub.events.bus import InProcessEventBus
 from app.hub.events.store import load_store_impl
 from app.main import app
@@ -33,23 +33,24 @@ async def db_conn() -> AsyncGenerator[asyncpg.Connection, None]:
 
 @pytest.fixture
 async def client() -> AsyncGenerator[AsyncClient, None]:
-    """httpx AsyncClient，初始化app.state（pool/event_store/event_bus）"""
-    pool = await asyncpg.create_pool(settings.postgres.url, min_size=2, max_size=5)
-    app.state.pool = pool
-
-    store_cls = load_store_impl("postgres")
+    """httpx AsyncClient，初始化app.state（event_store/event_bus/user_repo_provider）"""
+    store_cls = load_store_impl(settings.event_store)
     event_store = store_cls()
     await event_store.connect()
     app.state.event_store = event_store
     app.state.event_bus = InProcessEventBus()
-    app.state.user_repo_cls = load_user_repo_impl("postgres")
+
+    provider_cls = load_user_repo_provider(settings.user_repo)
+    user_repo_provider = provider_cls()
+    await user_repo_provider.connect()
+    app.state.user_repo_provider = user_repo_provider
 
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as c:
         yield c
 
+    await user_repo_provider.close()
     await event_store.close()
-    await pool.close()
 
 
 async def _register_first_admin(client: AsyncClient) -> dict[str, Any]:

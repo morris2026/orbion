@@ -1,10 +1,9 @@
-"""UserRepositoryProtocol抽象接口与注册表"""
+"""UserRepositoryProtocol抽象接口与Provider注册表"""
 
 import importlib
 from abc import ABC, abstractmethod
 from contextlib import AbstractAsyncContextManager
 from datetime import datetime
-from typing import Any, Protocol
 
 from pydantic import BaseModel
 
@@ -34,11 +33,7 @@ class PendingUserRecord(BaseModel):
 class UserRepositoryProtocol(ABC):
     """用户持久化抽象接口
 
-    实现类同时为async context manager，每次使用创建新实例：
-    async with repo:
-        await repo.check_username_exists(...)
-        await repo.create_user(...)
-    正常退出 → commit；异常退出 → rollback
+    仅定义CRUD方法，事务生命周期由UserRepositoryProvider.scoped()管理。
     """
 
     @abstractmethod
@@ -64,36 +59,53 @@ class UserRepositoryProtocol(ABC):
     async def list_pending_users(self) -> list[PendingUserRecord]: ...
 
 
-class UserRepositoryFactory(Protocol):
-    """工厂协议：接受pool参数，返回async context manager yielding UserRepositoryProtocol
+class UserRepositoryProvider(ABC):
+    """基础设施接口：连接池生命周期 + 每请求事务作用域工厂
 
-    事务生命周期是实现细节（不在UserRepositoryProtocol中定义），
-    但工厂协议确保mypy能验证 async with repo_cls(pool) as repo: 模式。
+    与EventStoreProtocol同一self-managed pool模式：
+    - connect(): 创建连接池
+    - close(): 关闭连接池
+    - scoped(): 返回async context manager，yielding UserRepositoryProtocol
+
+    使用模式：
+        provider = PostgresUserRepositoryProvider()
+        await provider.connect()
+        async with provider.scoped() as repo:
+            await repo.check_username_exists(...)
+            await repo.create_user(...)
+        await provider.close()
     """
 
-    def __call__(self, pool: Any, /) -> AbstractAsyncContextManager[UserRepositoryProtocol]: ...  # noqa: ANN401
+    @abstractmethod
+    async def connect(self) -> None: ...
+    @abstractmethod
+    async def close(self) -> None: ...
+    @abstractmethod
+    def scoped(self) -> AbstractAsyncContextManager[UserRepositoryProtocol]: ...
 
 
-REPO_IMPLEMENTATIONS = {
-    "postgres": "app.hub.auth.postgres_repo.PostgresUserRepository",
+REPO_PROVIDER_IMPLEMENTATIONS = {
+    "postgres": "app.hub.auth.postgres_repo.PostgresUserRepositoryProvider",
 }
 
 
-def load_user_repo_impl(name: str) -> type[UserRepositoryProtocol]:
-    """按注册表动态加载UserRepository实现类
+def load_user_repo_provider(name: str) -> type[UserRepositoryProvider]:
+    """按注册表动态加载UserRepositoryProvider实现类
 
     Args:
         name: 注册表中的实现名，如 "postgres"
 
     Returns:
-        实现类（未实例化），保证为 UserRepositoryProtocol 的子类
+        Provider实现类（未实例化），保证为 UserRepositoryProvider 的子类
 
     Raises:
-        ValueError: 实现名未在注册表中注册，或加载的类未继承 UserRepositoryProtocol
+        ValueError: 实现名未在注册表中注册，或加载的类未继承 UserRepositoryProvider
     """
-    impl_path = REPO_IMPLEMENTATIONS.get(name)
+    impl_path = REPO_PROVIDER_IMPLEMENTATIONS.get(name)
     if impl_path is None:
-        raise ValueError(f"未注册的UserRepository实现: {name}，可选: {list(REPO_IMPLEMENTATIONS.keys())}")
+        raise ValueError(
+            f"未注册的UserRepositoryProvider实现: {name}，可选: {list(REPO_PROVIDER_IMPLEMENTATIONS.keys())}"
+        )
     module_path, class_name = impl_path.rsplit(".", 1)
     try:
         module = importlib.import_module(module_path)
@@ -103,6 +115,6 @@ def load_user_repo_impl(name: str) -> type[UserRepositoryProtocol]:
         impl_cls = getattr(module, class_name)
     except AttributeError as e:
         raise ValueError(f"模块 {module_path} 中不存在类 {class_name}") from e
-    if not isinstance(impl_cls, type) or not issubclass(impl_cls, UserRepositoryProtocol):
-        raise ValueError(f"实现类 {class_name} 未继承 UserRepositoryProtocol")
+    if not isinstance(impl_cls, type) or not issubclass(impl_cls, UserRepositoryProvider):
+        raise ValueError(f"实现类 {class_name} 未继承 UserRepositoryProvider")
     return impl_cls

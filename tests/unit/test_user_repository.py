@@ -1,16 +1,17 @@
-"""步骤7 UserRepository抽象层UT：Protocol conformance、domain models、生命周期边界"""
+"""UserRepository抽象层UT：Protocol conformance、domain models、生命周期边界"""
 
 from datetime import datetime
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from app.hub.auth.postgres_repo import PostgresUserRepository
+from app.hub.auth.postgres_repo import PostgresUserRepository, PostgresUserRepositoryProvider
 from app.hub.auth.repository import (
     PendingUserRecord,
     UserRecord,
     UserRepositoryProtocol,
-    load_user_repo_impl,
+    UserRepositoryProvider,
+    load_user_repo_provider,
 )
 
 
@@ -55,15 +56,45 @@ class TestUserRecordModels:
 class TestUserRepositoryProtocolConformance:
     """Protocol conformance验证"""
 
-    def test_postgres_impl_satisfies_protocol(self) -> None:
-        """PostgresUserRepository继承UserRepositoryProtocol"""
-        cls = load_user_repo_impl("postgres")
-        assert issubclass(cls, UserRepositoryProtocol)
+    def test_postgres_provider_satisfies_provider_protocol(self) -> None:
+        """PostgresUserRepositoryProvider继承UserRepositoryProvider"""
+        cls = load_user_repo_provider("postgres")
+        assert issubclass(cls, UserRepositoryProvider)
 
-    def test_load_unknown_impl_raises_value_error(self) -> None:
-        """未注册实现名抛ValueError"""
+    def test_postgres_repo_satisfies_repo_protocol(self) -> None:
+        """PostgresUserRepository继承UserRepositoryProtocol"""
+        assert issubclass(PostgresUserRepository, UserRepositoryProtocol)
+
+    def test_load_unknown_provider_raises_value_error(self) -> None:
+        """未注册Provider实现名抛ValueError"""
         with pytest.raises(ValueError, match="未注册"):
-            load_user_repo_impl("unknown")
+            load_user_repo_provider("unknown")
+
+
+class TestPostgresUserRepositoryProviderLifecycle:
+    """Provider生命周期边界测试"""
+
+    def test_scoped_raises_before_connect(self) -> None:
+        """scoped()在未connect时抛RuntimeError"""
+        provider = PostgresUserRepositoryProvider()
+        with pytest.raises(RuntimeError, match="未连接"):
+            provider.scoped()
+
+    @pytest.mark.asyncio
+    async def test_connect_close_cycle(self) -> None:
+        """Provider connect/close正常工作"""
+        mock_pool = AsyncMock()
+
+        # asyncpg.create_pool是async函数，mock为返回mock_pool的coroutine
+        async def mock_create_pool(*args: object, **kwargs: object) -> AsyncMock:
+            return mock_pool
+
+        with patch("app.hub.auth.postgres_repo.asyncpg.create_pool", side_effect=mock_create_pool):
+            provider = PostgresUserRepositoryProvider()
+            await provider.connect()
+            assert provider._pool is mock_pool
+        await provider.close()
+        assert provider._pool is None
 
 
 class TestPostgresUserRepositoryLifecycle:

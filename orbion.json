@@ -1,6 +1,7 @@
 {
   "event_store": "postgres",
   "event_projections": "postgres",
+  "user_repo": "postgres",
   "postgres": {
     "host": "localhost",
     "port": 5432,
