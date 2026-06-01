@@ -19,17 +19,8 @@ from app.hub.auth.models import (
     UserResponse,
 )
 from app.hub.auth.policy import AdminApprovalPolicy
-from app.hub.auth.service import (
-    check_username_exists,
-    create_access_token,
-    create_user,
-    get_user_by_id,
-    get_user_by_username,
-    hash_password,
-    list_pending_users,
-    update_user_status,
-    verify_password,
-)
+from app.hub.auth.repository import UserRepositoryFactory
+from app.hub.auth.service import create_access_token, hash_password, verify_password
 from app.hub.events.bus import EventBus
 from app.hub.events.store import EventStoreProtocol
 from app.hub.events.types import Event, EventType, UserRegisteredPayload
@@ -45,6 +36,11 @@ async def _get_pool(request: Request) -> asyncpg.Pool:
     return cast("asyncpg.Pool", request.app.state.pool)
 
 
+async def _get_user_repo(request: Request) -> UserRepositoryFactory:
+    """从app.state获取UserRepository实现类（每次请求创建新实例）"""
+    return cast(UserRepositoryFactory, request.app.state.user_repo_cls)
+
+
 async def _get_event_store(request: Request) -> EventStoreProtocol:
     return cast(EventStoreProtocol, request.app.state.event_store)
 
@@ -57,32 +53,33 @@ async def _get_event_bus(request: Request) -> EventBus:
 async def register(
     request: UserRegister,
     pool: asyncpg.Pool = Depends(_get_pool),
+    repo_cls: UserRepositoryFactory = Depends(_get_user_repo),
     settings: Settings = Depends(get_settings),
     event_store: EventStoreProtocol = Depends(_get_event_store),
     event_bus: EventBus = Depends(_get_event_bus),
 ) -> RegistrationResponse:
     """用户注册：首个用户自动审批+is_admin，后续用户pending"""
-    async with pool.acquire() as conn:
-        async with conn.transaction():
-            if await check_username_exists(conn, request.username):
-                raise HTTPException(status_code=409, detail="Username already exists")
+    # async with repo 内的 HTTPException 会触发事务 rollback；
+    # 当前所有端点均在写入前抛出异常（纯读校验），故 rollback 无副作用
+    async with repo_cls(pool) as repo:
+        if await repo.check_username_exists(request.username):
+            raise HTTPException(status_code=409, detail="Username already exists")
 
-            policy = AdminApprovalPolicy()
-            decision = await policy.evaluate(request, conn)
+        policy = AdminApprovalPolicy()
+        decision = await policy.evaluate(request, repo)
 
-            password_hash = hash_password(request.password)
-            row = await create_user(
-                conn,
-                request.username,
-                password_hash,
-                request.display_name,
-                decision.status,
-                decision.is_admin,
-            )
-            user_id = str(row["id"]) if row else ""
-            user_status = row["status"] if row else "pending"
+        password_hash = hash_password(request.password)
+        user_record = await repo.create_user(
+            request.username,
+            password_hash,
+            request.display_name,
+            decision.status,
+            decision.is_admin,
+        )
+        user_id = user_record.id
+        user_status = user_record.status
 
-    # 连接释放后写事件（EventStore使用独立连接池）
+    # 事务提交后写事件（EventStore使用独立连接池）
     event_payload = UserRegisteredPayload(
         username=request.username,
         display_name=request.display_name,
@@ -131,34 +128,34 @@ async def register(
 async def login(
     request: UserLogin,
     pool: asyncpg.Pool = Depends(_get_pool),
+    repo_cls: UserRepositoryFactory = Depends(_get_user_repo),
     settings: Settings = Depends(get_settings),
 ) -> UserResponse:
     """用户登录：pending/rejected返回403，密码错误返回401"""
-    async with pool.acquire() as conn:
-        row = await get_user_by_username(conn, request.username)
-        if not row:
+    async with repo_cls(pool) as repo:
+        user_record = await repo.get_user_by_username(request.username)
+        if user_record is None:
             raise HTTPException(status_code=401, detail="Invalid credentials")
 
-        if row["status"] == "pending":
+        if user_record.status == "pending":
             raise HTTPException(status_code=403, detail="Account pending admin approval")
-        if row["status"] == "rejected":
+        if user_record.status == "rejected":
             raise HTTPException(status_code=403, detail="Account registration was rejected")
 
-        if not verify_password(request.password, row["password_hash"]):
+        if not verify_password(request.password, user_record.password_hash):
             raise HTTPException(status_code=401, detail="Invalid credentials")
 
-        user_id = str(row["id"])
         token = create_access_token(
-            user_id=user_id,
-            username=row["username"],
-            display_name=row["display_name"],
-            is_admin=row["is_admin"],
+            user_id=user_record.id,
+            username=user_record.username,
+            display_name=user_record.display_name,
+            is_admin=user_record.is_admin,
             settings=settings,
         )
         return UserResponse(
-            user_id=user_id,
-            username=row["username"],
-            display_name=row["display_name"],
+            user_id=user_record.id,
+            username=user_record.username,
+            display_name=user_record.display_name,
             access_token=token,
         )
 
@@ -167,17 +164,19 @@ async def login(
 async def list_pending(
     admin: User = Depends(require_admin_dependency),
     pool: asyncpg.Pool = Depends(_get_pool),
+    repo_cls: UserRepositoryFactory = Depends(_get_user_repo),
 ) -> list[PendingUserResponse]:
     """列出待审批用户，仅is_admin可访问"""
-    async with pool.acquire() as conn:
-        rows = await list_pending_users(conn)
+    # read-only操作也使用事务模式，保持与写端点的repo使用模式一致
+    async with repo_cls(pool) as repo:
+        rows = await repo.list_pending_users()
         return [
             PendingUserResponse(
-                user_id=str(r["id"]),
-                username=r["username"],
-                display_name=r["display_name"],
-                status=r["status"],
-                created_at=r["created_at"],
+                user_id=r.id,
+                username=r.username,
+                display_name=r.display_name,
+                status=r.status,
+                created_at=r.created_at,
             )
             for r in rows
         ]
@@ -188,24 +187,24 @@ async def approve_user(
     user_id: str,
     admin: User = Depends(require_admin_dependency),
     pool: asyncpg.Pool = Depends(_get_pool),
+    repo_cls: UserRepositoryFactory = Depends(_get_user_repo),
 ) -> ApprovalResponse:
     """管理员审批用户：pending→active"""
-    async with pool.acquire() as conn:
-        async with conn.transaction():
-            row = await get_user_by_id(conn, uuid.UUID(user_id))
-            if not row:
-                raise HTTPException(status_code=404, detail="User not found")
-            if row["status"] == "active":
-                raise HTTPException(status_code=400, detail="User is already active")
-            if row["status"] == "rejected":
-                raise HTTPException(status_code=400, detail="User was already rejected")
+    async with repo_cls(pool) as repo:
+        user_record = await repo.get_user_by_id(user_id)
+        if user_record is None:
+            raise HTTPException(status_code=404, detail="User not found")
+        if user_record.status == "active":
+            raise HTTPException(status_code=400, detail="User is already active")
+        if user_record.status == "rejected":
+            raise HTTPException(status_code=400, detail="User was already rejected")
 
-            await update_user_status(conn, uuid.UUID(user_id), "active")
+        await repo.update_user_status(user_id, "active")
 
         return ApprovalResponse(
             user_id=user_id,
-            username=row["username"],
-            display_name=row["display_name"],
+            username=user_record.username,
+            display_name=user_record.display_name,
             status="active",
         )
 
@@ -216,25 +215,25 @@ async def reject_user(
     body: RejectionRequest | None = None,
     admin: User = Depends(require_admin_dependency),
     pool: asyncpg.Pool = Depends(_get_pool),
+    repo_cls: UserRepositoryFactory = Depends(_get_user_repo),
 ) -> ApprovalResponse:
     """管理员拒绝用户：pending→rejected"""
-    async with pool.acquire() as conn:
-        async with conn.transaction():
-            row = await get_user_by_id(conn, uuid.UUID(user_id))
-            if not row:
-                raise HTTPException(status_code=404, detail="User not found")
-            if row["status"] == "active":
-                raise HTTPException(status_code=400, detail="User is already active")
-            if row["status"] == "rejected":
-                raise HTTPException(status_code=400, detail="User was already rejected")
+    async with repo_cls(pool) as repo:
+        user_record = await repo.get_user_by_id(user_id)
+        if user_record is None:
+            raise HTTPException(status_code=404, detail="User not found")
+        if user_record.status == "active":
+            raise HTTPException(status_code=400, detail="User is already active")
+        if user_record.status == "rejected":
+            raise HTTPException(status_code=400, detail="User was already rejected")
 
-            await update_user_status(conn, uuid.UUID(user_id), "rejected")
+        await repo.update_user_status(user_id, "rejected")
 
         reason = body.reason if body else None
         return ApprovalResponse(
             user_id=user_id,
-            username=row["username"],
-            display_name=row["display_name"],
+            username=user_record.username,
+            display_name=user_record.display_name,
             status="rejected",
             reason=reason,
         )
