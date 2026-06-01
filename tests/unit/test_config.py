@@ -72,13 +72,13 @@ def test_postgres_config_schema_forbid_password() -> None:
 def test_orbion_config_schema_defaults() -> None:
     """OrbionConfigSchema 空输入返回完整默认值"""
     config = OrbionConfigSchema.model_validate({})
-    assert config.event_store == "postgres"
+    assert config.database == "postgres"
     assert config.postgres.host == "localhost"
     assert config.postgres.port == 5432
 
 
 def test_config_file_parser_no_file_fallback() -> None:
-    """无配置文件时回退到 OrbionConfigSchema 默认值"""
+    """无配置文件时回退到 OrbionConfigSchema 默认值，database 展开为4个字段"""
     from app.config import OrbionConfigFileParser
 
     monkeypatch = MonkeyPatch()
@@ -87,7 +87,32 @@ def test_config_file_parser_no_file_fallback() -> None:
     data = source()
     assert data["postgres"]["host"] == "localhost"
     assert data["event_store"] == "postgres"
+    assert "database" not in data
     monkeypatch.undo()
+
+
+def test_config_file_parser_expands_database() -> None:
+    """OrbionConfigFileParser 将 database 展开为4个per-feature字段"""
+    from app.config import OrbionConfigFileParser
+
+    with NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
+        json.dump({"database": "postgres"}, f)
+        f.flush()
+        config_path = f.name
+
+    monkeypatch = MonkeyPatch()
+    monkeypatch.setenv("ORBION_CONFIG_PATH", config_path)
+    try:
+        source = OrbionConfigFileParser(Settings)
+        data = source()
+        assert data["event_store"] == "postgres"
+        assert data["event_projections"] == "postgres"
+        assert data["project_read"] == "postgres"
+        assert data["user_repo"] == "postgres"
+        assert "database" not in data
+    finally:
+        monkeypatch.undo()
+        Path(config_path).unlink()
 
 
 def test_config_file_parser_reads_file() -> None:
