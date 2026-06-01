@@ -768,6 +768,65 @@ class TestTaskOutputApprovedRevisionRequestedProjection:
         assert result[0]["status"] == "revision_requested"
 
 
+class TestProjectCreatedProjection:
+    """ProjectCreated → 原子插入 projects + creator member"""
+
+    async def test_project_created_inserts_project_and_creator(
+        self,
+        postgres_pool: asyncpg.Pool,
+        event_bus: InProcessEventBus,
+        event_store: EventStoreProtocol,
+        projections: EventProjectionsProtocol,
+    ) -> None:
+        from datetime import UTC, datetime
+
+        project_id = str(uuid4())
+        now = datetime.now(UTC)
+
+        payload = {
+            "project_id": project_id,
+            "name": "测试项目",
+            "description": "项目描述",
+            "created_at": now.isoformat(),
+            "creator_id": "user-1",
+            "creator_display_name": "张三",
+        }
+        event = make_event(
+            event_type="ProjectCreated",
+            project_id=project_id,
+            participant_id="user-1",
+            payload=payload,
+        )
+        await event_store.append(event)
+        await event_bus.publish(
+            "ProjectCreated",
+            {**payload},
+        )
+        await event_bus.wait_for_pending()
+
+        # 验证 projects 表
+        result = await projections.get_project_members(project_id)
+        assert len(result) == 1
+        member = result[0]
+        assert member["participant_id"] == "user-1"
+        assert member["project_id"] == project_id
+        assert member["type"] == "human"
+        assert member["display_name"] == "张三"
+        # creator 自动成为 owner
+        assert member["roles"] == 4095
+
+        # 验证 projects 行存在
+        async with postgres_pool.acquire() as conn:
+            row = await conn.fetchrow(
+                "SELECT id, name, description FROM projects WHERE id = $1",
+                UUID(project_id),
+            )
+        assert row is not None
+        assert str(row["id"]) == project_id
+        assert row["name"] == "测试项目"
+        assert row["description"] == "项目描述"
+
+
 class TestProjectMembersProjection:
     """TC-5.8: 成员添加 → project_members投影"""
 
@@ -817,8 +876,8 @@ class TestProjectMembersProjection:
         assert member["project_id"] == project_id
         assert member["type"] == "human"
         assert member["display_name"] == "张三"
-        # MVP阶段roles未做str→bitmask转换，DB默认0
-        assert member["roles"] == 0
+        # roles已从payload.roles(["owner"])转为bitmask(4095)
+        assert member["roles"] == 4095
 
 
 class TestProjectionQueryStructuredData:

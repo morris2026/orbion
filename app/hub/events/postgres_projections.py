@@ -1,6 +1,7 @@
 """PostgresEventProjections — PostgreSQL 4张投影表的CQRS读端实现"""
 
 import json
+from datetime import datetime
 from typing import Any
 from uuid import UUID
 
@@ -9,6 +10,7 @@ import asyncpg
 from app.config import get_settings
 from app.hub.events.bus import EventBus
 from app.hub.events.projections import EventProjectionsProtocol
+from app.hub.permissions.roles import AGENT_ROLE_BITS, HUMAN_ROLE_BITS
 
 
 class PostgresEventProjections(EventProjectionsProtocol):
@@ -26,6 +28,7 @@ class PostgresEventProjections(EventProjectionsProtocol):
     async def connect(self) -> None:
         self._pool = await asyncpg.create_pool(self._url, min_size=2, max_size=10)
         self._sub_ids = [
+            self._bus.subscribe("ProjectCreated", self._on_project_created),
             self._bus.subscribe("DiscussionMessageCreated", self._on_message_created),
             self._bus.subscribe("DiscussionSummaryGenerated", self._on_summary_generated),
             self._bus.subscribe("ExecutionPlanProposed", self._on_plan_proposed),
@@ -53,6 +56,32 @@ class PostgresEventProjections(EventProjectionsProtocol):
         return self._pool
 
     # -- 投影更新 handler --
+
+    async def _on_project_created(self, payload: dict[str, Any]) -> None:
+        pool = self._require_pool()
+        async with pool.acquire() as conn:
+            async with conn.transaction():
+                # MVP阶段暂不实现租户隔离，tenant_id由DB DEFAULT填充，投影handler不写入
+                await conn.execute(
+                    "INSERT INTO projects (id, name, description, created_at) "
+                    "VALUES ($1, $2, $3, $4) ON CONFLICT (id) DO NOTHING",
+                    UUID(payload["project_id"]),
+                    payload["name"],
+                    payload.get("description"),
+                    _parse_datetime(payload["created_at"]),
+                )
+                # creator 自动成为 owner member（原子事务，FK依赖在事务内解决）
+                await conn.execute(
+                    "INSERT INTO project_members "
+                    "(participant_id, project_id, type, display_name, roles) "
+                    "VALUES ($1, $2, 'human', $3, $4) "
+                    "ON CONFLICT (participant_id, project_id) DO UPDATE SET "
+                    "display_name = EXCLUDED.display_name, roles = EXCLUDED.roles",
+                    payload["creator_id"],
+                    UUID(payload["project_id"]),
+                    payload["creator_display_name"],
+                    HUMAN_ROLE_BITS["owner"],
+                )
 
     async def _on_message_created(self, payload: dict[str, Any]) -> None:
         pool = self._require_pool()
@@ -165,18 +194,19 @@ class PostgresEventProjections(EventProjectionsProtocol):
 
     async def _on_member_added(self, payload: dict[str, Any]) -> None:
         pool = self._require_pool()
-        # 幂等：ON CONFLICT不产生重复数据
-        # MVP阶段不将payload.roles(str列表)转为DB.roles(BIGINT bitmask)，暂用DB默认0
+        roles_bits = _roles_to_bitmask(payload.get("roles", []), payload.get("participant_type", "human"))
         async with pool.acquire() as conn:
             await conn.execute(
                 "INSERT INTO project_members "
-                "(participant_id, project_id, type, display_name) "
-                "VALUES ($1, $2, $3, $4) "
-                "ON CONFLICT (participant_id, project_id) DO NOTHING",
+                "(participant_id, project_id, type, display_name, roles) "
+                "VALUES ($1, $2, $3, $4, $5) "
+                "ON CONFLICT (participant_id, project_id) DO UPDATE SET "
+                "display_name = EXCLUDED.display_name, roles = EXCLUDED.roles",
                 payload["participant_id"],
                 UUID(payload["project_id"]),
                 payload["participant_type"],
                 payload.get("display_name", ""),
+                roles_bits,
             )
 
     # -- 投影查询方法 --
@@ -260,3 +290,23 @@ def _row_to_dict(row: asyncpg.Record) -> dict[str, Any]:
         if isinstance(val, str):
             record[key] = json.loads(val)
     return record
+
+
+def _roles_to_bitmask(role_names: list[str], participant_type: str) -> int:
+    """将角色名称列表转换为权限位掩码"""
+    if participant_type == "human":
+        bits = 0
+        for role in role_names:
+            bits |= HUMAN_ROLE_BITS.get(role, HUMAN_ROLE_BITS["member"])
+        return bits if bits > 0 else HUMAN_ROLE_BITS["member"]
+    bits = 0
+    for role in role_names:
+        bits |= AGENT_ROLE_BITS.get(role, 0)
+    return bits
+
+
+def _parse_datetime(value: str | datetime) -> datetime:
+    """Bus payload中created_at可能是ISO字符串（Pydantic model_dump序列化），需转为datetime"""
+    if isinstance(value, datetime):
+        return value
+    return datetime.fromisoformat(value)

@@ -44,6 +44,7 @@ class OrbionConfigSchema(BaseModel):
     event_projections: str = Field(
         default="postgres", description="EventProjections 实现名，参见 PROJECTIONS_IMPLEMENTATIONS 注册表"
     )
+    project_read: str = Field(default="postgres", description="ProjectRead 实现名，参见 READ_IMPLEMENTATIONS 注册表")
     user_repo: str = Field(
         default="postgres", description="UserRepositoryProvider 实现名，参见 REPO_PROVIDER_IMPLEMENTATIONS 注册表"
     )
@@ -94,6 +95,7 @@ class Settings(BaseSettings):
     # 非密钥字段：orbion.json 基础值，环境变量可覆盖
     event_store: str = "postgres"
     event_projections: str = "postgres"
+    project_read: str = "postgres"
     user_repo: str = "postgres"
     postgres: PostgresSettings = PostgresSettings()
     repo_path: str = "./repo"
