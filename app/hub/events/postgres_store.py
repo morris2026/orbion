@@ -40,14 +40,15 @@ class PostgresEventStore(EventStoreProtocol):
         await self._pool.execute(
             "INSERT INTO event_log "
             "(event_id, project_id, event_type, participant_id, participant_type, "
-            "payload, correlation_id, causation_id) "
-            "VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, $8)",
-            UUID(event.event_id),  # asyncpg要求UUID列用Python UUID对象
+            "participant_display_name, payload, correlation_id, causation_id) "
+            "VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, $8, $9)",
+            UUID(event.event_id),
             event.project_id,
             event.event_type,
             event.participant_id,
             event.participant_type,
-            json.dumps(event.payload),  # asyncpg要求JSONB列先序列化再::jsonb cast
+            event.participant_display_name,
+            json.dumps(event.payload),
             UUID(event.correlation_id),
             UUID(event.causation_id) if event.causation_id else None,
         )

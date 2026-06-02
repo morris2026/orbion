@@ -124,13 +124,16 @@ class PostgresThreadRead(ThreadReadProtocol):
         )
         return row is not None
 
-    async def check_member_exists(self, project_id: str, user_id: str) -> bool:
-        """检查用户是否为项目成员"""
+    async def check_member_exists(self, project_id: str, user_id: str, member_type: str | None = None) -> bool:
+        """检查用户是否为项目成员 — 默认只查人类成员"""
         pool = self._require_pool()
+        # 线程相关场景只关心人类成员，member_type未指定时默认human
+        effective_type = member_type if member_type is not None else "human"
         row = await pool.fetchrow(
-            "SELECT 1 FROM project_members WHERE participant_id = $1 AND project_id = $2 AND type = 'human'",
+            "SELECT 1 FROM project_members WHERE participant_id = $1 AND project_id = $2 AND type = $3",
             user_id,
             uuid.UUID(project_id),
+            effective_type,
         )
         return row is not None
 

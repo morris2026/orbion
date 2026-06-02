@@ -24,28 +24,22 @@ class ProjectService:
         project_id = str(uuid.uuid4())
         now = datetime.now(UTC)
 
-        # ProjectCreated事件（含创建者信息，投影handler原子插入project + creator member）
-        payload = ProjectCreatedPayload(
-            project_id=project_id,
-            name=name,
-            description=description,
-            created_at=now,
-            creator_id=creator.id,
-            creator_display_name=creator.display_name,
-        )
+        payload = ProjectCreatedPayload(name=name, description=description)
         event = Event(
             event_id=str(uuid.uuid4()),
             project_id=project_id,
             event_type=EventType.ProjectCreated,
             participant_id=creator.id,
             participant_type="human",
+            participant_display_name=creator.display_name,
             payload=payload.model_dump(mode="json"),
             correlation_id=project_id,
+            created_at=now,
         )
 
         # 写入event_log + 发布到EventBus（fire-and-forget，投影最终一致）
         await self._event_store.append(event)
-        await self._event_bus.publish(EventType.ProjectCreated, payload.model_dump(mode="json"))
+        await self._event_bus.publish(event)
 
         # 从命令输入构造响应（CQRS写端不从读端取数据）
         return {
@@ -72,25 +66,20 @@ class ProjectService:
         if await self._read_repo.check_member_exists(project_id, user_id):
             raise ValueError(_MSG_MEMBER_EXISTS)
 
-        payload = MemberAddedPayload(
-            participant_id=user_id,
-            project_id=project_id,
-            participant_type="human",
-            display_name=display_name,
-            roles=[role],
-        )
+        payload = MemberAddedPayload(roles=[role])
         event = Event(
             event_id=str(uuid.uuid4()),
             project_id=project_id,
             event_type=EventType.MemberAdded,
-            participant_id=actor_id,
+            participant_id=user_id,
             participant_type="human",
+            participant_display_name=display_name,
             payload=payload.model_dump(mode="json"),
             correlation_id=str(uuid.uuid4()),
         )
 
         await self._event_store.append(event)
-        await self._event_bus.publish(EventType.MemberAdded, payload.model_dump(mode="json"))
+        await self._event_bus.publish(event)
 
         # 从命令输入构造响应
         return {

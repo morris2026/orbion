@@ -28,8 +28,17 @@ settings = get_settings()
 
 @pytest.fixture
 async def db_conn() -> AsyncGenerator[asyncpg.Connection, None]:
-    """每个测试独立的DB连接，测试后清理关联表"""
+    """每个测试独立的DB连接，测试前后清理关联表"""
     conn = await asyncpg.connect(settings.postgres.url)
+    await conn.execute("DELETE FROM thread_messages")
+    await conn.execute("DELETE FROM execution_plans")
+    await conn.execute("DELETE FROM threads")
+    await conn.execute("DELETE FROM project_members")
+    await conn.execute("DELETE FROM projects")
+    await conn.execute(
+        "DELETE FROM event_log WHERE event_type IN ('DiscussionMessageCreated', 'MemberAdded', 'ProjectCreated')"
+    )
+    await conn.execute("DELETE FROM users")
     yield conn
     await conn.execute("DELETE FROM thread_messages")
     await conn.execute("DELETE FROM execution_plans")

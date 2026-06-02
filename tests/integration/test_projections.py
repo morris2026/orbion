@@ -66,6 +66,7 @@ def make_event(
     project_id: str | None = None,
     participant_id: str = "user-1",
     participant_type: Literal["human", "agent"] = "human",
+    participant_display_name: str = "",
     payload: dict[str, Any] | None = None,
     correlation_id: str | None = None,
     causation_id: str | None = None,
@@ -77,6 +78,7 @@ def make_event(
         event_type=event_type,
         participant_id=participant_id,
         participant_type=participant_type,
+        participant_display_name=participant_display_name,
         payload=payload or {},
         correlation_id=correlation_id or str(uuid4()),
         causation_id=causation_id,
@@ -130,20 +132,11 @@ class TestDiscussionMessageCreatedProjection:
             project_id=project_id,
             participant_id="user-1",
             participant_type="human",
+            participant_display_name="张三",
             payload=payload,
         )
         await event_store.append(event)
-        await event_bus.publish(
-            "DiscussionMessageCreated",
-            {
-                "event_id": event.event_id,
-                "project_id": event.project_id,
-                "participant_id": event.participant_id,
-                "participant_type": event.participant_type,
-                "event_type": event.event_type,
-                **payload,
-            },
-        )
+        await event_bus.publish(event)
 
         # 等待异步handler执行
         await event_bus.wait_for_pending()
@@ -189,17 +182,7 @@ class TestDiscussionSummaryGeneratedProjection:
             payload=payload,
         )
         await event_store.append(event)
-        await event_bus.publish(
-            "DiscussionSummaryGenerated",
-            {
-                "event_id": event.event_id,
-                "project_id": event.project_id,
-                "participant_id": event.participant_id,
-                "participant_type": event.participant_type,
-                "event_type": event.event_type,
-                **payload,
-            },
-        )
+        await event_bus.publish(event)
 
         await event_bus.wait_for_pending()
 
@@ -249,18 +232,7 @@ class TestExecutionPlanProposedProjection:
             payload=payload,
         )
         await event_store.append(event)
-        await event_bus.publish(
-            "ExecutionPlanProposed",
-            {
-                "event_id": event.event_id,
-                "project_id": event.project_id,
-                "participant_id": event.participant_id,
-                "participant_type": event.participant_type,
-                "event_type": event.event_type,
-                "correlation_id": event.correlation_id,
-                **payload,
-            },
-        )
+        await event_bus.publish(event)
 
         await event_bus.wait_for_pending()
 
@@ -308,18 +280,7 @@ class TestExecutionPlanApprovedProjection:
             payload=proposed_payload,
         )
         await event_store.append(proposed_event)
-        await event_bus.publish(
-            "ExecutionPlanProposed",
-            {
-                "event_id": proposed_event.event_id,
-                "project_id": proposed_event.project_id,
-                "participant_id": proposed_event.participant_id,
-                "participant_type": proposed_event.participant_type,
-                "event_type": proposed_event.event_type,
-                "correlation_id": proposed_event.correlation_id,
-                **proposed_payload,
-            },
-        )
+        await event_bus.publish(proposed_event)
 
         await event_bus.wait_for_pending()
 
@@ -339,17 +300,7 @@ class TestExecutionPlanApprovedProjection:
             causation_id=proposed_event.event_id,
         )
         await event_store.append(approved_event)
-        await event_bus.publish(
-            "ExecutionPlanApproved",
-            {
-                "event_id": approved_event.event_id,
-                "project_id": approved_event.project_id,
-                "participant_id": approved_event.participant_id,
-                "participant_type": approved_event.participant_type,
-                "event_type": approved_event.event_type,
-                **approved_payload,
-            },
-        )
+        await event_bus.publish(approved_event)
 
         await event_bus.wait_for_pending()
 
@@ -391,18 +342,7 @@ class TestExecutionPlanRejectedProjection:
             payload=proposed_payload,
         )
         await event_store.append(proposed_event)
-        await event_bus.publish(
-            "ExecutionPlanProposed",
-            {
-                "event_id": proposed_event.event_id,
-                "project_id": proposed_event.project_id,
-                "participant_id": proposed_event.participant_id,
-                "participant_type": proposed_event.participant_type,
-                "event_type": proposed_event.event_type,
-                "correlation_id": proposed_event.correlation_id,
-                **proposed_payload,
-            },
-        )
+        await event_bus.publish(proposed_event)
 
         await event_bus.wait_for_pending()
 
@@ -422,17 +362,7 @@ class TestExecutionPlanRejectedProjection:
             causation_id=proposed_event.event_id,
         )
         await event_store.append(rejected_event)
-        await event_bus.publish(
-            "ExecutionPlanRejected",
-            {
-                "event_id": rejected_event.event_id,
-                "project_id": rejected_event.project_id,
-                "participant_id": rejected_event.participant_id,
-                "participant_type": rejected_event.participant_type,
-                "event_type": rejected_event.event_type,
-                **rejected_payload,
-            },
-        )
+        await event_bus.publish(rejected_event)
 
         await event_bus.wait_for_pending()
 
@@ -472,18 +402,7 @@ class TestTaskOutputGeneratedProjection:
             payload=proposed_payload,
         )
         await event_store.append(proposed_event)
-        await event_bus.publish(
-            "ExecutionPlanProposed",
-            {
-                "event_id": proposed_event.event_id,
-                "project_id": proposed_event.project_id,
-                "participant_id": proposed_event.participant_id,
-                "participant_type": proposed_event.participant_type,
-                "event_type": proposed_event.event_type,
-                "correlation_id": proposed_event.correlation_id,
-                **proposed_payload,
-            },
-        )
+        await event_bus.publish(proposed_event)
 
         await event_bus.wait_for_pending()
 
@@ -507,17 +426,7 @@ class TestTaskOutputGeneratedProjection:
             causation_id=proposed_event.event_id,
         )
         await event_store.append(output_event)
-        await event_bus.publish(
-            "TaskOutputGenerated",
-            {
-                "event_id": output_event.event_id,
-                "project_id": output_event.project_id,
-                "participant_id": output_event.participant_id,
-                "participant_type": output_event.participant_type,
-                "event_type": output_event.event_type,
-                **output_payload,
-            },
-        )
+        await event_bus.publish(output_event)
 
         await event_bus.wait_for_pending()
 
@@ -562,22 +471,7 @@ class TestTaskOutputApprovedRevisionRequestedProjection:
             },
         )
         await event_store.append(proposed_event)
-        await event_bus.publish(
-            "ExecutionPlanProposed",
-            {
-                "event_id": proposed_event.event_id,
-                "project_id": proposed_event.project_id,
-                "participant_id": proposed_event.participant_id,
-                "participant_type": proposed_event.participant_type,
-                "event_type": proposed_event.event_type,
-                "correlation_id": proposed_event.correlation_id,
-                "plan_id": plan_id,
-                "thread_id": thread_id,
-                "tasks": [
-                    {"task_id": "task-1", "type": "code", "description": "实现", "dependencies": [], "priority": "high"}
-                ],
-            },
-        )
+        await event_bus.publish(proposed_event)
 
         await event_bus.wait_for_pending()
 
@@ -600,23 +494,7 @@ class TestTaskOutputApprovedRevisionRequestedProjection:
             causation_id=proposed_event.event_id,
         )
         await event_store.append(output_event)
-        await event_bus.publish(
-            "TaskOutputGenerated",
-            {
-                "event_id": output_event.event_id,
-                "project_id": output_event.project_id,
-                "participant_id": output_event.participant_id,
-                "participant_type": output_event.participant_type,
-                "event_type": output_event.event_type,
-                "task_id": "task-1",
-                "plan_id": plan_id,
-                "output_id": output_id,
-                "output_type": "code",
-                "content": "code",
-                "diff": None,
-                "file_paths": [],
-            },
-        )
+        await event_bus.publish(output_event)
 
         await event_bus.wait_for_pending()
 
@@ -631,18 +509,7 @@ class TestTaskOutputApprovedRevisionRequestedProjection:
             causation_id=output_event.event_id,
         )
         await event_store.append(approved_event)
-        await event_bus.publish(
-            "TaskOutputApproved",
-            {
-                "event_id": approved_event.event_id,
-                "project_id": approved_event.project_id,
-                "participant_id": approved_event.participant_id,
-                "participant_type": approved_event.participant_type,
-                "event_type": approved_event.event_type,
-                "output_id": output_id,
-                "feedback": "不错",
-            },
-        )
+        await event_bus.publish(approved_event)
 
         await event_bus.wait_for_pending()
 
@@ -677,22 +544,7 @@ class TestTaskOutputApprovedRevisionRequestedProjection:
             },
         )
         await event_store.append(proposed_event)
-        await event_bus.publish(
-            "ExecutionPlanProposed",
-            {
-                "event_id": proposed_event.event_id,
-                "project_id": proposed_event.project_id,
-                "participant_id": proposed_event.participant_id,
-                "participant_type": proposed_event.participant_type,
-                "event_type": proposed_event.event_type,
-                "correlation_id": proposed_event.correlation_id,
-                "plan_id": plan_id,
-                "thread_id": thread_id,
-                "tasks": [
-                    {"task_id": "task-1", "type": "code", "description": "实现", "dependencies": [], "priority": "high"}
-                ],
-            },
-        )
+        await event_bus.publish(proposed_event)
 
         await event_bus.wait_for_pending()
 
@@ -715,23 +567,7 @@ class TestTaskOutputApprovedRevisionRequestedProjection:
             causation_id=proposed_event.event_id,
         )
         await event_store.append(output_event)
-        await event_bus.publish(
-            "TaskOutputGenerated",
-            {
-                "event_id": output_event.event_id,
-                "project_id": output_event.project_id,
-                "participant_id": output_event.participant_id,
-                "participant_type": output_event.participant_type,
-                "event_type": output_event.event_type,
-                "task_id": "task-1",
-                "plan_id": plan_id,
-                "output_id": output_id,
-                "output_type": "code",
-                "content": "code",
-                "diff": None,
-                "file_paths": [],
-            },
-        )
+        await event_bus.publish(output_event)
 
         await event_bus.wait_for_pending()
 
@@ -746,20 +582,7 @@ class TestTaskOutputApprovedRevisionRequestedProjection:
             causation_id=output_event.event_id,
         )
         await event_store.append(revision_event)
-        await event_bus.publish(
-            "TaskOutputRevisionRequested",
-            {
-                "event_id": revision_event.event_id,
-                "project_id": revision_event.project_id,
-                "participant_id": revision_event.participant_id,
-                "participant_type": revision_event.participant_type,
-                "event_type": revision_event.event_type,
-                "output_id": output_id,
-                "task_id": "task-1",
-                "issues": ["有bug"],
-                "suggestions": ["修复bug"],
-            },
-        )
+        await event_bus.publish(revision_event)
 
         await event_bus.wait_for_pending()
 
@@ -784,24 +607,20 @@ class TestProjectCreatedProjection:
         now = datetime.now(UTC)
 
         payload = {
-            "project_id": project_id,
             "name": "测试项目",
             "description": "项目描述",
-            "created_at": now.isoformat(),
-            "creator_id": "user-1",
-            "creator_display_name": "张三",
         }
         event = make_event(
             event_type="ProjectCreated",
             project_id=project_id,
             participant_id="user-1",
+            participant_display_name="张三",
             payload=payload,
+            correlation_id=project_id,
         )
+        event.created_at = now
         await event_store.append(event)
-        await event_bus.publish(
-            "ProjectCreated",
-            {**payload},
-        )
+        await event_bus.publish(event)
         await event_bus.wait_for_pending()
 
         # 验证 projects 表
@@ -841,10 +660,6 @@ class TestProjectMembersProjection:
         await seed_project(postgres_pool, project_id)
 
         payload = {
-            "participant_id": "user-1",
-            "project_id": project_id,
-            "participant_type": "human",
-            "display_name": "张三",
             "roles": ["owner"],
         }
         event = make_event(
@@ -852,20 +667,11 @@ class TestProjectMembersProjection:
             project_id=project_id,
             participant_id="user-1",
             participant_type="human",
+            participant_display_name="张三",
             payload=payload,
         )
         await event_store.append(event)
-        await event_bus.publish(
-            "MemberAdded",
-            {
-                "event_id": event.event_id,
-                "project_id": event.project_id,
-                "participant_id": event.participant_id,
-                "participant_type": event.participant_type,
-                "event_type": event.event_type,
-                **payload,
-            },
-        )
+        await event_bus.publish(event)
 
         await event_bus.wait_for_pending()
 
@@ -906,17 +712,7 @@ class TestProjectionQueryStructuredData:
             payload=payload,
         )
         await event_store.append(event)
-        await event_bus.publish(
-            "DiscussionMessageCreated",
-            {
-                "event_id": event.event_id,
-                "project_id": event.project_id,
-                "participant_id": event.participant_id,
-                "participant_type": event.participant_type,
-                "event_type": event.event_type,
-                **payload,
-            },
-        )
+        await event_bus.publish(event)
 
         await event_bus.wait_for_pending()
 
@@ -1004,30 +800,17 @@ class TestProjectMembersPrimaryKeyConstraint:
         await seed_project(postgres_pool, project_id)
 
         payload = {
-            "participant_id": "user-A",
-            "project_id": project_id,
-            "participant_type": "human",
-            "display_name": "用户A",
             "roles": ["owner"],
         }
         event1 = make_event(
             event_type="MemberAdded",
             project_id=project_id,
             participant_id="user-A",
+            participant_display_name="用户A",
             payload=payload,
         )
         await event_store.append(event1)
-        await event_bus.publish(
-            "MemberAdded",
-            {
-                "event_id": event1.event_id,
-                "project_id": event1.project_id,
-                "participant_id": event1.participant_id,
-                "participant_type": event1.participant_type,
-                "event_type": event1.event_type,
-                **payload,
-            },
-        )
+        await event_bus.publish(event1)
 
         await event_bus.wait_for_pending()
 
@@ -1036,20 +819,11 @@ class TestProjectMembersPrimaryKeyConstraint:
             event_type="MemberAdded",
             project_id=project_id,
             participant_id="user-A",
+            participant_display_name="用户A",
             payload=payload,
         )
         await event_store.append(event2)
-        await event_bus.publish(
-            "MemberAdded",
-            {
-                "event_id": event2.event_id,
-                "project_id": event2.project_id,
-                "participant_id": event2.participant_id,
-                "participant_type": event2.participant_type,
-                "event_type": event2.event_type,
-                **payload,
-            },
-        )
+        await event_bus.publish(event2)
 
         await event_bus.wait_for_pending()
 

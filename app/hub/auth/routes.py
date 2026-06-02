@@ -85,11 +85,12 @@ async def register(
         event_type=EventType.UserRegistered,
         participant_id=user_id,
         participant_type="human",
+        participant_display_name=request.display_name,
         payload=event_payload.model_dump(mode="json"),
         correlation_id=user_id,
     )
     await event_store.append(event)
-    await event_bus.publish(EventType.UserRegistered, event_payload.model_dump(mode="json"))
+    await event_bus.publish(event)
 
     if user_status == "active":
         token = create_access_token(

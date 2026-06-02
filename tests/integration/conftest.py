@@ -1,19 +1,9 @@
-"""PostgreSQL测试seeding临时方案
-
-当前MVP没有ProjectCreated/ThreadCreated等领域事件，投影测试需要的前置数据
-（projects、threads表行）只能通过直接DB INSERT实现。本文件提供独立连接池
-用于seeding和cleanup，绕过抽象层直接操作数据库。
-
-⚠️ 这是临时方案，后续替换目标：
-- 补充ProjectCreated/ThreadCreated等领域事件类型
-- 投影处理器订阅这些事件，自动写入projects/threads表
-- 测试seeding改为通过EventStore.append + EventBus.publish发送领域事件
-- 删除本文件，seeding逻辑回归test_projections.py通过事件通道完成
-"""
+"""PostgreSQL测试基础设施：Docker启停 + 数据库迁移 + seeding连接池"""
 
 import subprocess
 import time
 from collections.abc import AsyncGenerator, Generator
+from pathlib import Path
 
 import asyncpg
 import pytest
@@ -21,6 +11,7 @@ import pytest
 from app.config import get_settings
 
 settings = get_settings()
+MIGRATIONS_DIR = Path(__file__).resolve().parent.parent.parent / "migrations"
 
 
 def _wait_for_postgres() -> None:
@@ -40,11 +31,28 @@ def _wait_for_postgres() -> None:
     raise RuntimeError("PostgreSQL did not become ready within 30 seconds")
 
 
+async def _run_migrations() -> None:
+    """清空现有表后执行所有迁移SQL文件（确保schema一致性）"""
+    conn = await asyncpg.connect(settings.postgres.url)
+    # 清空现有表（测试每次从干净schema开始）
+    tables = await conn.fetch("SELECT tablename FROM pg_tables WHERE schemaname = 'public'")
+    for t in tables:
+        await conn.execute(f"DROP TABLE IF EXISTS {t['tablename']} CASCADE")
+    # 按文件名排序执行迁移
+    migration_files = sorted(MIGRATIONS_DIR.glob("*.sql"))
+    for mf in migration_files:
+        await conn.execute(mf.read_text())
+    await conn.close()
+
+
 @pytest.fixture(scope="session", autouse=True)
 def _docker_postgres() -> Generator[None, None, None]:
-    """集成测试 session 级自动启停 Docker PostgreSQL"""
+    """集成测试 session 级自动启停 Docker PostgreSQL + 执行数据库迁移"""
     subprocess.run(["docker", "compose", "up", "-d", "postgres"], check=True)
     _wait_for_postgres()
+    import asyncio
+
+    asyncio.run(_run_migrations())
     yield
     subprocess.run(["docker", "compose", "down"], check=True)
 
