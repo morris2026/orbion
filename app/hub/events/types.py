@@ -9,6 +9,7 @@ from pydantic import BaseModel, Field
 # Event模型VARCHAR长度约束（与migrations/001_initial.sql event_log表对齐）
 EVENT_PROJECT_ID_MAX_LEN: Final[int] = 64
 EVENT_PARTICIPANT_ID_MAX_LEN: Final[int] = 64
+EVENT_PARTICIPANT_DISPLAY_NAME_MAX_LEN: Final[int] = 64
 EVENT_TYPE_MAX_LEN: Final[int] = 64
 EVENT_PARTICIPANT_TYPE_MAX_LEN: Final[int] = 8
 
@@ -37,6 +38,7 @@ class Event(BaseModel):
     event_type: str = Field(max_length=EVENT_TYPE_MAX_LEN)
     participant_id: str = Field(max_length=EVENT_PARTICIPANT_ID_MAX_LEN)
     participant_type: Literal["human", "agent"] = Field(max_length=EVENT_PARTICIPANT_TYPE_MAX_LEN)
+    participant_display_name: str = Field(default="", max_length=EVENT_PARTICIPANT_DISPLAY_NAME_MAX_LEN)
     payload: dict[str, Any] = Field(default_factory=dict)
     correlation_id: str
     causation_id: str | None = None
@@ -47,11 +49,12 @@ class Event(BaseModel):
 
 
 class DiscussionMessageCreatedPayload(BaseModel):
-    """DiscussionMessageCreated payload"""
+    """DiscussionMessageCreated payload — 领域字段 + 投影行主键"""
 
     thread_id: str
     content: str
     request_summary: bool = False
+    message_id: str = ""
 
 
 class DiscussionSummaryGeneratedPayload(BaseModel):
@@ -128,23 +131,15 @@ class TaskOutputRevisionRequestedPayload(BaseModel):
 
 
 class ProjectCreatedPayload(BaseModel):
-    """ProjectCreated payload — 项目创建事件，携带创建者信息"""
+    """ProjectCreated payload — 纯领域字段：项目名和描述"""
 
-    project_id: str
     name: str
     description: str | None = None
-    created_at: datetime
-    creator_id: str
-    creator_display_name: str
 
 
 class MemberAddedPayload(BaseModel):
-    """MemberAdded payload"""
+    """MemberAdded payload — 纯领域字段：角色"""
 
-    participant_id: str
-    project_id: str
-    participant_type: Literal["human", "agent"]
-    display_name: str
     roles: list[str] = Field(default_factory=list)
 
 

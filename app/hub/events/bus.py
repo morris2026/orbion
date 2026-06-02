@@ -4,31 +4,35 @@ import asyncio
 import logging
 from collections import defaultdict
 from collections.abc import Awaitable, Callable
-from typing import Any, Protocol, runtime_checkable
+from typing import Protocol, runtime_checkable
 from uuid import uuid4
+
+from app.hub.events.types import Event
 
 logger = logging.getLogger(__name__)
 
-Handler = Callable[[dict[str, Any]], Awaitable[None]]
+Handler = Callable[[Event], Awaitable[None]]
 
 
 @runtime_checkable
 class EventBus(Protocol):
     """事件发布/订阅抽象接口"""
 
-    async def publish(self, event_type: str, payload: dict[str, Any]) -> None: ...
+    async def publish(self, event: Event) -> None: ...
+
     def subscribe(
         self,
         event_type: str,
         handler: Handler,
     ) -> str: ...  # 返回subscription_id，用于unsubscribe取消订阅
+
     def unsubscribe(self, subscription_id: str) -> None: ...
 
 
-async def _safe_run(handler: Handler, payload: dict[str, Any]) -> None:
+async def _safe_run(handler: Handler, event: Event) -> None:
     """handler异常隔离：一个handler失败不阻塞其他handler，异常仅记录日志"""
     try:
-        await handler(payload)
+        await handler(event)
     except Exception:
         logger.exception("EventBus handler error")
 
@@ -40,10 +44,10 @@ class InProcessEventBus:
         self._handlers: dict[str, list[tuple[str, Handler]]] = defaultdict(list)
         self._pending: set[asyncio.Task[None]] = set()
 
-    async def publish(self, event_type: str, payload: dict[str, Any]) -> None:
-        handlers = self._handlers.get(event_type, [])
+    async def publish(self, event: Event) -> None:
+        handlers = self._handlers.get(event.event_type, [])
         for _sub_id, handler in handlers:
-            task = asyncio.create_task(_safe_run(handler, payload))
+            task = asyncio.create_task(_safe_run(handler, event))
             self._pending.add(task)
             task.add_done_callback(self._pending.discard)
 

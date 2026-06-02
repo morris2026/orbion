@@ -8,6 +8,7 @@ CREATE TABLE event_log (
     event_type       VARCHAR(64) NOT NULL,
     participant_id   VARCHAR(64) NOT NULL,
     participant_type VARCHAR(8)  NOT NULL CHECK (participant_type IN ('human', 'agent')),
+    participant_display_name VARCHAR(64) NOT NULL DEFAULT '',
     payload          JSONB       NOT NULL DEFAULT '{}',
     correlation_id   UUID        NOT NULL,
     causation_id     UUID        NULL,

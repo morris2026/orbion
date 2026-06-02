@@ -73,13 +73,21 @@ class PostgresProjectRead(ProjectReadProtocol):
         )
         return int(row["roles"]) if row else None
 
-    async def check_member_exists(self, project_id: str, user_id: str) -> bool:
+    async def check_member_exists(self, project_id: str, user_id: str, member_type: str | None = None) -> bool:
         pool = self._require_pool()
-        row = await pool.fetchrow(
-            "SELECT 1 FROM project_members WHERE participant_id = $1 AND project_id = $2",
-            user_id,
-            uuid.UUID(project_id),
-        )
+        if member_type is not None:
+            row = await pool.fetchrow(
+                "SELECT 1 FROM project_members WHERE participant_id = $1 AND project_id = $2 AND type = $3",
+                user_id,
+                uuid.UUID(project_id),
+                member_type,
+            )
+        else:
+            row = await pool.fetchrow(
+                "SELECT 1 FROM project_members WHERE participant_id = $1 AND project_id = $2",
+                user_id,
+                uuid.UUID(project_id),
+            )
         return row is not None
 
 

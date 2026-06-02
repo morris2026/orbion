@@ -20,9 +20,8 @@ settings = get_settings()
 
 @pytest.fixture
 async def db_conn() -> AsyncGenerator[asyncpg.Connection, None]:
-    """每个测试独立的DB连接，测试后清理users表"""
+    """每个测试独立的DB连接，测试前后清理users表和关联的event_log记录"""
     conn = await asyncpg.connect(settings.postgres.url)
-    # 清理users表和关联的event_log记录
     await conn.execute("DELETE FROM event_log WHERE event_type = 'UserRegistered'")
     await conn.execute("DELETE FROM users")
     yield conn

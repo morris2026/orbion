@@ -1,7 +1,7 @@
 """PostgresEventProjections — PostgreSQL 4张投影表的CQRS读端实现"""
 
 import json
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID
 
@@ -10,6 +10,7 @@ import asyncpg
 from app.config import get_settings
 from app.hub.events.bus import EventBus
 from app.hub.events.projections import EventProjectionsProtocol
+from app.hub.events.types import Event
 from app.hub.permissions.roles import AGENT_ROLE_BITS, HUMAN_ROLE_BITS
 
 
@@ -57,18 +58,19 @@ class PostgresEventProjections(EventProjectionsProtocol):
 
     # -- 投影更新 handler --
 
-    async def _on_project_created(self, payload: dict[str, Any]) -> None:
+    async def _on_project_created(self, event: Event) -> None:
         pool = self._require_pool()
+        payload = event.payload
         async with pool.acquire() as conn:
             async with conn.transaction():
                 # MVP阶段暂不实现租户隔离，tenant_id由DB DEFAULT填充，投影handler不写入
                 await conn.execute(
                     "INSERT INTO projects (id, name, description, created_at) "
                     "VALUES ($1, $2, $3, $4) ON CONFLICT (id) DO NOTHING",
-                    UUID(payload["project_id"]),
+                    UUID(event.project_id),
                     payload["name"],
                     payload.get("description"),
-                    _parse_datetime(payload["created_at"]),
+                    event.created_at or datetime.now(UTC),
                 )
                 # creator 自动成为 owner member（原子事务，FK依赖在事务内解决）
                 await conn.execute(
@@ -77,16 +79,17 @@ class PostgresEventProjections(EventProjectionsProtocol):
                     "VALUES ($1, $2, 'human', $3, $4) "
                     "ON CONFLICT (participant_id, project_id) DO UPDATE SET "
                     "display_name = EXCLUDED.display_name, roles = EXCLUDED.roles",
-                    payload["creator_id"],
-                    UUID(payload["project_id"]),
-                    payload["creator_display_name"],
+                    event.participant_id,
+                    UUID(event.project_id),
+                    event.participant_display_name,
                     HUMAN_ROLE_BITS["owner"],
                 )
 
-    async def _on_message_created(self, payload: dict[str, Any]) -> None:
+    async def _on_message_created(self, event: Event) -> None:
         pool = self._require_pool()
+        payload = event.payload
         async with pool.acquire() as conn:
-            # 如果payload包含message_id，使用它作为thread_messages.id（保证游标分页一致性）
+            # message_id用于投影表和响应id对齐，保证游标分页一致性
             message_id = payload.get("message_id")
             if message_id:
                 await conn.execute(
@@ -95,12 +98,12 @@ class PostgresEventProjections(EventProjectionsProtocol):
                     "VALUES ($1, $2, $3, $4, $5, $6, $7, $8)",
                     UUID(message_id),
                     UUID(payload["thread_id"]),
-                    UUID(payload["project_id"]),
-                    payload["participant_id"],
-                    payload["participant_type"],
-                    payload.get("display_name", ""),
+                    UUID(event.project_id),
+                    event.participant_id,
+                    event.participant_type,
+                    event.participant_display_name,
                     payload["content"],
-                    payload["event_type"],
+                    event.event_type,
                 )
             else:
                 await conn.execute(
@@ -108,16 +111,17 @@ class PostgresEventProjections(EventProjectionsProtocol):
                     "(thread_id, project_id, participant_id, participant_type, display_name, content, event_type) "
                     "VALUES ($1, $2, $3, $4, $5, $6, $7)",
                     UUID(payload["thread_id"]),
-                    UUID(payload["project_id"]),
-                    payload["participant_id"],
-                    payload["participant_type"],
-                    payload.get("display_name", ""),
+                    UUID(event.project_id),
+                    event.participant_id,
+                    event.participant_type,
+                    event.participant_display_name,
                     payload["content"],
-                    payload["event_type"],
+                    event.event_type,
                 )
 
-    async def _on_summary_generated(self, payload: dict[str, Any]) -> None:
+    async def _on_summary_generated(self, event: Event) -> None:
         pool = self._require_pool()
+        payload = event.payload
         summary_content = json.dumps(
             {
                 "summary_id": payload.get("summary_id"),
@@ -133,58 +137,62 @@ class PostgresEventProjections(EventProjectionsProtocol):
                 "(thread_id, project_id, participant_id, participant_type, display_name, content, event_type) "
                 "VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7)",
                 UUID(payload["thread_id"]),
-                UUID(payload["project_id"]),
-                payload["participant_id"],
-                payload["participant_type"],
-                payload.get("display_name", ""),
+                UUID(event.project_id),
+                event.participant_id,
+                event.participant_type,
+                event.participant_display_name,
                 summary_content,
-                payload["event_type"],
+                event.event_type,
             )
 
-    async def _on_plan_proposed(self, payload: dict[str, Any]) -> None:
+    async def _on_plan_proposed(self, event: Event) -> None:
         pool = self._require_pool()
+        payload = event.payload
         async with pool.acquire() as conn:
             await conn.execute(
                 "INSERT INTO execution_plans "
                 "(id, project_id, thread_id, correlation_id, status, proposed_by, tasks) "
                 "VALUES ($1, $2, $3, $4, 'proposed', $5, $6::jsonb)",
                 UUID(payload["plan_id"]),
-                UUID(payload["project_id"]),
+                UUID(event.project_id),
                 UUID(payload["thread_id"]) if payload.get("thread_id") else None,
-                UUID(payload["correlation_id"]),
-                payload["participant_id"],
+                UUID(event.correlation_id),
+                event.participant_id,
                 json.dumps(payload.get("tasks", [])),
             )
 
-    async def _on_plan_approved(self, payload: dict[str, Any]) -> None:
+    async def _on_plan_approved(self, event: Event) -> None:
         pool = self._require_pool()
+        payload = event.payload
         async with pool.acquire() as conn:
             # 追加审批者到approved_by列表
             await conn.execute(
                 "UPDATE execution_plans "
                 "SET status = 'approved', approved_by = approved_by || $1::jsonb, updated_at = NOW() "
                 "WHERE id = $2",
-                json.dumps([payload["participant_id"]]),
+                json.dumps([event.participant_id]),
                 UUID(payload["plan_id"]),
             )
 
-    async def _on_plan_rejected(self, payload: dict[str, Any]) -> None:
+    async def _on_plan_rejected(self, event: Event) -> None:
         pool = self._require_pool()
+        payload = event.payload
         async with pool.acquire() as conn:
             await conn.execute(
                 "UPDATE execution_plans SET status = 'rejected', updated_at = NOW() WHERE id = $1",
                 UUID(payload["plan_id"]),
             )
 
-    async def _on_output_generated(self, payload: dict[str, Any]) -> None:
+    async def _on_output_generated(self, event: Event) -> None:
         pool = self._require_pool()
+        payload = event.payload
         async with pool.acquire() as conn:
             await conn.execute(
                 "INSERT INTO task_outputs "
                 "(id, project_id, task_id, plan_id, output_type, content, diff, file_paths, status) "
                 "VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, 'generated')",
                 UUID(payload["output_id"]),
-                UUID(payload["project_id"]),
+                UUID(event.project_id),
                 payload["task_id"],
                 UUID(payload["plan_id"]),
                 payload["output_type"],
@@ -193,25 +201,28 @@ class PostgresEventProjections(EventProjectionsProtocol):
                 json.dumps(payload.get("file_paths", [])),
             )
 
-    async def _on_output_approved(self, payload: dict[str, Any]) -> None:
+    async def _on_output_approved(self, event: Event) -> None:
         pool = self._require_pool()
+        payload = event.payload
         async with pool.acquire() as conn:
             await conn.execute(
                 "UPDATE task_outputs SET status = 'approved' WHERE id = $1",
                 UUID(payload["output_id"]),
             )
 
-    async def _on_output_revision_requested(self, payload: dict[str, Any]) -> None:
+    async def _on_output_revision_requested(self, event: Event) -> None:
         pool = self._require_pool()
+        payload = event.payload
         async with pool.acquire() as conn:
             await conn.execute(
                 "UPDATE task_outputs SET status = 'revision_requested' WHERE id = $1",
                 UUID(payload["output_id"]),
             )
 
-    async def _on_member_added(self, payload: dict[str, Any]) -> None:
+    async def _on_member_added(self, event: Event) -> None:
         pool = self._require_pool()
-        roles_bits = _roles_to_bitmask(payload.get("roles", []), payload.get("participant_type", "human"))
+        payload = event.payload
+        roles_bits = _roles_to_bitmask(payload.get("roles", []), event.participant_type)
         async with pool.acquire() as conn:
             await conn.execute(
                 "INSERT INTO project_members "
@@ -219,10 +230,10 @@ class PostgresEventProjections(EventProjectionsProtocol):
                 "VALUES ($1, $2, $3, $4, $5) "
                 "ON CONFLICT (participant_id, project_id) DO UPDATE SET "
                 "display_name = EXCLUDED.display_name, roles = EXCLUDED.roles",
-                payload["participant_id"],
-                UUID(payload["project_id"]),
-                payload["participant_type"],
-                payload.get("display_name", ""),
+                event.participant_id,
+                UUID(event.project_id),
+                event.participant_type,
+                event.participant_display_name,
                 roles_bits,
             )
 

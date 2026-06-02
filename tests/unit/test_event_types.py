@@ -152,6 +152,7 @@ class TestDiscussionMessageCreatedPayload:
         assert payload.thread_id == "t-1"
         assert payload.content == "hello"
         assert payload.request_summary is False
+        assert payload.message_id == ""
 
     def test_tc2_4_1_thread_id_required(self) -> None:
         """TC-2.4.1：thread_id缺失报错"""
@@ -180,6 +181,13 @@ class TestDiscussionMessageCreatedPayload:
 
         payload = DiscussionMessageCreatedPayload(thread_id="t-1", content="hello")
         assert payload.request_summary is False
+
+    def test_tc2_4_1_message_id_default_empty(self) -> None:
+        """TC-2.4.1：message_id默认空字符串"""
+        from app.hub.events.types import DiscussionMessageCreatedPayload
+
+        payload = DiscussionMessageCreatedPayload(thread_id="t-1", content="hello", message_id="m-1")
+        assert payload.message_id == "m-1"
 
 
 class TestDiscussionSummaryGeneratedPayload:
@@ -488,196 +496,54 @@ class TestTaskOutputRevisionRequestedPayload:
 
 
 class TestMemberAddedPayload:
-    """TC-2.4.9：MemberAdded payload"""
+    """TC-2.4.9：MemberAdded payload — 纯领域字段roles"""
 
     def test_tc2_4_9_valid_creation(self) -> None:
         """TC-2.4.9：正常创建"""
         from app.hub.events.types import MemberAddedPayload
 
-        payload = MemberAddedPayload(
-            participant_id="user-1",
-            project_id="proj-1",
-            participant_type="human",
-            display_name="张三",
-        )
-        assert payload.participant_id == "user-1"
-        assert payload.project_id == "proj-1"
-        assert payload.participant_type == "human"
-        assert payload.display_name == "张三"
-        assert payload.roles == []
-
-    def test_tc2_4_9_participant_id_required(self) -> None:
-        """TC-2.4.9：participant_id缺失报错"""
-        from app.hub.events.types import MemberAddedPayload
-
-        with pytest.raises(ValidationError):
-            MemberAddedPayload(  # type: ignore[call-arg]
-                project_id="proj-1",
-                participant_type="human",
-                display_name="张三",
-            )
-
-    def test_tc2_4_9_project_id_required(self) -> None:
-        """TC-2.4.9：project_id缺失报错"""
-        from app.hub.events.types import MemberAddedPayload
-
-        with pytest.raises(ValidationError):
-            MemberAddedPayload(  # type: ignore[call-arg]
-                participant_id="user-1",
-                participant_type="human",
-                display_name="张三",
-            )
-
-    def test_tc2_4_9_display_name_required(self) -> None:
-        """TC-2.4.9：display_name缺失报错"""
-        from app.hub.events.types import MemberAddedPayload
-
-        with pytest.raises(ValidationError):
-            MemberAddedPayload(  # type: ignore[call-arg]
-                participant_id="user-1",
-                project_id="proj-1",
-                participant_type="human",
-            )
-
-    def test_tc2_4_9_participant_type_invalid(self) -> None:
-        """TC-2.4.9：participant_type非法值报错"""
-        from app.hub.events.types import MemberAddedPayload
-
-        with pytest.raises(ValidationError):
-            MemberAddedPayload(
-                participant_id="user-1",
-                project_id="proj-1",
-                participant_type="robot",  # type: ignore[arg-type]
-                display_name="张三",
-            )
+        payload = MemberAddedPayload(roles=["owner"])
+        assert payload.roles == ["owner"]
 
     def test_tc2_4_9_roles_default_empty_list(self) -> None:
         """TC-2.4.9：roles默认空列表"""
         from app.hub.events.types import MemberAddedPayload
 
-        payload = MemberAddedPayload(
-            participant_id="user-1",
-            project_id="proj-1",
-            participant_type="human",
-            display_name="张三",
-        )
+        payload = MemberAddedPayload()
         assert payload.roles == []
 
-        payload_with_roles = MemberAddedPayload(
-            participant_id="user-1",
-            project_id="proj-1",
-            participant_type="human",
-            display_name="张三",
-            roles=["owner"],
-        )
-        assert payload_with_roles.roles == ["owner"]
+    def test_tc2_4_9_roles_with_multiple_values(self) -> None:
+        """TC-2.4.9：roles支持多个角色"""
+        from app.hub.events.types import MemberAddedPayload
+
+        payload = MemberAddedPayload(roles=["owner", "member"])
+        assert payload.roles == ["owner", "member"]
 
 
 class TestProjectCreatedPayload:
-    """ProjectCreated payload schema测试"""
+    """ProjectCreated payload schema测试 — 纯领域字段name+description"""
 
     def test_valid_creation(self) -> None:
         """正常创建：全字段"""
-        from datetime import UTC, datetime
-
         from app.hub.events.types import ProjectCreatedPayload
 
-        now = datetime(2026, 1, 1, tzinfo=UTC)
         payload = ProjectCreatedPayload(
-            project_id="proj-1",
             name="My Project",
             description="A test project",
-            created_at=now,
-            creator_id="user-1",
-            creator_display_name="张三",
         )
-        assert payload.project_id == "proj-1"
         assert payload.name == "My Project"
         assert payload.description == "A test project"
-        assert payload.created_at == now
-        assert payload.creator_id == "user-1"
-        assert payload.creator_display_name == "张三"
-
-    def test_creator_id_required(self) -> None:
-        """creator_id缺失报错"""
-        from datetime import UTC, datetime
-
-        from app.hub.events.types import ProjectCreatedPayload
-
-        with pytest.raises(ValidationError):
-            ProjectCreatedPayload(  # type: ignore[call-arg]
-                project_id="proj-1",
-                name="My Project",
-                created_at=datetime.now(UTC),
-                creator_display_name="张三",
-            )
-
-    def test_creator_display_name_required(self) -> None:
-        """creator_display_name缺失报错"""
-        from datetime import UTC, datetime
-
-        from app.hub.events.types import ProjectCreatedPayload
-
-        with pytest.raises(ValidationError):
-            ProjectCreatedPayload(  # type: ignore[call-arg]
-                project_id="proj-1",
-                name="My Project",
-                created_at=datetime.now(UTC),
-                creator_id="user-1",
-            )
-
-    def test_created_at_required(self) -> None:
-        """created_at缺失报错"""
-        from app.hub.events.types import ProjectCreatedPayload
-
-        with pytest.raises(ValidationError):
-            ProjectCreatedPayload(  # type: ignore[call-arg]
-                project_id="proj-1",
-                name="My Project",
-                creator_id="user-1",
-                creator_display_name="张三",
-            )
-
-    def test_project_id_required(self) -> None:
-        """project_id缺失报错"""
-        from datetime import UTC, datetime
-
-        from app.hub.events.types import ProjectCreatedPayload
-
-        with pytest.raises(ValidationError):
-            ProjectCreatedPayload(  # type: ignore[call-arg]
-                name="My Project",
-                created_at=datetime.now(UTC),
-                creator_id="user-1",
-                creator_display_name="张三",
-            )
 
     def test_name_required(self) -> None:
         """name缺失报错"""
-        from datetime import UTC, datetime
-
         from app.hub.events.types import ProjectCreatedPayload
 
         with pytest.raises(ValidationError):
-            ProjectCreatedPayload(  # type: ignore[call-arg]
-                project_id="proj-1",
-                description="desc",
-                created_at=datetime.now(UTC),
-                creator_id="user-1",
-                creator_display_name="张三",
-            )
+            ProjectCreatedPayload()  # type: ignore[call-arg]
 
     def test_description_optional(self) -> None:
         """description选填，默认None"""
-        from datetime import UTC, datetime
-
         from app.hub.events.types import ProjectCreatedPayload
 
-        payload = ProjectCreatedPayload(
-            project_id="proj-1",
-            name="My Project",
-            created_at=datetime.now(UTC),
-            creator_id="user-1",
-            creator_display_name="张三",
-        )
+        payload = ProjectCreatedPayload(name="My Project")
         assert payload.description is None

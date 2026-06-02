@@ -35,23 +35,13 @@ class ThreadService:
 
         # 线程创建消息以标题作为首条内容 — 设计文档3.1要求创建线程同时发布DiscussionMessageCreated事件，
         # 需要有content（MessageCreate min_length=1），标题是线程主题的自然表达
+        message_id = str(uuid.uuid4())
         payload = DiscussionMessageCreatedPayload(
             thread_id=thread_id,
             content=title,
             request_summary=False,
+            message_id=message_id,
         )
-        # DiscussionMessageCreatedPayload只含领域字段（thread_id/content/request_summary），
-        # 投影handler(_on_message_created)还需从payload读取上下文字段（project_id/participant_id等），
-        # 这些字段在Event模型中有但不自动传递到payload dict，需手动补充
-        payload_dict = payload.model_dump(mode="json")
-        payload_dict["project_id"] = project_id
-        payload_dict["participant_id"] = creator.id
-        payload_dict["participant_type"] = "human"
-        payload_dict["display_name"] = creator.display_name
-        payload_dict["event_type"] = "DiscussionMessageCreated"
-        # 消息id用于投影表和响应id对齐，保证游标分页一致性
-        message_id = str(uuid.uuid4())
-        payload_dict["message_id"] = message_id
 
         event = Event(
             event_id=str(uuid.uuid4()),
@@ -59,12 +49,14 @@ class ThreadService:
             event_type=EventType.DiscussionMessageCreated,
             participant_id=creator.id,
             participant_type="human",
-            payload=payload_dict,
+            participant_display_name=creator.display_name,
+            payload=payload.model_dump(mode="json"),
             correlation_id=thread_id,
+            created_at=now,
         )
 
         await self._event_store.append(event)
-        await self._event_bus.publish(EventType.DiscussionMessageCreated, payload_dict)
+        await self._event_bus.publish(event)
 
         # 从命令输入构造响应
         return {
@@ -83,23 +75,13 @@ class ThreadService:
         if project_id is None:
             raise ValueError(f"Thread {thread_id} not found")
 
+        message_id = str(uuid.uuid4())
         payload = DiscussionMessageCreatedPayload(
             thread_id=thread_id,
             content=content,
             request_summary=request_summary,
+            message_id=message_id,
         )
-        # DiscussionMessageCreatedPayload只含领域字段（thread_id/content/request_summary），
-        # 投影handler(_on_message_created)还需从payload读取上下文字段（project_id/participant_id等），
-        # 这些字段在Event模型中有但不自动传递到payload dict，需手动补充
-        payload_dict = payload.model_dump(mode="json")
-        payload_dict["project_id"] = project_id
-        payload_dict["participant_id"] = user.id
-        payload_dict["participant_type"] = "human"
-        payload_dict["display_name"] = user.display_name
-        payload_dict["event_type"] = "DiscussionMessageCreated"
-        # 消息id用于投影表和响应id对齐
-        message_id = str(uuid.uuid4())
-        payload_dict["message_id"] = message_id
 
         event = Event(
             event_id=str(uuid.uuid4()),
@@ -107,12 +89,13 @@ class ThreadService:
             event_type=EventType.DiscussionMessageCreated,
             participant_id=user.id,
             participant_type="human",
-            payload=payload_dict,
+            participant_display_name=user.display_name,
+            payload=payload.model_dump(mode="json"),
             correlation_id=thread_id,
         )
 
         await self._event_store.append(event)
-        await self._event_bus.publish(EventType.DiscussionMessageCreated, payload_dict)
+        await self._event_bus.publish(event)
 
         # 从命令输入构造响应
         return {
