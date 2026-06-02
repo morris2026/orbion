@@ -153,7 +153,7 @@
 
 ---
 
-### - [ ] 步骤 10：讨论线程与消息API
+### - [x] 步骤 10：讨论线程与消息API
 
 **增量**：threads模块（routes、models、service）、POST/GET /projects/{id}/threads、POST/GET /threads/{id}/messages（游标分页）、request_summary标志、消息发送时发布DiscussionMessageCreated事件
 

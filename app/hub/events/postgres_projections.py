@@ -86,18 +86,35 @@ class PostgresEventProjections(EventProjectionsProtocol):
     async def _on_message_created(self, payload: dict[str, Any]) -> None:
         pool = self._require_pool()
         async with pool.acquire() as conn:
-            await conn.execute(
-                "INSERT INTO thread_messages "
-                "(thread_id, project_id, participant_id, participant_type, display_name, content, event_type) "
-                "VALUES ($1, $2, $3, $4, $5, $6, $7)",
-                UUID(payload["thread_id"]),
-                UUID(payload["project_id"]),
-                payload["participant_id"],
-                payload["participant_type"],
-                payload.get("display_name", ""),
-                payload["content"],
-                payload["event_type"],
-            )
+            # 如果payload包含message_id，使用它作为thread_messages.id（保证游标分页一致性）
+            message_id = payload.get("message_id")
+            if message_id:
+                await conn.execute(
+                    "INSERT INTO thread_messages "
+                    "(id, thread_id, project_id, participant_id, participant_type, display_name, content, event_type) "
+                    "VALUES ($1, $2, $3, $4, $5, $6, $7, $8)",
+                    UUID(message_id),
+                    UUID(payload["thread_id"]),
+                    UUID(payload["project_id"]),
+                    payload["participant_id"],
+                    payload["participant_type"],
+                    payload.get("display_name", ""),
+                    payload["content"],
+                    payload["event_type"],
+                )
+            else:
+                await conn.execute(
+                    "INSERT INTO thread_messages "
+                    "(thread_id, project_id, participant_id, participant_type, display_name, content, event_type) "
+                    "VALUES ($1, $2, $3, $4, $5, $6, $7)",
+                    UUID(payload["thread_id"]),
+                    UUID(payload["project_id"]),
+                    payload["participant_id"],
+                    payload["participant_type"],
+                    payload.get("display_name", ""),
+                    payload["content"],
+                    payload["event_type"],
+                )
 
     async def _on_summary_generated(self, payload: dict[str, Any]) -> None:
         pool = self._require_pool()
