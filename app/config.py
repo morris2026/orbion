@@ -67,6 +67,7 @@ class OrbionConfigFileParser(PydanticBaseSettingsSource):
         data["event_store"] = db_name
         data["event_projections"] = db_name
         data["project_read"] = db_name
+        data["thread_read"] = db_name
         data["user_repo"] = db_name
         return data
 
@@ -102,6 +103,7 @@ class Settings(BaseSettings):
     event_store: str = "postgres"
     event_projections: str = "postgres"
     project_read: str = "postgres"
+    thread_read: str = "postgres"
     user_repo: str = "postgres"
     postgres: PostgresSettings = PostgresSettings()
     repo_path: str = "./repo"

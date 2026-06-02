@@ -8,6 +8,9 @@ from fastapi import FastAPI
 from app.biz.projects.read_repo import load_project_read_impl
 from app.biz.projects.routes import router as project_router
 from app.biz.projects.service import ProjectService
+from app.biz.threads.read_repo import load_thread_read_impl
+from app.biz.threads.routes import message_router, thread_router
+from app.biz.threads.service import ThreadService
 from app.config import get_settings
 from app.hub.auth.repository import load_user_repo_provider
 from app.hub.auth.routes import router as auth_router
@@ -35,11 +38,20 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     await app.state.project_read.connect()
     # ProjectService 初始化（纯依赖注入，无pool）
     app.state.project_service = ProjectService(app.state.event_store, app.state.event_bus, app.state.project_read)
+    # ThreadRead 初始化（self-managed pool，读端）
+    thread_read_cls = load_thread_read_impl(settings.thread_read)
+    app.state.thread_read = thread_read_cls()
+    await app.state.thread_read.connect()
+    # ThreadService 初始化（纯依赖注入，无pool）
+    app.state.thread_service = ThreadService(
+        app.state.event_store, app.state.event_bus, app.state.thread_read, app.state.project_read
+    )
     # UserRepositoryProvider 初始化
     provider_cls = load_user_repo_provider(settings.user_repo)
     app.state.user_repo_provider = provider_cls()
     await app.state.user_repo_provider.connect()
     yield
+    await app.state.thread_read.close()
     await app.state.event_projections.close()
     await app.state.event_store.close()
     await app.state.project_read.close()
@@ -53,6 +65,12 @@ app.include_router(auth_router, prefix="/auth", tags=["auth"])
 
 # 项目模块
 app.include_router(project_router, prefix="/projects", tags=["projects"])
+
+# 线程模块 — 线程端点嵌套在项目路径下
+app.include_router(thread_router, prefix="/projects/{project_id}/threads", tags=["threads"])
+
+# 消息模块 — 消息端点嵌套在线程路径下
+app.include_router(message_router, prefix="/threads/{thread_id}/messages", tags=["messages"])
 
 # 静态文件挂载必须在所有API路由之后
 mount_static_files(app)
