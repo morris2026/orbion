@@ -36,17 +36,8 @@ async def event_store(request: pytest.FixtureRequest) -> AsyncGenerator[EventSto
 
 
 @pytest.fixture(autouse=True)
-async def clean_tables(postgres_pool: asyncpg.Pool) -> AsyncGenerator[None, None]:
-    """每个测试结束后清理所有表数据"""
-    yield
-    async with postgres_pool.acquire() as conn:
-        await conn.execute("DELETE FROM task_outputs")
-        await conn.execute("DELETE FROM execution_plans")
-        await conn.execute("DELETE FROM thread_messages")
-        await conn.execute("DELETE FROM project_members")
-        await conn.execute("DELETE FROM threads")
-        await conn.execute("DELETE FROM projects")
-        await conn.execute("DELETE FROM event_log")
+async def clean_tables(db_conn: asyncpg.Connection) -> None:
+    """db_conn已在前后清空所有业务表"""
 
 
 @pytest.fixture(params=list(TEST_PROJECTION_STORE_PAIRING.keys()))
