@@ -19,18 +19,6 @@ settings = get_settings()
 
 
 @pytest.fixture
-async def db_conn() -> AsyncGenerator[asyncpg.Connection, None]:
-    """每个测试独立的DB连接，测试前后清理users表和关联的event_log记录"""
-    conn = await asyncpg.connect(settings.postgres.url)
-    await conn.execute("DELETE FROM event_log WHERE event_type = 'UserRegistered'")
-    await conn.execute("DELETE FROM users")
-    yield conn
-    await conn.execute("DELETE FROM event_log WHERE event_type = 'UserRegistered'")
-    await conn.execute("DELETE FROM users")
-    await conn.close()
-
-
-@pytest.fixture
 async def client() -> AsyncGenerator[AsyncClient, None]:
     """httpx AsyncClient，初始化app.state（event_store/event_bus/user_repo_provider）"""
     store_cls = load_store_impl(settings.event_store)

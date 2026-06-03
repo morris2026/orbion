@@ -14,6 +14,8 @@ from app.biz.threads.service import ThreadService
 from app.config import get_settings
 from app.hub.auth.repository import load_user_repo_provider
 from app.hub.auth.routes import router as auth_router
+from app.hub.channels.routes import router as sse_router
+from app.hub.channels.sse import SSEChannel
 from app.hub.channels.static import mount_static_files
 from app.hub.events.bus import InProcessEventBus
 from app.hub.events.projections import load_projections_impl
@@ -50,6 +52,8 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     provider_cls = load_user_repo_provider(settings.user_repo)
     app.state.user_repo_provider = provider_cls()
     await app.state.user_repo_provider.connect()
+    # SSEChannel 初始化（订阅EventBus）
+    app.state.sse_channel = SSEChannel(app.state.event_bus)
     yield
     await app.state.thread_read.close()
     await app.state.event_projections.close()
@@ -71,6 +75,9 @@ app.include_router(thread_router, prefix="/projects/{project_id}/threads", tags=
 
 # 消息模块 — 消息端点嵌套在线程路径下
 app.include_router(message_router, prefix="/threads/{thread_id}/messages", tags=["messages"])
+
+# SSE流 — 事件推送端点
+app.include_router(sse_router, prefix="/events", tags=["events"])
 
 # 静态文件挂载必须在所有API路由之后
 mount_static_files(app)

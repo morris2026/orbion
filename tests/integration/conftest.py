@@ -1,4 +1,4 @@
-"""PostgreSQL测试基础设施：Docker启停 + 数据库迁移 + seeding连接池"""
+"""PostgreSQL测试基础设施：Docker启停 + 数据库迁移 + 共享fixture"""
 
 import subprocess
 import time
@@ -12,6 +12,18 @@ from app.config import get_settings
 
 settings = get_settings()
 MIGRATIONS_DIR = Path(__file__).resolve().parent.parent.parent / "migrations"
+
+# 所有业务表，按外键依赖顺序（子表先删）
+CLEAN_TABLES = [
+    "task_outputs",
+    "execution_plans",
+    "thread_messages",
+    "project_members",
+    "threads",
+    "projects",
+    "event_log",
+    "users",
+]
 
 
 def _wait_for_postgres() -> None:
@@ -63,3 +75,15 @@ async def postgres_pool() -> AsyncGenerator[asyncpg.Pool, None]:
     pool = await asyncpg.create_pool(get_settings().postgres.url, min_size=1, max_size=5)
     yield pool
     await pool.close()
+
+
+@pytest.fixture
+async def db_conn() -> AsyncGenerator[asyncpg.Connection, None]:
+    """共享DB连接fixture：测试前后清空所有业务表"""
+    conn = await asyncpg.connect(settings.postgres.url)
+    for table in CLEAN_TABLES:
+        await conn.execute(f"DELETE FROM {table}")
+    yield conn
+    for table in CLEAN_TABLES:
+        await conn.execute(f"DELETE FROM {table}")
+    await conn.close()
