@@ -32,6 +32,7 @@ web/dist/
 
 # Docker
 pgdata/
+pgdata_staging/
 
 # 项目临时文件
 .superpowers/

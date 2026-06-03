@@ -1,0 +1,41 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: orbion
+      POSTGRES_USER: orbion
+      POSTGRES_PASSWORD: orbion_dev
+    ports:
+      - "5433:5432"
+    volumes:
+      - pgdata_staging:/var/lib/postgresql/data
+      - ./migrations/001_initial.sql:/docker-entrypoint-initdb.d/001_initial.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U orbion -d orbion"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+      start_period: 10s
+
+  orbion:
+    build: .
+    environment:
+      ORBION_JWT_SECRET: orbion-dev-secret
+      ORBION_ANTHROPIC_API_KEY: ${ORBION_ANTHROPIC_API_KEY:-}
+      ORBION_POSTGRES__PASSWORD: orbion_dev
+      ORBION_POSTGRES__HOST: postgres
+      ORBION_CONFIG_PATH: /app/orbion.json
+    volumes:
+      - ./orbion.json:/app/orbion.json:ro
+      - orbion_staging_repo:/app/repo
+      - orbion_staging_data:/app/data
+    ports:
+      - "8001:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  pgdata_staging:
+  orbion_staging_repo:
+  orbion_staging_data:
