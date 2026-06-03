@@ -1,4 +1,4 @@
-.PHONY: format lint lint-fix type test test-integration test-all audit check clean clean-all docker-up docker-down
+.PHONY: format lint lint-fix type test test-integration test-all audit check clean clean-all docker-up docker-down staging staging-clean staging-down staging-logs
 
 format:
 	.venv/bin/ruff format app/ tests/
@@ -38,3 +38,15 @@ clean:
 
 clean-all: clean docker-down
 	rm -rf .venv/ data/ repo/
+
+staging:
+	bash scripts/deploy-staging.sh
+
+staging-clean:
+	bash scripts/deploy-staging.sh --clean
+
+staging-down:
+	docker compose -f docker-compose.staging.yml down
+
+staging-logs:
+	docker compose -f docker-compose.staging.yml logs -f

@@ -1,0 +1,38 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+*.egg-info/
+dist/
+build/
+
+# Lint/test cache
+.ruff_cache/
+.mypy_cache/
+.pytest_cache/
+htmlcov/
+.coverage
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# Environment
+.env
+*.local.json
+
+# Frontend (built in Docker stage 1)
+web/node_modules/
+web/dist/
+
+# Data (runtime volumes, not needed in image)
+data/
+repo/
+pgdata/
+pgdata_staging/
+
+# Project metadata
+.superpowers/
+.git/
+temp/
