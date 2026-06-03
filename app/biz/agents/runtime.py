@@ -7,6 +7,7 @@ from typing import Any
 
 from app.biz.agents.adapters.base import EventSummary, ModelAdapter, ModelOutput, PromptInput
 from app.biz.agents.declarations import AgentDeclaration
+from app.biz.agents.memory import AgentMemory
 from app.hub.events.bus import EventBus
 from app.hub.events.store import EventStoreProtocol
 from app.hub.events.types import Event
@@ -28,10 +29,17 @@ class AgentState:
 class AgentRuntime:
     """Agent生命周期管理和调度执行"""
 
-    def __init__(self, event_bus: EventBus, event_store: EventStoreProtocol, adapter: ModelAdapter) -> None:
+    def __init__(
+        self,
+        event_bus: EventBus,
+        event_store: EventStoreProtocol,
+        adapter: ModelAdapter,
+        memory: AgentMemory | None = None,
+    ) -> None:
         self._bus = event_bus
         self._store = event_store
         self._adapter = adapter
+        self._memory = memory
         # project_id → agent_type → AgentState
         self._agents: dict[str, dict[str, AgentState]] = defaultdict(dict)
 
@@ -121,13 +129,18 @@ class AgentRuntime:
             for e in raw_events
         ]
         # Step3: context — MVP为空
-        # Step4: memory — 步骤14实现
+        # Step4: memory from AgentMemory
+        # Why: load_memory_chain是同步文件I/O——MVP文件小、项目少，阻塞影响可忽略；
+        # Phase 2迁移到数据库后改为async，或用aiofiles包装
+        memory = ""
+        if self._memory:
+            memory = self._memory.load_memory_chain(event.project_id, declaration.agent_type, event.correlation_id)
         # Step5: task
         task = self._payload_to_task(declaration.agent_type, event.payload)
         return PromptInput(
             system_prompt=system_prompt,
             context="",
-            memory="",
+            memory=memory,
             task=task,
             history=history,
             model_config_obj=declaration.model_config_obj,

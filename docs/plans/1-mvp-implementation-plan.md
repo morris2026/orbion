@@ -205,7 +205,7 @@
 
 ---
 
-### - [ ] 步骤 14：Agent层次化记忆管理
+### - [x] 步骤 14：Agent层次化记忆管理
 
 **增量**：memory模块（AgentMemory类）、层次化memory.md读写（平台→项目→Agent→任务4层）、记忆注入prompt流程
 
