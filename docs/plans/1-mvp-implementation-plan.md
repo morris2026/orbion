@@ -193,7 +193,7 @@
 
 ---
 
-### - [ ] 步骤 13：模型适配与Prompt组装流程
+### - [x] 步骤 13：模型适配与Prompt组装流程
 
 **增量**：ModelAdapter Protocol定义、ClaudeAdapter实现（Anthropic SDK）、PromptInput/ModelOutput/ModelConfig/EventSummary结构、7步prompt组装流程、task描述转换规则、产出解析→发布新事件
 

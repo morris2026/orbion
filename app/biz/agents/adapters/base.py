@@ -1,4 +1,4 @@
-"""ModelAdapter Protocol骨架定义（仅接口，ClaudeAdapter在步骤13实现）"""
+"""ModelAdapter Protocol定义——ClaudeAdapter在步骤13实现"""
 
 from datetime import datetime
 from typing import Any, Protocol, runtime_checkable
@@ -33,6 +33,7 @@ class PromptInput(BaseModel):
     memory: str = ""
     task: str
     history: list[EventSummary] = []
+    model_config_obj: ModelConfig
 
 
 class SkillCall(BaseModel):
