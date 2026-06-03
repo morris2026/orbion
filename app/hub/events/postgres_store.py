@@ -25,6 +25,7 @@ class PostgresEventStore(EventStoreProtocol):
     async def close(self) -> None:
         if self._pool:
             await self._pool.close()
+            self._pool = None
 
     @property
     def pool(self) -> asyncpg.Pool:

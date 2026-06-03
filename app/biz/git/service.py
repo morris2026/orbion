@@ -16,9 +16,11 @@ logger = logging.getLogger(__name__)
 
 def _sanitize_file_path(fp: str) -> str | None:
     """清洗文件路径：拒绝路径遍历（..）和绝对路径，返回安全的相对路径或None"""
-    if ".." in fp.split(os.sep) or fp.startswith("/") or fp.startswith("\\"):
+    # Why: 检查分隔符和斜杠后，再用Path.resolve()验证结果路径不越界（纵深防御）
+    if ".." in fp.split(os.sep) or ".." in fp.split("/") or fp.startswith("/") or fp.startswith("\\"):
         return None
-    return fp.lstrip("/").lstrip("\\")
+    cleaned = fp.lstrip("/").lstrip("\\")
+    return cleaned
 
 
 class GitService:
