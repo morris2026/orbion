@@ -5,6 +5,11 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
+from app.biz.agents.adapters.base import ModelOutput, PromptInput
+from app.biz.agents.routes import router as agent_router
+from app.biz.agents.runtime import AgentRuntime
+from app.biz.agents.scheduler import AgentScheduler
+from app.biz.agents.service import AgentService
 from app.biz.projects.read_repo import load_project_read_impl
 from app.biz.projects.routes import router as project_router
 from app.biz.projects.service import ProjectService
@@ -20,6 +25,13 @@ from app.hub.channels.static import mount_static_files
 from app.hub.events.bus import InProcessEventBus
 from app.hub.events.projections import load_projections_impl
 from app.hub.events.store import load_store_impl
+
+
+class StubModelAdapter:
+    """MVP stub adapter——步骤13用ClaudeAdapter替代"""
+
+    async def complete(self, prompt: PromptInput) -> ModelOutput:
+        raise NotImplementedError("ClaudeAdapter在步骤13实现")
 
 
 @asynccontextmanager
@@ -54,7 +66,13 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     await app.state.user_repo_provider.connect()
     # SSEChannel 初始化（订阅EventBus）
     app.state.sse_channel = SSEChannel(app.state.event_bus)
+    # AgentRuntime + AgentScheduler + AgentService 初始化
+    stub_adapter = StubModelAdapter()
+    app.state.agent_runtime = AgentRuntime(app.state.event_bus, app.state.event_store, stub_adapter)
+    app.state.agent_scheduler = AgentScheduler(app.state.event_bus, app.state.agent_runtime)
+    app.state.agent_service = AgentService(app.state.event_store, app.state.event_bus, app.state.agent_runtime)
     yield
+    app.state.agent_scheduler.close()
     await app.state.thread_read.close()
     await app.state.event_projections.close()
     await app.state.event_store.close()
@@ -69,6 +87,9 @@ app.include_router(auth_router, prefix="/auth", tags=["auth"])
 
 # 项目模块
 app.include_router(project_router, prefix="/projects", tags=["projects"])
+
+# Agent模块 — Agent端点嵌套在项目路径下
+app.include_router(agent_router, prefix="/projects", tags=["agents"])
 
 # 线程模块 — 线程端点嵌套在项目路径下
 app.include_router(thread_router, prefix="/projects/{project_id}/threads", tags=["threads"])

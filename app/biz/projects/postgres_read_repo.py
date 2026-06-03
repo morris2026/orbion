@@ -90,6 +90,30 @@ class PostgresProjectRead(ProjectReadProtocol):
             )
         return row is not None
 
+    async def list_agents(self, project_id: str) -> list[dict[str, Any]]:
+        """列出项目的所有Agent成员"""
+        pool = self._require_pool()
+        rows = await pool.fetch(
+            "SELECT participant_id, project_id, type, display_name, roles, "
+            "agent_type, model_id, status, created_at "
+            "FROM project_members WHERE project_id = $1 AND type = 'agent' "
+            "ORDER BY created_at ASC",
+            uuid.UUID(project_id),
+        )
+        return [_row_to_dict(r) for r in rows]
+
+    async def get_agent(self, project_id: str, agent_id: str) -> dict[str, Any] | None:
+        """获取项目单个Agent成员"""
+        pool = self._require_pool()
+        row = await pool.fetchrow(
+            "SELECT participant_id, project_id, type, display_name, roles, "
+            "agent_type, model_id, status, created_at "
+            "FROM project_members WHERE participant_id = $1 AND project_id = $2 AND type = 'agent'",
+            agent_id,
+            uuid.UUID(project_id),
+        )
+        return _row_to_dict(row) if row else None
+
 
 def _row_to_dict(row: asyncpg.Record) -> dict[str, Any]:
     """asyncpg Record → dict，UUID列自动转为str"""

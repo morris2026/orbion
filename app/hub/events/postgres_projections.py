@@ -39,6 +39,7 @@ class PostgresEventProjections(EventProjectionsProtocol):
             self._bus.subscribe("TaskOutputApproved", self._on_output_approved),
             self._bus.subscribe("TaskOutputRevisionRequested", self._on_output_revision_requested),
             self._bus.subscribe("MemberAdded", self._on_member_added),
+            self._bus.subscribe("AgentRegistered", self._on_agent_registered),
         ]
 
     async def close(self) -> None:
@@ -235,6 +236,28 @@ class PostgresEventProjections(EventProjectionsProtocol):
                 event.participant_type,
                 event.participant_display_name,
                 roles_bits,
+            )
+
+    async def _on_agent_registered(self, event: Event) -> None:
+        """Agent注册→project_members投影，含agent_type/model_id/status/roles"""
+        pool = self._require_pool()
+        payload = event.payload
+        roles_bits = _roles_to_bitmask(payload.get("roles", []), event.participant_type)
+        async with pool.acquire() as conn:
+            await conn.execute(
+                "INSERT INTO project_members "
+                "(participant_id, project_id, type, display_name, roles, agent_type, model_id, status) "
+                "VALUES ($1, $2, $3, $4, $5, $6, $7, 'idle') "
+                "ON CONFLICT (participant_id, project_id) DO UPDATE SET "
+                "display_name = EXCLUDED.display_name, roles = EXCLUDED.roles, "
+                "agent_type = EXCLUDED.agent_type, model_id = EXCLUDED.model_id",
+                event.participant_id,
+                UUID(event.project_id),
+                "agent",
+                event.participant_display_name,
+                roles_bits,
+                payload.get("agent_type"),
+                payload.get("model_id"),
             )
 
     # -- 投影查询方法 --

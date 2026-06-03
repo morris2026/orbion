@@ -181,7 +181,7 @@
 
 验证点3-4。顺序依赖基础层+讨论切片。
 
-### - [ ] 步骤 12：Agent声明与事件调度器
+### - [x] 步骤 12：Agent声明与事件调度器
 
 **增量**：agents模块（AgentDeclaration定义含skills字段、3个内置Agent声明模板、AgentScheduler、AgentRuntime生命周期管理）、app/biz/agents/skills.py（SkillDeclaration数据结构定义）、ModelAdapter Protocol骨架定义（仅接口，ClaudeAdapter在步骤13实现）、POST/GET /projects/{id}/agents API、GET /projects/{id}/agents/{id}/status API、Agent注册时自动分配角色权限位、Agent状态机idle→running→idle/error
 
