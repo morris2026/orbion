@@ -329,6 +329,18 @@ class PostgresEventProjections(EventProjectionsProtocol):
             )
         return [_row_to_dict(row) for row in rows]
 
+    async def get_output_by_id(self, output_id: str) -> dict[str, Any] | None:
+        pool = self._require_pool()
+        row = await pool.fetchrow(
+            "SELECT id, project_id, task_id, plan_id, output_type, content, "
+            "diff, file_paths, status, version, created_at "
+            "FROM task_outputs WHERE id = $1",
+            UUID(output_id),
+        )
+        if row is None:
+            return None
+        return _row_to_dict(row)
+
     async def get_project_members(self, project_id: str) -> list[dict[str, Any]]:
         pool = self._require_pool()
         rows = await pool.fetch(

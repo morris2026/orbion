@@ -12,6 +12,8 @@ from app.biz.agents.routes import router as agent_router
 from app.biz.agents.runtime import AgentRuntime
 from app.biz.agents.scheduler import AgentScheduler
 from app.biz.agents.service import AgentService
+from app.biz.outputs.routes import output_action_router, output_list_router
+from app.biz.outputs.service import OutputService
 from app.biz.plans.routes import plan_action_router, plan_list_router
 from app.biz.plans.service import PlanService
 from app.biz.projects.read_repo import load_project_read_impl
@@ -81,6 +83,8 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     app.state.agent_service = AgentService(app.state.event_store, app.state.event_bus, app.state.agent_runtime)
     # PlanService 初始化（纯依赖注入，依赖projections做读端查询）
     app.state.plan_service = PlanService(app.state.event_store, app.state.event_bus, app.state.event_projections)
+    # OutputService 初始化（纯依赖注入，依赖projections做读端查询）
+    app.state.output_service = OutputService(app.state.event_store, app.state.event_bus, app.state.event_projections)
     yield
     app.state.agent_scheduler.close()
     await app.state.thread_read.close()
@@ -104,6 +108,10 @@ app.include_router(agent_router, prefix="/projects", tags=["agents"])
 # 计划模块 — 列表端点嵌套在项目路径下，审批端点在plans路径下
 app.include_router(plan_list_router, prefix="/projects", tags=["plans"])
 app.include_router(plan_action_router, prefix="/plans", tags=["plans"])
+
+# 产出模块 — 列表端点嵌套在项目路径下，操作端点在outputs路径下
+app.include_router(output_list_router, prefix="/projects", tags=["outputs"])
+app.include_router(output_action_router, prefix="/outputs", tags=["outputs"])
 
 # 线程模块 — 线程端点嵌套在项目路径下
 app.include_router(thread_router, prefix="/projects/{project_id}/threads", tags=["threads"])

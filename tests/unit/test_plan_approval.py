@@ -76,6 +76,9 @@ class MockProjections(EventProjectionsProtocol):
     async def get_task_outputs(self, project_id: str, plan_id: str | None = None) -> list[dict[str, Any]]:
         return []
 
+    async def get_output_by_id(self, output_id: str) -> dict[str, Any] | None:
+        return None
+
     async def get_project_members(self, project_id: str) -> list[dict[str, Any]]:
         return []
 
