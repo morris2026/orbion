@@ -12,6 +12,7 @@ from app.biz.agents.routes import router as agent_router
 from app.biz.agents.runtime import AgentRuntime
 from app.biz.agents.scheduler import AgentScheduler
 from app.biz.agents.service import AgentService
+from app.biz.git.service import GitService
 from app.biz.outputs.routes import output_action_router, output_list_router
 from app.biz.outputs.service import OutputService
 from app.biz.plans.routes import plan_action_router, plan_list_router
@@ -85,6 +86,8 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     app.state.plan_service = PlanService(app.state.event_store, app.state.event_bus, app.state.event_projections)
     # OutputService 初始化（纯依赖注入，依赖projections做读端查询）
     app.state.output_service = OutputService(app.state.event_store, app.state.event_bus, app.state.event_projections)
+    # GitService 初始化（订阅TaskOutputApproved事件，审批通过后自动commit）
+    app.state.git_service = GitService(settings.repo_path, app.state.event_bus, app.state.event_projections)
     yield
     app.state.agent_scheduler.close()
     await app.state.thread_read.close()

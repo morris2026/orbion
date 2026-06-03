@@ -245,7 +245,7 @@
 
 ---
 
-### - [ ] 步骤 17：Git集成与审批后自动commit
+### - [x] 步骤 17：Git集成与审批后自动commit
 
 **增量**：git模块（GitService）、产出审批通过后自动commit到本地仓库、commit内容与产出一致、要求修改不触发commit
 
