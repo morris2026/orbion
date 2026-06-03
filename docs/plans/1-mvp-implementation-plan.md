@@ -221,7 +221,7 @@
 
 验证点5-8。顺序依赖基础层+讨论切片+Agent切片。
 
-### - [ ] 步骤 15：执行计划审批API
+### - [x] 步骤 15：执行计划审批API
 
 **增量**：plans模块（routes、models、service）、GET /projects/{id}/plans（可按thread_id和status过滤）、POST /plans/{id}/approve（部分审批）、POST /plans/{id}/reject、计划状态机（proposed→approved/rejected）
 
