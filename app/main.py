@@ -7,6 +7,7 @@ from fastapi import FastAPI
 
 from app.biz.agents.adapters.base import ModelAdapter, ModelOutput, PromptInput
 from app.biz.agents.adapters.claude import ClaudeAdapter
+from app.biz.agents.memory import AgentMemory
 from app.biz.agents.routes import router as agent_router
 from app.biz.agents.runtime import AgentRuntime
 from app.biz.agents.scheduler import AgentScheduler
@@ -72,7 +73,8 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         adapter: ModelAdapter = ClaudeAdapter(api_key=settings.anthropic_api_key)
     else:
         adapter = StubModelAdapter()
-    app.state.agent_runtime = AgentRuntime(app.state.event_bus, app.state.event_store, adapter)
+    agent_memory = AgentMemory(settings.memory_base_path)
+    app.state.agent_runtime = AgentRuntime(app.state.event_bus, app.state.event_store, adapter, agent_memory)
     app.state.agent_scheduler = AgentScheduler(app.state.event_bus, app.state.agent_runtime)
     app.state.agent_service = AgentService(app.state.event_store, app.state.event_bus, app.state.agent_runtime)
     yield
