@@ -5,7 +5,7 @@ from collections import defaultdict
 from datetime import UTC, datetime
 from typing import Any
 
-from app.biz.agents.adapters.base import ModelAdapter, ModelOutput, PromptInput
+from app.biz.agents.adapters.base import EventSummary, ModelAdapter, ModelOutput, PromptInput
 from app.biz.agents.declarations import AgentDeclaration
 from app.hub.events.bus import EventBus
 from app.hub.events.store import EventStoreProtocol
@@ -61,7 +61,7 @@ class AgentRuntime:
 
         try:
             # 组装prompt + 调用adapter
-            prompt = self._assemble_prompt(state.declaration, event)
+            prompt = await self._assemble_prompt(state.declaration, event)
             output = await self._adapter.complete(prompt)
             # 产出完成 → IDLE
             state.status = "idle"
@@ -94,27 +94,60 @@ class AgentRuntime:
             "last_execution_at": state.last_execution_at,
         }
 
-    def _assemble_prompt(self, declaration: AgentDeclaration, event: Event) -> PromptInput:
-        """组装PromptInput——MVP简化：context/memory/history均为空
-        Why: 设计文档7步流程中context(history从EventStore)、memory从KnowledgeStore获取，
-        MVP阶段这三个步骤全部跳过（1.6文档第9节确认context步骤为空）
+    async def _assemble_prompt(self, declaration: AgentDeclaration, event: Event) -> PromptInput:
+        """7步Prompt组装流程
+        Step1: system_prompt from declaration
+        Step2: history from EventStore (correlation_id事件链)
+        Step3: context — MVP为空
+        Step4: memory — 步骤14实现，当前为空
+        Step5: task from payload
+        Step6: 合并为PromptInput → ModelAdapter.complete()
         """
+        # Step1: system_prompt
         system_prompt = f"Role: {declaration.role}\nGoal: {declaration.goal}\n\n{declaration.backstory}"
+        # Step2: history from EventStore
+        correlation_id = event.correlation_id
+        raw_events = await self._store.get_events_by_correlation(correlation_id)
+        history = [
+            EventSummary(
+                event_type=e.event_type,
+                participant_id=e.participant_id,
+                participant_type=e.participant_type,
+                # Why: MVP简化——粗暴截取payload字符串前200字符作为摘要；
+                # Phase 2应改为从payload中提取关键字段或使用领域schema解析
+                content=str(e.payload)[:200],
+                created_at=e.created_at or datetime.now(UTC),
+            )
+            for e in raw_events
+        ]
+        # Step3: context — MVP为空
+        # Step4: memory — 步骤14实现
+        # Step5: task
         task = self._payload_to_task(declaration.agent_type, event.payload)
-        return PromptInput(system_prompt=system_prompt, task=task)
+        return PromptInput(
+            system_prompt=system_prompt,
+            context="",
+            memory="",
+            task=task,
+            history=history,
+            model_config_obj=declaration.model_config_obj,
+        )
 
     def _payload_to_task(self, agent_type: str, payload: dict[str, Any]) -> str:
-        """事件payload → 任务描述转换"""
+        """事件payload → 自然语言任务描述转换"""
         if agent_type == "summary":
             return f"请总结以下讨论线程的消息内容：{payload.get('content', '')}"
         if agent_type == "decompose":
-            consensus = payload.get("consensus_points", [])
-            actions = payload.get("action_items", [])
-            return f"请根据以下共识点和行动项，分解为可执行的代码任务：{consensus}, {actions}"
+            consensus = "\n".join(str(c) for c in payload.get("consensus_points", []))
+            actions = "\n".join(str(a) for a in payload.get("action_items", []))
+            return f"请根据以下共识点和行动项，分解为可执行的代码任务：\n共识点：\n{consensus}\n行动项：\n{actions}"
         if agent_type == "execute":
             if "approved_tasks" in payload:
-                return f"请执行以下审批通过的代码任务：{payload['approved_tasks']}"
-            return f"请根据以下修改意见重新生成产出：{payload.get('issues', [])}, {payload.get('suggestions', [])}"
+                tasks = "\n".join(str(t) for t in payload["approved_tasks"])
+                return f"请执行以下审批通过的代码任务：\n{tasks}"
+            issues = "\n".join(str(i) for i in payload.get("issues", []))
+            suggestions = "\n".join(str(s) for s in payload.get("suggestions", []))
+            return f"请根据以下修改意见重新生成产出：\n问题：\n{issues}\n建议：\n{suggestions}"
         return str(payload)
 
     async def _publish_output(self, declaration: AgentDeclaration, output: ModelOutput, trigger_event: Event) -> None:

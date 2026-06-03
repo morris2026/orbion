@@ -5,7 +5,8 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
-from app.biz.agents.adapters.base import ModelOutput, PromptInput
+from app.biz.agents.adapters.base import ModelAdapter, ModelOutput, PromptInput
+from app.biz.agents.adapters.claude import ClaudeAdapter
 from app.biz.agents.routes import router as agent_router
 from app.biz.agents.runtime import AgentRuntime
 from app.biz.agents.scheduler import AgentScheduler
@@ -28,10 +29,10 @@ from app.hub.events.store import load_store_impl
 
 
 class StubModelAdapter:
-    """MVP stub adapter——步骤13用ClaudeAdapter替代"""
+    """测试环境fallback adapter——无api_key时使用"""
 
     async def complete(self, prompt: PromptInput) -> ModelOutput:
-        raise NotImplementedError("ClaudeAdapter在步骤13实现")
+        raise NotImplementedError("需配置 anthropic_api_key 才能调用 ClaudeAdapter")
 
 
 @asynccontextmanager
@@ -67,8 +68,11 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     # SSEChannel 初始化（订阅EventBus）
     app.state.sse_channel = SSEChannel(app.state.event_bus)
     # AgentRuntime + AgentScheduler + AgentService 初始化
-    stub_adapter = StubModelAdapter()
-    app.state.agent_runtime = AgentRuntime(app.state.event_bus, app.state.event_store, stub_adapter)
+    if settings.anthropic_api_key:
+        adapter: ModelAdapter = ClaudeAdapter(api_key=settings.anthropic_api_key)
+    else:
+        adapter = StubModelAdapter()
+    app.state.agent_runtime = AgentRuntime(app.state.event_bus, app.state.event_store, adapter)
     app.state.agent_scheduler = AgentScheduler(app.state.event_bus, app.state.agent_runtime)
     app.state.agent_service = AgentService(app.state.event_store, app.state.event_bus, app.state.agent_runtime)
     yield
