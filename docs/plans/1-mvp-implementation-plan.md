@@ -261,7 +261,7 @@
 
 验证点9。后端全部完成后整体跟进。
 
-### - [ ] 步骤 18：前端项目脚手架与三栏布局骨架
+### - [x] 步骤 18：前端项目脚手架与三栏布局骨架
 
 **增量**：Vite+React+TypeScript+TailwindCSS+shadcn/ui 项目初始化、App.tsx路由结构、Workspace.tsx三栏布局骨架、API调用封装层（api.ts）、SSE连接管理封装（sse.ts）、JWT存储封装（auth.ts）、Vite开发代理配置、hub/channels/static.py实际配置（挂载web/dist/到FastAPI）
 

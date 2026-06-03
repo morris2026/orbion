@@ -54,7 +54,8 @@ class AgentService:
             participant_type="agent",
             participant_display_name=display_name,
             payload=payload.model_dump(mode="json"),
-            correlation_id=project_id,
+            # Why: correlation_id应串联讨论链而非项目；Agent注册是独立操作，用自身event_id做correlation
+            correlation_id=str(uuid.uuid4()),
             created_at=datetime.now(UTC),
         )
         await self._event_store.append(event)
