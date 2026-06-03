@@ -24,5 +24,18 @@ class OutputApprove(BaseModel):
 
 
 class OutputRequestRevision(BaseModel):
-    issues: list[str]
+    issues: list[str] = Field(..., min_length=1)
     suggestions: list[str] = Field(default_factory=list)
+
+
+class OutputApproveResponse(BaseModel):
+    output_id: str
+    status: str
+    feedback: str | None = None
+
+
+class OutputRevisionResponse(BaseModel):
+    output_id: str
+    status: str
+    issues: list[str]
+    suggestions: list[str]

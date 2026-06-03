@@ -233,7 +233,7 @@
 
 ---
 
-### - [ ] 步骤 16：任务产出审批API
+### - [x] 步骤 16：任务产出审批API
 
 **增量**：outputs模块（routes、models、service）、GET /projects/{id}/outputs（可按plan_id过滤）、POST /outputs/{id}/approve、POST /outputs/{id}/request-revision、产出状态机（generated→approved/revision_requested）、产出version自增逻辑
 
