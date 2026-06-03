@@ -128,6 +128,7 @@ class TestEventTypeEnum:
             "TaskOutputApproved",
             "TaskOutputRevisionRequested",
             "MemberAdded",
+            "AgentRegistered",
             "UserRegistered",
         ]
         actual_names = [e.value for e in EventType]

@@ -27,6 +27,7 @@ class EventType(StrEnum):
     TaskOutputApproved = "TaskOutputApproved"
     TaskOutputRevisionRequested = "TaskOutputRevisionRequested"
     MemberAdded = "MemberAdded"
+    AgentRegistered = "AgentRegistered"
     UserRegistered = "UserRegistered"
 
 
@@ -140,6 +141,15 @@ class ProjectCreatedPayload(BaseModel):
 class MemberAddedPayload(BaseModel):
     """MemberAdded payload — 纯领域字段：角色"""
 
+    roles: list[str] = Field(default_factory=list)
+
+
+class AgentRegisteredPayload(BaseModel):
+    """AgentRegistered payload — Agent注册领域字段"""
+
+    agent_type: str
+    model_id: str
+    subscribed_events: list[str] = Field(default_factory=list)
     roles: list[str] = Field(default_factory=list)
 
 
