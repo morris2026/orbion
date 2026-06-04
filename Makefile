@@ -16,7 +16,7 @@ test:
 	.venv/bin/python -m pytest tests/unit/ --cov=app --cov-fail-under=80
 
 test-front:
-	cd web && npm test
+	cd web && npm test -- --sequence.shuffle
 
 test-integration:
 	.venv/bin/python -m pytest tests/integration/ --cov=app --cov-fail-under=80
