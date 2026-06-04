@@ -9,6 +9,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 
 type ViewMode = 'login' | 'register' | 'pending' | 'rejected'
 
+const USERNAME_PATTERN = /^[a-zA-Z0-9_]+$/
+
 export default function Login() {
   const navigate = useNavigate()
   const [mode, setMode] = useState<ViewMode>('login')
@@ -16,11 +18,21 @@ export default function Login() {
   const [password, setPassword] = useState('')
   const [displayName, setDisplayName] = useState('')
   const [error, setError] = useState('')
+  const [validationErrors, setValidationErrors] = useState<string[]>([])
   const [loading, setLoading] = useState(false)
+
+  const validateRegister = (): string[] => {
+    const errors: string[] = []
+    if (username.length < 3) errors.push('用户名至少3个字符')
+    if (!USERNAME_PATTERN.test(username)) errors.push('用户名只能包含字母、数字或下划线')
+    if (password.length < 8) errors.push('密码长度不足8个字符')
+    return errors
+  }
 
   const handleLogin = async (e: FormEvent) => {
     e.preventDefault()
     setError('')
+    setValidationErrors([])
     setLoading(true)
     try {
       const resp = await apiPost<{ access_token: string }>('/auth/login', { username, password })
@@ -45,6 +57,10 @@ export default function Login() {
 
   const handleRegister = async (e: FormEvent) => {
     e.preventDefault()
+    const errors = validateRegister()
+    setValidationErrors(errors)
+    if (errors.length > 0) return
+
     setError('')
     setLoading(true)
     try {
@@ -52,7 +68,7 @@ export default function Login() {
         status: string
         access_token: string | null
         message: string
-      }>('/auth/register', { username, password, display_name: displayName })
+      }>('/auth/register', { username, password, display_name: displayName || username })
 
       if (resp.status === 'active' && resp.access_token) {
         setToken(resp.access_token)
@@ -77,6 +93,7 @@ export default function Login() {
     setPassword('')
     setDisplayName('')
     setError('')
+    setValidationErrors([])
   }
 
   if (mode === 'pending') {
@@ -118,21 +135,29 @@ export default function Login() {
           <CardTitle>{mode === 'login' ? '登录 Orbion' : '注册 Orbion'}</CardTitle>
         </CardHeader>
         <CardContent>
+          {validationErrors.length > 0 && (
+            <ul className="text-destructive mb-4 text-sm list-disc pl-4">
+              {validationErrors.map((msg) => <li key={msg}>{msg}</li>)}
+            </ul>
+          )}
           {error && <p className="text-destructive mb-4 text-sm">{error}</p>}
           <form onSubmit={mode === 'login' ? handleLogin : handleRegister} className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="username">用户名</Label>
               <Input id="username" value={username} onChange={(e) => setUsername(e.target.value)} />
+              {mode === 'register' && <p className="text-xs text-muted-foreground">3-32个字符，仅限字母、数字、下划线</p>}
             </div>
             <div className="space-y-2">
               <Label htmlFor="password">密码</Label>
               <Input id="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} />
+              {mode === 'register' && <p className="text-xs text-muted-foreground">至少8个字符</p>}
             </div>
             {mode === 'register' && (
               <div className="space-y-2">
-                <Label htmlFor="displayName">显示名称</Label>
+                <Label htmlFor="displayName">显示名称（可选）</Label>
                 <Input id="displayName" value={displayName} onChange={(e) => setDisplayName(e.target.value)} />
-            </div>
+                <p className="text-xs text-muted-foreground">不填则使用用户名</p>
+              </div>
             )}
             <Button type="submit" className="w-full" disabled={loading}>
               {mode === 'login' ? '登录' : '提交注册'}

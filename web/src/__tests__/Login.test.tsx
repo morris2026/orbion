@@ -76,7 +76,6 @@ describe('Login页面', () => {
   describe('TC-19.2: 第一个用户注册 → 自动审批 → 跳转工作区', () => {
     it('首个用户注册后自动获得JWT并跳转', async () => {
       const user = userEvent.setup()
-      const navigateMock = vi.fn()
       vi.spyOn(authModule, 'setToken')
 
       mockApiPost({
@@ -176,4 +175,79 @@ describe('Login页面', () => {
     })
   })
 
+  describe('注册时显示名称为空 → 用用户名替代', () => {
+    it('不填显示名称时，提交的display_name为username', async () => {
+      const user = userEvent.setup()
+
+      const fetchSpy = vi.fn().mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({
+          user_id: 'user-1', username: 'myname', display_name: 'myname',
+          status: 'active', access_token: 'jwt-xyz', token_type: 'bearer',
+          message: 'Auto-approved',
+        }),
+      })
+      vi.stubGlobal('fetch', fetchSpy)
+
+      renderLogin()
+
+      await user.click(screen.getByRole('button', { name: /注册/i }))
+      await user.type(screen.getByLabelText(/用户名/i), 'myname')
+      await user.type(screen.getByLabelText(/密码/i), 'password123')
+
+      await user.click(screen.getByRole('button', { name: /提交注册/i }))
+
+      await waitFor(() => {
+        expect(fetchSpy).toHaveBeenCalled()
+      })
+      const callBody = JSON.parse(fetchSpy.mock.calls[0][1].body)
+      expect(callBody.display_name).toBe('myname')
+
+      vi.unstubAllGlobals()
+    })
   })
+
+  describe('客户端校验提示', () => {
+    it('用户名少于3字符时显示提示且不发送请求', async () => {
+      const user = userEvent.setup()
+
+      renderLogin()
+      await user.click(screen.getByRole('button', { name: /注册/i }))
+
+      await user.type(screen.getByLabelText(/用户名/i), 'ab')
+      await user.type(screen.getByLabelText(/密码/i), 'longpassword')
+
+      await user.click(screen.getByRole('button', { name: /提交注册/i }))
+
+      expect(screen.getByText(/至少3个字符/i)).toBeInTheDocument()
+    })
+
+    it('密码少于8字符时显示提示', async () => {
+      const user = userEvent.setup()
+
+      renderLogin()
+      await user.click(screen.getByRole('button', { name: /注册/i }))
+
+      await user.type(screen.getByLabelText(/用户名/i), 'validuser')
+      await user.type(screen.getByLabelText(/密码/i), 'short')
+
+      await user.click(screen.getByRole('button', { name: /提交注册/i }))
+
+      expect(screen.getByText(/长度不足8个字符/i)).toBeInTheDocument()
+    })
+
+    it('用户名含非法字符时显示提示', async () => {
+      const user = userEvent.setup()
+
+      renderLogin()
+      await user.click(screen.getByRole('button', { name: /注册/i }))
+
+      await user.type(screen.getByLabelText(/用户名/i), 'bad user!')
+      await user.type(screen.getByLabelText(/密码/i), 'longpassword')
+
+      await user.click(screen.getByRole('button', { name: /提交注册/i }))
+
+      expect(screen.getByText(/字母、数字或下划线/i)).toBeInTheDocument()
+    })
+  })
+})
