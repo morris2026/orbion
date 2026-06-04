@@ -29,17 +29,6 @@ function mockApiPost(response: unknown) {
   }))
 }
 
-/** 辅助：mock连续的fetch调用（先GET再POST） */
-function mockSequentialFetch(responses: unknown[]) {
-  const calls = responses.map((resp) => ({
-    ok: true,
-    json: () => Promise.resolve(resp),
-  }))
-  vi.stubGlobal('fetch', vi.fn()
-    .mockResolvedValueOnce(calls[0])
-    .mockResolvedValueOnce(calls[1])
-  )
-}
 
 function renderApproval() {
   return render(
@@ -88,15 +77,7 @@ describe('Approval审批面板', () => {
       const user = userEvent.setup()
       authModule.setToken(createJWT({ sub: 'admin-1', username: 'admin', is_admin: true }))
 
-      // 先返回待审批列表，然后approve后返回空列表
-      mockSequentialFetch([
-        // 第一次GET：返回1个pending用户
-        [{ user_id: 'user-2', username: 'pending1', display_name: 'Pending One', status: 'pending', created_at: '2026-01-01T00:00:00Z' }],
-        // approve后GET：返回空列表
-        [],
-      ])
-
-      // mock POST approve
+      // 依次mock：GET pending列表 → POST approve → GET 刷新后的空列表
       vi.stubGlobal('fetch', vi.fn()
         .mockResolvedValueOnce({
           ok: true,

@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import {
-  getToken, setToken, clearToken, isAuthenticated,
+  setToken,
   decodeToken, isTokenExpired, getIsAdmin,
 } from '@/lib/auth'
 
