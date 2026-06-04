@@ -12,6 +12,7 @@ from app.biz.agents.routes import router as agent_router
 from app.biz.agents.runtime import AgentRuntime
 from app.biz.agents.scheduler import AgentScheduler
 from app.biz.agents.service import AgentService
+from app.biz.git.routes import router as git_router
 from app.biz.git.service import GitService
 from app.biz.outputs.routes import output_action_router, output_list_router
 from app.biz.outputs.service import OutputService
@@ -115,6 +116,9 @@ app.include_router(plan_action_router, prefix="/plans", tags=["plans"])
 # 产出模块 — 列表端点嵌套在项目路径下，操作端点在outputs路径下
 app.include_router(output_list_router, prefix="/projects", tags=["outputs"])
 app.include_router(output_action_router, prefix="/outputs", tags=["outputs"])
+
+# Git模块 — git log查询端点
+app.include_router(git_router, prefix="/git", tags=["git"])
 
 # 线程模块 — 线程端点嵌套在项目路径下
 app.include_router(thread_router, prefix="/projects/{project_id}/threads", tags=["threads"])

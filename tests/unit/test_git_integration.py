@@ -257,3 +257,47 @@ async def test_tc17_4_auto_init_repo(tmp_path: Path) -> None:
     # 内容一致
     committed_content = (Path(repo_path) / "hello.py").read_text()
     assert committed_content == "print('hello')"
+
+
+# -- git log查询 --
+
+
+async def test_get_recent_commits(tmp_path: Path) -> None:
+    """GitService.get_recent_commits返回最近N条commit摘要
+    包含message和hexsha字段
+    """
+    bus = InProcessEventBus()
+    projections = MockProjections(bus)
+    output_id = "out-log-1"
+    output = _make_output_dict(output_id=output_id, file_paths=["log_test.py"])
+    projections._outputs = [output]
+
+    repo_path = str(tmp_path / "repo")
+    git_service = GitService(repo_path, bus, projections)
+    await git_service.ensure_repo()
+
+    # 触发审批commit
+    event = _make_approved_event(output_id=output_id)
+    await bus.publish(event)
+    await bus.wait_for_pending()
+
+    commits = git_service.get_recent_commits(limit=5)
+    assert len(commits) >= 2
+    # 最新commit消息含output_id
+    assert output_id in commits[0]["message"]
+    # hexsha非空
+    assert commits[0]["hexsha"] != ""
+
+
+async def test_get_recent_commits_empty_repo(tmp_path: Path) -> None:
+    """空repo（只有初始commit）→get_recent_commits返回1条"""
+    bus = InProcessEventBus()
+    projections = MockProjections(bus)
+
+    repo_path = str(tmp_path / "empty_repo")
+    git_service = GitService(repo_path, bus, projections)
+    await git_service.ensure_repo()
+
+    commits = git_service.get_recent_commits(limit=10)
+    assert len(commits) == 1
+    assert "init" in commits[0]["message"]

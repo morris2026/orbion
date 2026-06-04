@@ -1,5 +1,6 @@
 """步骤13 UT：TC-13.1–13.6 — 模型适配与Prompt组装流程"""
 
+import json
 from datetime import UTC, datetime
 from typing import Any, Literal
 from unittest.mock import AsyncMock
@@ -225,6 +226,76 @@ async def test_tc13_5_output_to_new_event() -> None:
     assert new_event.participant_type == "agent"
 
 
+# -- _publish_output JSON解析路径 --
+
+
+async def test_publish_output_json_parsed_as_payload() -> None:
+    """_publish_output：ModelOutput返回有效JSON字符串→payload被解析为结构化字典
+    投影handler期望payload顶层含领域字段而非{"content": "<json-string>"}
+    """
+    bus = InProcessEventBus()
+    store = MockEventStore()
+    mock_adapter = AsyncMock()
+    summary_json = json.dumps(
+        {
+            "summary_id": "s-1",
+            "thread_id": "t-1",
+            "consensus_points": ["共识点1"],
+            "divergence_points": [],
+            "action_items": [],
+            "knowledge_references": [],
+        }
+    )
+    mock_adapter.complete = AsyncMock(return_value=ModelOutput(content=summary_json))
+    runtime = AgentRuntime(bus, store, mock_adapter)
+    runtime.register("proj-1", SUMMARY_DECLARATION)
+
+    event = _make_event(EventType.DiscussionMessageCreated, correlation_id="corr-json")
+    await runtime.dispatch("proj-1", "summary", event)
+
+    assert len(store.appended) == 1
+    new_event = store.appended[0]
+    # payload是解析后的JSON字典，不是{"content": "<json-string>"}
+    assert "summary_id" in new_event.payload
+    assert new_event.payload["summary_id"] == "s-1"
+    assert new_event.payload["thread_id"] == "t-1"
+    assert "content" not in new_event.payload
+
+
+async def test_publish_output_non_json_fallback_to_content() -> None:
+    """_publish_output：ModelOutput返回非JSON字符串→payload回退为{"content": ...}"""
+    bus = InProcessEventBus()
+    store = MockEventStore()
+    mock_adapter = AsyncMock()
+    mock_adapter.complete = AsyncMock(return_value=ModelOutput(content="纯文本产出"))
+    runtime = AgentRuntime(bus, store, mock_adapter)
+    runtime.register("proj-1", SUMMARY_DECLARATION)
+
+    event = _make_event(EventType.DiscussionMessageCreated, correlation_id="corr-text")
+    await runtime.dispatch("proj-1", "summary", event)
+
+    assert len(store.appended) == 1
+    new_event = store.appended[0]
+    assert new_event.payload["content"] == "纯文本产出"
+
+
+async def test_publish_output_json_array_fallback_to_content() -> None:
+    """_publish_output：ModelOutput返回JSON数组（非dict）→payload回退为{"content": ...}"""
+    bus = InProcessEventBus()
+    store = MockEventStore()
+    mock_adapter = AsyncMock()
+    mock_adapter.complete = AsyncMock(return_value=ModelOutput(content='["a", "b"]'))
+    runtime = AgentRuntime(bus, store, mock_adapter)
+    runtime.register("proj-1", SUMMARY_DECLARATION)
+
+    event = _make_event(EventType.DiscussionMessageCreated, correlation_id="corr-arr")
+    await runtime.dispatch("proj-1", "summary", event)
+
+    assert len(store.appended) == 1
+    new_event = store.appended[0]
+    assert new_event.payload["content"] == '["a", "b"]'
+
+
 # -- TC-13.6: ClaudeAdapter调用格式 --
 
 
@@ -300,3 +371,74 @@ async def test_tc13_6_empty_memory_context() -> None:
     # 无history，只有task
     assert len(messages) == 1
     assert messages[0]["role"] == "user"
+
+
+# -- metadata：事件payload *_id字段提取到PromptInput.metadata --
+
+
+async def test_metadata_from_event_payload_ids() -> None:
+    """metadata提取：事件payload中以_id结尾的字符串字段→自动进入PromptInput.metadata
+    project_id始终包含；非_id字段不进入metadata
+    """
+    bus = InProcessEventBus()
+    store = MockEventStore()
+    adapter = AsyncMock()
+    runtime = AgentRuntime(bus, store, adapter)
+    runtime.register("proj-1", SUMMARY_DECLARATION)
+
+    state = runtime._agents["proj-1"]["summary"]
+    event = _make_event(
+        EventType.DiscussionMessageCreated,
+        project_id="proj-1",
+        payload={"thread_id": "thread-abc", "content": "讨论内容", "request_summary": True},
+    )
+    prompt = await runtime._assemble_prompt(state.declaration, event)
+
+    # thread_id从payload提取到metadata
+    assert prompt.metadata["thread_id"] == "thread-abc"
+    # project_id始终包含
+    assert prompt.metadata["project_id"] == "proj-1"
+    # 非_id字段（content、request_summary）不进入metadata
+    assert "content" not in prompt.metadata
+    assert "request_summary" not in prompt.metadata
+
+
+async def test_metadata_multiple_ids() -> None:
+    """metadata提取：多个*_id字段同时提取（如plan_id+thread_id）"""
+    bus = InProcessEventBus()
+    store = MockEventStore()
+    adapter = AsyncMock()
+    runtime = AgentRuntime(bus, store, adapter)
+    runtime.register("proj-1", SUMMARY_DECLARATION)
+
+    state = runtime._agents["proj-1"]["summary"]
+    event = _make_event(
+        EventType.ExecutionPlanProposed,
+        project_id="proj-2",
+        payload={"plan_id": "plan-xyz", "thread_id": "thread-abc", "tasks": []},
+    )
+    prompt = await runtime._assemble_prompt(state.declaration, event)
+
+    assert prompt.metadata["plan_id"] == "plan-xyz"
+    assert prompt.metadata["thread_id"] == "thread-abc"
+    assert prompt.metadata["project_id"] == "proj-2"
+
+
+async def test_metadata_only_project_id_when_no_payload_ids() -> None:
+    """metadata提取：payload无*_id字段→metadata只含project_id"""
+    bus = InProcessEventBus()
+    store = MockEventStore()
+    adapter = AsyncMock()
+    runtime = AgentRuntime(bus, store, adapter)
+    runtime.register("proj-1", SUMMARY_DECLARATION)
+
+    state = runtime._agents["proj-1"]["summary"]
+    event = _make_event(
+        EventType.ProjectCreated,
+        project_id="proj-new",
+        payload={"name": "新项目", "description": "描述"},
+    )
+    prompt = await runtime._assemble_prompt(state.declaration, event)
+
+    # 无*_id字段，只有project_id
+    assert prompt.metadata == {"project_id": "proj-new"}

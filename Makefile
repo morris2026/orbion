@@ -1,4 +1,4 @@
-.PHONY: format lint lint-fix type test test-integration test-all audit check clean clean-all docker-up docker-down staging staging-clean staging-down staging-logs
+.PHONY: format lint lint-fix type test test-integration test-all test-e2e audit check clean clean-all docker-up docker-down staging staging-clean staging-down staging-logs
 
 format:
 	.venv/bin/ruff format app/ tests/
@@ -20,6 +20,10 @@ test-integration:
 
 test-all:
 	.venv/bin/python -m pytest tests/ --cov=app --cov-fail-under=80
+
+test-e2e:
+	# 前置：docker-up（PostgreSQL）+ migrations + npm run build + playwright install
+	cd web && npm run build && npx playwright test
 
 audit:
 	.venv/bin/pip-audit
