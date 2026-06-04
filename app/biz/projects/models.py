@@ -38,3 +38,13 @@ class MemberResponse(BaseModel):
     type: str
     display_name: str
     role: str
+    agent_type: str | None = None
+
+
+class MemberListItem(BaseModel):
+    participant_id: str
+    project_id: str
+    type: str
+    display_name: str
+    role: str
+    agent_type: str | None = None

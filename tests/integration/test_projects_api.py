@@ -462,3 +462,70 @@ class TestErrorResponseFormat:
         assert resp.status_code == 409
         data = resp.json()
         assert "detail" in data
+
+
+class TestListMembers:
+    """TC-9补充: 成员列表端点 — 验证创建者自动成为Owner + 添加成员可见"""
+
+    @pytest.mark.asyncio
+    async def test_list_members_after_project_creation(
+        self, client: AsyncClient, event_bus: InProcessEventBus, user_repo_provider: UserRepositoryProvider
+    ) -> None:
+        """创建项目后成员列表包含Owner"""
+        owner = await _create_user(user_repo_provider, "listmem_owner")
+        project_id = await _create_project(client, owner["token"])
+        await event_bus.wait_for_pending()
+
+        resp = await client.get(
+            f"/projects/{project_id}/members", headers={"Authorization": f"Bearer {owner['token']}"}
+        )
+        assert resp.status_code == 200
+        members = resp.json()
+        assert len(members) >= 1
+        owner_members = [m for m in members if m["participant_id"] == owner["id"]]
+        assert len(owner_members) == 1
+        assert owner_members[0]["role"] == "owner"
+        assert owner_members[0]["type"] == "human"
+        assert owner_members[0]["display_name"] == owner["display_name"]
+
+    @pytest.mark.asyncio
+    async def test_list_members_includes_added_member(
+        self, client: AsyncClient, event_bus: InProcessEventBus, user_repo_provider: UserRepositoryProvider
+    ) -> None:
+        """添加成员后列表可见"""
+        owner = await _create_user(user_repo_provider, "listmem2_owner")
+        new_member = await _create_user(user_repo_provider, "listmem2_member")
+        project_id = await _create_project(client, owner["token"])
+        await event_bus.wait_for_pending()
+
+        await client.post(
+            f"/projects/{project_id}/members",
+            json={"user_id": new_member["id"], "role": "member"},
+            headers={"Authorization": f"Bearer {owner['token']}"},
+        )
+        await event_bus.wait_for_pending()
+
+        resp = await client.get(
+            f"/projects/{project_id}/members", headers={"Authorization": f"Bearer {owner['token']}"}
+        )
+        assert resp.status_code == 200
+        members = resp.json()
+        assert len(members) >= 2
+        added = [m for m in members if m["participant_id"] == new_member["id"]]
+        assert len(added) == 1
+        assert added[0]["role"] == "member"
+
+    @pytest.mark.asyncio
+    async def test_list_members_non_member_404(
+        self, client: AsyncClient, event_bus: InProcessEventBus, user_repo_provider: UserRepositoryProvider
+    ) -> None:
+        """非项目成员请求成员列表→404"""
+        owner = await _create_user(user_repo_provider, "listmem3_owner")
+        outsider = await _create_user(user_repo_provider, "listmem3_out")
+        project_id = await _create_project(client, owner["token"])
+        await event_bus.wait_for_pending()
+
+        resp = await client.get(
+            f"/projects/{project_id}/members", headers={"Authorization": f"Bearer {outsider['token']}"}
+        )
+        assert resp.status_code == 404

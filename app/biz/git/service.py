@@ -102,3 +102,9 @@ class GitService:
         repo = git.Repo(self._repo_path)
         repo.index.add(safe_paths)
         repo.index.commit(f"[approve] output {output_id}")
+
+    def get_recent_commits(self, limit: int = 10) -> list[dict[str, str]]:
+        """查询git log返回最近N条commit摘要"""
+        repo = git.Repo(self._repo_path)
+        commits = list(repo.iter_commits(max_count=limit))
+        return [{"message": str(c.message), "hexsha": str(c.hexsha)} for c in commits]

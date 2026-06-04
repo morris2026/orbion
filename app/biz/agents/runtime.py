@@ -1,5 +1,6 @@
 """AgentRuntime——Agent生命周期管理（状态机、并发守卫、dispatch）"""
 
+import json
 import uuid
 from collections import defaultdict
 from datetime import UTC, datetime
@@ -137,6 +138,11 @@ class AgentRuntime:
             memory = self._memory.load_memory_chain(event.project_id, declaration.agent_type, event.correlation_id)
         # Step5: task
         task = self._payload_to_task(declaration.agent_type, event.payload)
+        # Step5.5: metadata — 从事件payload提取*_id字段，供Agent产出引用真实实体ID
+        metadata: dict[str, Any] = {"project_id": event.project_id}
+        for key, value in event.payload.items():
+            if key.endswith("_id") and isinstance(value, str):
+                metadata[key] = value
         return PromptInput(
             system_prompt=system_prompt,
             context="",
@@ -144,6 +150,7 @@ class AgentRuntime:
             task=task,
             history=history,
             model_config_obj=declaration.model_config_obj,
+            metadata=metadata,
         )
 
     def _payload_to_task(self, agent_type: str, payload: dict[str, Any]) -> str:
@@ -164,7 +171,21 @@ class AgentRuntime:
         return str(payload)
 
     async def _publish_output(self, declaration: AgentDeclaration, output: ModelOutput, trigger_event: Event) -> None:
-        """将Agent产出发布为新事件到EventBus"""
+        """将Agent产出发布为新事件到EventBus
+
+        尝试解析ModelOutput.content为JSON结构化payload；若非JSON则作为content字段。
+        Why: 投影handler期望payload顶层含领域字段（summary_id/tasks等），
+        但LLM可能返回JSON字符串而非纯文本，需在发布时解析合并。
+        """
+        try:
+            parsed = json.loads(output.content)
+            if isinstance(parsed, dict):
+                payload = parsed
+            else:
+                payload = {"content": output.content}
+        except (json.JSONDecodeError, TypeError):
+            payload = {"content": output.content}
+
         new_event = Event(
             event_id=str(uuid.uuid4()),
             project_id=trigger_event.project_id,
@@ -172,7 +193,7 @@ class AgentRuntime:
             participant_id=declaration.agent_id,
             participant_type="agent",
             participant_display_name=declaration.display_name,
-            payload={"content": output.content},
+            payload=payload,
             correlation_id=trigger_event.correlation_id,
             causation_id=trigger_event.event_id,
             created_at=datetime.now(UTC),

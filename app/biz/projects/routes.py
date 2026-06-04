@@ -4,7 +4,14 @@ from typing import cast
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 
-from app.biz.projects.models import MemberAdd, MemberResponse, ProjectCreate, ProjectListItem, ProjectResponse
+from app.biz.projects.models import (
+    MemberAdd,
+    MemberListItem,
+    MemberResponse,
+    ProjectCreate,
+    ProjectListItem,
+    ProjectResponse,
+)
 from app.biz.projects.service import ProjectService
 from app.hub.auth.dependencies import get_current_user
 from app.hub.auth.models import User
@@ -84,3 +91,17 @@ async def add_member(
     except ValueError as e:
         raise HTTPException(status_code=409, detail=str(e))
     return MemberResponse(**result)
+
+
+@router.get("/{project_id}/members", response_model=list[MemberListItem])
+async def list_members(
+    project_id: str,
+    user: User = Depends(get_current_user),
+    service: ProjectService = Depends(_get_project_service),
+) -> list[MemberListItem]:
+    """列出项目所有成员，仅项目成员可访问"""
+    is_member = await service.get_member_roles(project_id, user.id)
+    if is_member is None:
+        raise HTTPException(status_code=404, detail="Not a project member")
+    members = await service.list_members(project_id)
+    return [MemberListItem(**m) for m in members]

@@ -93,3 +93,7 @@ class ProjectService:
     async def get_member_roles(self, project_id: str, user_id: str) -> int | None:
         """查询用户在项目中的roles bitmask"""
         return await self._read_repo.get_member_roles(project_id, user_id)
+
+    async def list_members(self, project_id: str) -> list[dict[str, Any]]:
+        """列出项目所有成员"""
+        return await self._read_repo.list_members(project_id)

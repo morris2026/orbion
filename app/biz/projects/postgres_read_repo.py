@@ -114,6 +114,20 @@ class PostgresProjectRead(ProjectReadProtocol):
         )
         return _row_to_dict(row) if row else None
 
+    async def list_members(self, project_id: str) -> list[dict[str, Any]]:
+        """列出项目所有成员（人类+Agent）"""
+        pool = self._require_pool()
+        rows = await pool.fetch(
+            "SELECT participant_id, project_id, type, display_name, roles, "
+            "agent_type, model_id, status, created_at "
+            "FROM project_members WHERE project_id = $1 ORDER BY created_at ASC",
+            uuid.UUID(project_id),
+        )
+        results = [_row_to_dict(r) for r in rows]
+        for r in results:
+            r["role"] = derive_role_name(int(r["roles"]))
+        return results
+
 
 def _row_to_dict(row: asyncpg.Record) -> dict[str, Any]:
     """asyncpg Record → dict，UUID列自动转为str"""

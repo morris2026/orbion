@@ -34,6 +34,7 @@ class PromptInput(BaseModel):
     task: str
     history: list[EventSummary] = []
     model_config_obj: ModelConfig
+    metadata: dict[str, Any] = {}
 
 
 class SkillCall(BaseModel):

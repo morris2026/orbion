@@ -87,3 +87,15 @@ async def db_conn() -> AsyncGenerator[asyncpg.Connection, None]:
     for table in CLEAN_TABLES:
         await conn.execute(f"DELETE FROM {table}")
     await conn.close()
+
+
+@pytest.fixture(autouse=True, scope="function")
+async def _clean_test_tables() -> None:
+    """自动清理所有业务表，确保每个测试从干净数据库开始
+    Why: db_conn fixture非autouse，18/24个集成测试不请求它，
+    导致数据库状态在测试间累积→username UNIQUE约束冲突→间歇性失败
+    """
+    conn = await asyncpg.connect(settings.postgres.url)
+    for table in CLEAN_TABLES:
+        await conn.execute(f"DELETE FROM {table}")
+    await conn.close()
