@@ -37,3 +37,4 @@ pgdata_staging/
 # 项目临时文件
 .superpowers/
 temp/
+.VSCodeCounter
