@@ -1,4 +1,4 @@
-.PHONY: format lint lint-fix type test test-integration test-all test-e2e audit check clean clean-all docker-up docker-down staging staging-clean staging-down staging-logs
+.PHONY: format lint lint-fix type test test-front test-integration test-all test-e2e audit check clean clean-all docker-up docker-down staging staging-clean staging-down staging-logs
 
 format:
 	.venv/bin/ruff format app/ tests/
@@ -15,6 +15,9 @@ type:
 test:
 	.venv/bin/python -m pytest tests/unit/ --cov=app --cov-fail-under=80
 
+test-front:
+	cd web && npm test
+
 test-integration:
 	.venv/bin/python -m pytest tests/integration/ --cov=app --cov-fail-under=80
 
@@ -22,13 +25,12 @@ test-all:
 	.venv/bin/python -m pytest tests/ --cov=app --cov-fail-under=80
 
 test-e2e:
-	# 前置：docker-up（PostgreSQL）+ migrations + npm run build + playwright install
-	cd web && npm run build && npx playwright test
+	cd web && npx playwright install && npx playwright test
 
 audit:
 	.venv/bin/pip-audit
 
-check: format lint type test-all audit
+check: format lint type test-all test-front audit
 
 docker-up:
 	docker compose up -d
@@ -38,7 +40,7 @@ docker-down:
 
 clean:
 	find app/ tests/ -type d -name __pycache__ -exec rm -rf {} +
-	rm -rf .pytest_cache/ .ruff_cache/ .mypy_cache/ htmlcov/ .coverage
+	rm -rf .pytest_cache/ .ruff_cache/ .mypy_cache/ htmlcov/ .coverage node_modules/
 
 clean-all: clean docker-down
 	rm -rf .venv/ data/ repo/
