@@ -285,7 +285,7 @@
 
 ---
 
-### - [ ] 步骤 20：前端三栏工作区完整交互
+### - [x] 步骤 20：前端三栏工作区完整交互
 
 **增量**：ThreadList组件（线程列表+状态标记+成员列表）、DiscussionPanel组件（消息流+人类/Agent不同样式+request_summary按钮）、ExecutionPanel组件（计划卡片+审批操作+产出diff预览+Agent状态）、MessageItem组件（人类/Agent样式区分）、PlanCard组件、OutputDiff组件、SSE实时更新全部面板
 
