@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { createSSEConnection, disconnectSSE } from '@/lib/sse'
+import * as authModule from '@/lib/auth'
 
 class MockEventSource {
   url: string
@@ -16,10 +17,24 @@ class MockEventSource {
 describe('sse.ts — SSE连接管理封装', () => {
   beforeEach(() => {
     vi.restoreAllMocks()
+    localStorage.clear()
   })
 
-  it('创建EventSource连接到/events/stream端点', () => {
+  it('创建EventSource连接到/events/stream端点并附带JWT token', () => {
     vi.stubGlobal('EventSource', MockEventSource)
+    vi.spyOn(authModule, 'getToken').mockReturnValue('jwt-abc')
+
+    const onEvent = vi.fn()
+    const conn = createSSEConnection('proj-1', onEvent)
+
+    expect(conn.url).toBe('/events/stream?project_id=proj-1&token=jwt-abc')
+
+    vi.unstubAllGlobals()
+  })
+
+  it('无JWT token时不附带到URL', () => {
+    vi.stubGlobal('EventSource', MockEventSource)
+    vi.spyOn(authModule, 'getToken').mockReturnValue(null)
 
     const onEvent = vi.fn()
     const conn = createSSEConnection('proj-1', onEvent)
@@ -31,14 +46,14 @@ describe('sse.ts — SSE连接管理封装', () => {
 
   it('收到事件时调用回调并解析JSON', () => {
     vi.stubGlobal('EventSource', MockEventSource)
+    vi.spyOn(authModule, 'getToken').mockReturnValue('jwt-abc')
 
     const onEvent = vi.fn()
     const conn = createSSEConnection('proj-1', onEvent)
 
-    // 模拟SSE消息——call绑定this到conn
-    conn.onmessage!({ data: '{"event_type":"DiscussionMessageCreated","content":"hello"}' } as MessageEvent)
+    conn.onmessage!({ data: '{"event_type":"message_created","content":"hello"}' } as MessageEvent)
     expect(onEvent).toHaveBeenCalledWith({
-      event_type: 'DiscussionMessageCreated',
+      event_type: 'message_created',
       content: 'hello',
     })
 
@@ -47,6 +62,7 @@ describe('sse.ts — SSE连接管理封装', () => {
 
   it('disconnectSSE关闭连接', () => {
     vi.stubGlobal('EventSource', MockEventSource)
+    vi.spyOn(authModule, 'getToken').mockReturnValue('jwt-abc')
 
     const onEvent = vi.fn()
     const conn = createSSEConnection('proj-1', onEvent)
