@@ -27,7 +27,10 @@ class MockModelAdapter:
 class MockEventStore(EventStoreProtocol):
     """mock EventStore——记录append但不写DB"""
 
-    appended: list[Event] = []
+    appended: list[Event]
+
+    def __init__(self) -> None:
+        self.appended = []
 
     async def append(self, event: Event) -> None:
         self.appended.append(event)
