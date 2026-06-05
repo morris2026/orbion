@@ -35,11 +35,6 @@ async def event_store(request: pytest.FixtureRequest) -> AsyncGenerator[EventSto
     await store.close()
 
 
-@pytest.fixture(autouse=True)
-async def clean_tables(db_conn: asyncpg.Connection) -> None:
-    """db_conn已在前后清空所有业务表"""
-
-
 @pytest.fixture(params=list(TEST_PROJECTION_STORE_PAIRING.keys()))
 async def projections(
     request: pytest.FixtureRequest, event_bus: InProcessEventBus

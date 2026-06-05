@@ -1,55 +1,34 @@
-"""共享session级fixture — Docker PG启停与数据库迁移"""
+"""根conftest — 统一的function级全局状态清理兜底fixture"""
 
-import subprocess
-import time
-from collections.abc import Generator
-from pathlib import Path
-
-import asyncpg
 import pytest
 
-from app.config import get_settings
 
-settings = get_settings()
-MIGRATIONS_DIR = Path(__file__).resolve().parent.parent / "migrations"
-
-
-def _wait_for_postgres() -> None:
-    """轮询等待PG就绪"""
-    import asyncio
-
-    async def _try() -> None:
-        conn = await asyncpg.connect(settings.postgres.url)
-        await conn.close()
-
-    for _ in range(30):
-        try:
-            asyncio.run(_try())
-            return
-        except Exception:
-            time.sleep(1)
-    raise RuntimeError("PostgreSQL未在30秒内就绪")
-
-
-async def _run_migrations() -> None:
-    """清空现有表后执行所有迁移SQL"""
-    conn = await asyncpg.connect(settings.postgres.url)
-    tables = await conn.fetch("SELECT tablename FROM pg_tables WHERE schemaname = 'public'")
-    for t in tables:
-        await conn.execute(f"DROP TABLE IF EXISTS {t['tablename']} CASCADE")
-    migration_files = sorted(MIGRATIONS_DIR.glob("*.sql"))
-    for mf in migration_files:
-        await conn.execute(mf.read_text())
-    await conn.close()
-
-
-@pytest.fixture(scope="session", autouse=True)
-def _docker_postgres() -> Generator[None, None, None]:
-    """集成/基准测试 session 级自动启停 Docker PostgreSQL + 执行数据库迁移"""
-    subprocess.run(["docker", "compose", "up", "-d", "postgres"], check=True)
-    _wait_for_postgres()
-    import asyncio
-
-    asyncio.run(_run_migrations())
+@pytest.fixture(autouse=True, scope="function")
+def _reset_global_state() -> None:
+    """每个测试前后清理全局状态残留，消除随机化执行顺序时的状态泄漏
+    Why: pytest-randomly随机化时，前一个测试的全局状态残留可能污染后续测试；
+    统一的function级清理确保无论执行顺序如何，每个测试都从干净环境开始
+    """
+    # setup前：无操作（各子目录conftest已有具体的DB/app.state清理）
     yield
-    subprocess.run(["docker", "compose", "down"], check=True)
+    # teardown后：清理模块级全局对象可能残留的属性
+    from app.main import app
+
+    for attr in (
+        "event_store",
+        "event_bus",
+        "event_projections",
+        "project_read",
+        "project_service",
+        "thread_read",
+        "thread_service",
+        "user_repo_provider",
+        "sse_channel",
+        "agent_runtime",
+        "agent_scheduler",
+        "agent_service",
+    ):
+        try:
+            delattr(app.state, attr)
+        except (AttributeError, KeyError):
+            pass

@@ -27,7 +27,10 @@ class DispatchRecorder:
 
 
 class MockEventStore(EventStoreProtocol):
-    appended: list[Event] = []
+    appended: list[Event]
+
+    def __init__(self) -> None:
+        self.appended = []
 
     async def append(self, event: Event) -> None:
         self.appended.append(event)

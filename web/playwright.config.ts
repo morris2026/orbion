@@ -16,14 +16,14 @@ export default defineConfig({
     },
   ],
   use: {
-    baseURL: 'http://localhost:8000',
+    baseURL: 'http://localhost:8002',
     headless: true,
     screenshot: 'only-on-failure',
   },
   webServer: {
     // 使用独立E2E启动脚本注入TestModelAdapter，不修改生产代码
-    command: `cd ${projectRoot} && .venv/bin/python scripts/start-e2e-server.py`,
-    port: 8000,
+    command: `cd ${projectRoot} && ORBION_POSTGRES__DB=orbion_e2e .venv/bin/python scripts/start-e2e-server.py`,
+    port: 8002,
     reuseExistingServer: true,
     timeout: 30000,
   },
