@@ -12,8 +12,11 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 }
 
 function AdminRoute({ children }: { children: React.ReactNode }) {
-  if (!isAuthenticated() || isTokenExpired() || !getIsAdmin()) {
+  if (!isAuthenticated() || isTokenExpired()) {
     return <Navigate to="/login" replace />
+  }
+  if (!getIsAdmin()) {
+    return <Navigate to="/workspace" replace />
   }
   return <>{children}</>
 }

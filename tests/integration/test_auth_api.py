@@ -2,42 +2,14 @@
 
 import json
 import uuid
-from collections.abc import AsyncGenerator
 from typing import Any
 
 import asyncpg
-import pytest
-from httpx import ASGITransport, AsyncClient
+from httpx import AsyncClient
 
 from app.config import get_settings
-from app.hub.auth.repository import load_user_repo_provider
-from app.hub.events.bus import InProcessEventBus
-from app.hub.events.store import load_store_impl
-from app.main import app
 
 settings = get_settings()
-
-
-@pytest.fixture
-async def client() -> AsyncGenerator[AsyncClient, None]:
-    """httpx AsyncClient，初始化app.state（event_store/event_bus/user_repo_provider）"""
-    store_cls = load_store_impl(settings.event_store)
-    event_store = store_cls()
-    await event_store.connect()
-    app.state.event_store = event_store
-    app.state.event_bus = InProcessEventBus()
-
-    provider_cls = load_user_repo_provider(settings.user_repo)
-    user_repo_provider = provider_cls()
-    await user_repo_provider.connect()
-    app.state.user_repo_provider = user_repo_provider
-
-    transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test") as c:
-        yield c
-
-    await user_repo_provider.close()
-    await event_store.close()
 
 
 async def _register_first_admin(client: AsyncClient) -> dict[str, Any]:

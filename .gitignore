@@ -25,6 +25,7 @@ repo/       # Settings.repo_path 默认 "./repo"
 .pytest_cache/
 htmlcov/
 .coverage
+test-results/
 
 # 前端
 node_modules/

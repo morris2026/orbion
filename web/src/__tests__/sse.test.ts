@@ -8,9 +8,26 @@ class MockEventSource {
   onmessage: ((ev: MessageEvent) => void) | null = null
   onerror: ((ev: Event) => void) | null = null
   close = vi.fn()
+  private _listeners: Map<string, EventListener[]> = new Map()
 
   constructor(url: string) {
     this.url = url
+  }
+
+  addEventListener(type: string, listener: EventListener) {
+    if (!this._listeners.has(type)) {
+      this._listeners.set(type, [])
+    }
+    this._listeners.get(type)!.push(listener)
+  }
+
+  /** 模拟后端推送named event */
+  emit(type: string, data: string) {
+    const listeners = this._listeners.get(type) ?? []
+    const msg = new MessageEvent(type, { data })
+    for (const listener of listeners) {
+      listener(msg)
+    }
   }
 }
 
@@ -44,16 +61,18 @@ describe('sse.ts — SSE连接管理封装', () => {
     vi.unstubAllGlobals()
   })
 
-  it('收到事件时调用回调并解析JSON', () => {
+  it('named event触发addEventListener回调并解析JSON+注入event_type', () => {
     vi.stubGlobal('EventSource', MockEventSource)
     vi.spyOn(authModule, 'getToken').mockReturnValue('jwt-abc')
 
     const onEvent = vi.fn()
-    const conn = createSSEConnection('proj-1', onEvent)
+    const conn = createSSEConnection('proj-1', onEvent) as MockEventSource
 
-    conn.onmessage!({ data: '{"event_type":"message_created","content":"hello"}' } as MessageEvent)
+    // 模拟后端推送message_created named event
+    conn.emit('message_created', '{"message_id":"m1","content":"hello"}')
     expect(onEvent).toHaveBeenCalledWith({
       event_type: 'message_created',
+      message_id: 'm1',
       content: 'hello',
     })
 

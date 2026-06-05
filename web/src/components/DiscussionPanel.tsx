@@ -5,11 +5,10 @@ import { Button } from '@/components/ui/button'
 
 interface DiscussionPanelProps {
   messages: MessageResponse[]
-  threadId: string
   onSendMessage: (opts: { content: string; request_summary?: boolean }) => void
 }
 
-export default function DiscussionPanel({ messages, threadId, onSendMessage }: DiscussionPanelProps) {
+export default function DiscussionPanel({ messages, onSendMessage }: DiscussionPanelProps) {
   const [input, setInput] = useState('')
 
   const handleSend = () => {

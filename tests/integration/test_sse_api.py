@@ -3,24 +3,17 @@
 import asyncio
 import json
 import uuid
-from collections.abc import AsyncGenerator, MutableMapping
+from collections.abc import MutableMapping
 from typing import Any, Literal
 
 import asyncpg
-import pytest
-from httpx import ASGITransport, AsyncClient
+from httpx import AsyncClient
 
-from app.biz.projects.read_repo import load_project_read_impl
-from app.biz.projects.service import ProjectService
-from app.biz.threads.read_repo import load_thread_read_impl
-from app.biz.threads.service import ThreadService
 from app.config import get_settings
-from app.hub.auth.repository import UserRepositoryProvider, load_user_repo_provider
+from app.hub.auth.repository import UserRepositoryProvider
 from app.hub.auth.service import create_access_token, hash_password
 from app.hub.channels.sse import SSEChannel
 from app.hub.events.bus import InProcessEventBus
-from app.hub.events.projections import load_projections_impl
-from app.hub.events.store import load_store_impl
 from app.hub.events.types import (
     DiscussionMessageCreatedPayload,
     DiscussionSummaryGeneratedPayload,
@@ -38,77 +31,6 @@ from app.hub.events.types import (
 from app.main import app
 
 settings = get_settings()
-
-
-# -- SSEChannel直接测试fixture --
-
-
-@pytest.fixture
-async def event_bus() -> InProcessEventBus:
-    return InProcessEventBus()
-
-
-@pytest.fixture
-async def sse_channel(event_bus: InProcessEventBus) -> SSEChannel:
-    return SSEChannel(event_bus)
-
-
-# -- HTTP端点测试fixture --
-
-
-@pytest.fixture
-async def user_repo_provider() -> AsyncGenerator[UserRepositoryProvider, None]:
-    provider_cls = load_user_repo_provider(settings.user_repo)
-    provider = provider_cls()
-    await provider.connect()
-    yield provider
-    await provider.close()
-
-
-@pytest.fixture
-async def http_client(
-    event_bus: InProcessEventBus,
-    sse_channel: SSEChannel,
-    user_repo_provider: UserRepositoryProvider,
-) -> AsyncGenerator[AsyncClient, None]:
-    """httpx AsyncClient，初始化app.state（含SSEChannel）"""
-    store_cls = load_store_impl(settings.event_store)
-    event_store = store_cls()
-    await event_store.connect()
-
-    proj_cls = load_projections_impl(settings.event_projections)
-    projections = proj_cls(event_bus)
-    await projections.connect()
-
-    read_cls = load_project_read_impl(settings.project_read)
-    project_read = read_cls()
-    await project_read.connect()
-
-    thread_read_cls = load_thread_read_impl(settings.thread_read)
-    thread_read = thread_read_cls()
-    await thread_read.connect()
-
-    project_service = ProjectService(event_store, event_bus, project_read)
-    thread_service = ThreadService(event_store, event_bus, thread_read, project_read)
-
-    app.state.event_store = event_store
-    app.state.event_bus = event_bus
-    app.state.event_projections = projections
-    app.state.project_read = project_read
-    app.state.project_service = project_service
-    app.state.thread_read = thread_read
-    app.state.thread_service = thread_service
-    app.state.user_repo_provider = user_repo_provider
-    app.state.sse_channel = sse_channel
-
-    transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test") as c:
-        yield c
-
-    await projections.close()
-    await thread_read.close()
-    await project_read.close()
-    await event_store.close()
 
 
 # -- helpers --
@@ -377,17 +299,17 @@ async def test_tc11_6_project_id_filter(event_bus: InProcessEventBus, sse_channe
 
 
 async def test_tc11_1_sse_connection(
-    http_client: AsyncClient,
+    client: AsyncClient,
     event_bus: InProcessEventBus,
     user_repo_provider: UserRepositoryProvider,
     db_conn: asyncpg.Connection,
 ) -> None:
     """TC-11.1: 建立SSE长连接——Content-Type: text/event-stream + 项目成员授权检查
 
-    httpx ASGITransport不支持SSE流式响应，http_client fixture初始化app.state后用ASGI直接调用。
+    httpx ASGITransport不支持SSE流式响应，client fixture初始化app.state后用ASGI直接调用。
     """
     user = await _create_user(user_repo_provider, "sseuser1", is_admin=True)
-    project = await _create_project(http_client, user["token"])
+    project = await _create_project(client, user["token"])
     # 等待投影写入project_members，否则成员检查会403
     await event_bus.wait_for_pending()
 
@@ -437,9 +359,9 @@ async def test_tc11_1_sse_connection(
 # -- TC-11.5: 无JWT→401 --
 
 
-async def test_tc11_5_no_jwt_rejected(http_client: AsyncClient) -> None:
+async def test_tc11_5_no_jwt_rejected(client: AsyncClient) -> None:
     """TC-11.5: 无JWT→连接拒绝，返回401"""
-    response = await http_client.get("/events/stream?project_id=some-project")
+    response = await client.get("/events/stream?project_id=some-project")
     assert response.status_code == 401
 
 
@@ -447,19 +369,19 @@ async def test_tc11_5_no_jwt_rejected(http_client: AsyncClient) -> None:
 
 
 async def test_tc11_5b_non_member_rejected(
-    http_client: AsyncClient,
+    client: AsyncClient,
     event_bus: InProcessEventBus,
     user_repo_provider: UserRepositoryProvider,
     db_conn: asyncpg.Connection,
 ) -> None:
     """TC-11.5b: 非项目成员订阅项目SSE流→返回403"""
     admin = await _create_user(user_repo_provider, "sseadmin", is_admin=True)
-    project = await _create_project(http_client, admin["token"])
+    project = await _create_project(client, admin["token"])
     await event_bus.wait_for_pending()
     # 创建非成员用户
     outsider = await _create_user(user_repo_provider, "outsider1", is_admin=False)
     # outsider尝试订阅admin的项目SSE流
-    response = await http_client.get(
+    response = await client.get(
         f"/events/stream?project_id={project['id']}",
         headers={"Authorization": f"Bearer {outsider['token']}"},
     )

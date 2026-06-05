@@ -51,7 +51,6 @@ export default function Workspace({ workspaceOptions }: WorkspaceProps) {
         {ws.selectedThreadId ? (
           <DiscussionPanel
             messages={ws.messages}
-            threadId={ws.selectedThreadId}
             onSendMessage={ws.handleSendMessage}
           />
         ) : (

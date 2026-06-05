@@ -1,7 +1,10 @@
 """E2E测试服务器启动脚本 — 注入TestModelAdapter到生产lifespan，不修改生产代码"""
 
+import asyncio
 import json
 import uuid
+
+import asyncpg
 
 from app.biz.agents.adapters.base import ModelOutput, PromptInput
 
@@ -16,7 +19,7 @@ class TestModelAdapter:
     def _detect_agent_type(self, task: str) -> str:
         if "总结" in task or "摘要" in task:
             return "summary"
-        if "分解" in task or "任务" in task:
+        if "分解" in task:
             return "decompose"
         if "执行" in task or "代码" in task or "重新生成" in task:
             return "execute"
@@ -97,6 +100,21 @@ class TestModelAdapter:
 import app.main
 
 app.main.StubModelAdapter = TestModelAdapter
+
+# 清空所有业务表，确保E2E测试数据隔离
+async def _clean_db() -> None:
+    """TRUNCATE所有业务表，确保每次E2E运行从空库开始"""
+    from app.config import get_settings
+
+    settings = get_settings()
+    conn = await asyncpg.connect(settings.postgres.url)
+    await conn.execute(
+        "TRUNCATE task_outputs, execution_plans, thread_messages, "
+        "project_members, threads, projects, event_log, users CASCADE"
+    )
+    await conn.close()
+
+asyncio.run(_clean_db())
 
 # 启动服务器
 import uvicorn

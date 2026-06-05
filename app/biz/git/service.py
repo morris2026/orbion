@@ -36,7 +36,8 @@ class GitService:
         event_bus: EventBus,
         projections: EventProjectionsProtocol,
     ) -> None:
-        self._repo_path = repo_path
+        # Why: 相对路径依赖CWD，asyncio.to_thread可能在不同CWD下执行git操作
+        self._repo_path = str(Path(repo_path).resolve())
         self._event_bus = event_bus
         self._projections = projections
         # 只订阅审批通过事件——要求修改和拒绝不触发commit

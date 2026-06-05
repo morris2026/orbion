@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { apiGet, apiPost } from '@/lib/api'
-import { createSSEConnection, disconnectSSE, SSERawEvent } from '@/lib/sse'
+import { createSSEConnection, disconnectSSE } from '@/lib/sse'
+import type { SSERawEvent } from '@/lib/sse'
 import type { ProjectListItem, ThreadListItem, MessageResponse, PlanResponse, PlanTask, OutputResponse } from '@/types/api'
 import type {
   SSEMessageCreatedEvent,
