@@ -1,87 +1,18 @@
 """讨论线程与消息API集成测试：TC-10.1–TC-10.7"""
 
 import uuid
-from collections.abc import AsyncGenerator
 from typing import Any
 
 import asyncpg
 import pytest
-from httpx import ASGITransport, AsyncClient
+from httpx import AsyncClient
 
-from app.biz.projects.read_repo import load_project_read_impl
-from app.biz.projects.service import ProjectService
-from app.biz.threads.read_repo import load_thread_read_impl
-from app.biz.threads.service import ThreadService
 from app.config import get_settings
-from app.hub.auth.repository import UserRepositoryProvider, load_user_repo_provider
+from app.hub.auth.repository import UserRepositoryProvider
 from app.hub.auth.service import create_access_token, hash_password
 from app.hub.events.bus import InProcessEventBus
-from app.hub.events.projections import load_projections_impl
-from app.hub.events.store import load_store_impl
-from app.main import app
 
 settings = get_settings()
-
-
-# -- fixture --
-
-
-@pytest.fixture
-async def user_repo_provider() -> AsyncGenerator[UserRepositoryProvider, None]:
-    provider_cls = load_user_repo_provider(settings.user_repo)
-    provider = provider_cls()
-    await provider.connect()
-    yield provider
-    await provider.close()
-
-
-@pytest.fixture
-async def event_bus() -> InProcessEventBus:
-    """InProcessEventBus实例，供写操作后等待投影完成"""
-    return InProcessEventBus()
-
-
-@pytest.fixture
-async def client(
-    event_bus: InProcessEventBus, user_repo_provider: UserRepositoryProvider
-) -> AsyncGenerator[AsyncClient, None]:
-    """httpx AsyncClient，初始化app.state（含ThreadService）"""
-    store_cls = load_store_impl(settings.event_store)
-    event_store = store_cls()
-    await event_store.connect()
-    # Projections 初始化
-    proj_cls = load_projections_impl(settings.event_projections)
-    projections = proj_cls(event_bus)
-    await projections.connect()
-    # ProjectRead 初始化
-    read_cls = load_project_read_impl(settings.project_read)
-    project_read = read_cls()
-    await project_read.connect()
-    # ThreadRead 初始化
-    thread_read_cls = load_thread_read_impl(settings.thread_read)
-    thread_read = thread_read_cls()
-    await thread_read.connect()
-    # ProjectService 初始化
-    project_service = ProjectService(event_store, event_bus, project_read)
-    # ThreadService 初始化
-    thread_service = ThreadService(event_store, event_bus, thread_read, project_read)
-    app.state.event_store = event_store
-    app.state.event_bus = event_bus
-    app.state.event_projections = projections
-    app.state.project_read = project_read
-    app.state.project_service = project_service
-    app.state.thread_read = thread_read
-    app.state.thread_service = thread_service
-    app.state.user_repo_provider = user_repo_provider
-
-    transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test") as c:
-        yield c
-
-    await projections.close()
-    await thread_read.close()
-    await project_read.close()
-    await event_store.close()
 
 
 # -- helper --

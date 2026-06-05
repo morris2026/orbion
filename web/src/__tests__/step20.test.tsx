@@ -94,7 +94,7 @@ describe('步骤20：前端三栏工作区完整交互', () => {
     it('点击请求总结按钮触发onSendMessage回调，包含content和request_summary=true', async () => {
       const user = userEvent.setup()
       const onSendMessage = vi.fn()
-      render(<DiscussionPanel messages={mockMessages} threadId="t1" onSendMessage={onSendMessage} />)
+      render(<DiscussionPanel messages={mockMessages} onSendMessage={onSendMessage} />)
 
       // 输入消息内容
       const input = screen.getByPlaceholderText(/输入消息/)
@@ -107,7 +107,7 @@ describe('步骤20：前端三栏工作区完整交互', () => {
     it('未输入内容时点击请求总结使用默认content', async () => {
       const user = userEvent.setup()
       const onSendMessage = vi.fn()
-      render(<DiscussionPanel messages={mockMessages} threadId="t1" onSendMessage={onSendMessage} />)
+      render(<DiscussionPanel messages={mockMessages} onSendMessage={onSendMessage} />)
 
       await user.click(screen.getByRole('button', { name: /请求总结/i }))
       expect(onSendMessage).toHaveBeenCalledWith({ content: '请总结当前讨论要点', request_summary: true })

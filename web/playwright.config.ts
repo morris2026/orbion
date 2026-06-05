@@ -1,7 +1,7 @@
 import { defineConfig } from '@playwright/test'
 import path from 'path'
 
-const projectRoot = path.resolve(__dirname, '..')
+const projectRoot = path.resolve(import.meta.dirname, '..')
 
 export default defineConfig({
   testDir: './e2e',
@@ -9,6 +9,12 @@ export default defineConfig({
   retries: 0,
   timeout: 30000,
   expect: { timeout: 10000 },
+  projects: [
+    {
+      name: 'chromium',
+      use: { browserName: 'chromium' },
+    },
+  ],
   use: {
     baseURL: 'http://localhost:8000',
     headless: true,

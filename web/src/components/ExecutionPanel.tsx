@@ -6,7 +6,7 @@ interface ExecutionPanelProps {
   plans: PlanResponse[]
   outputs: OutputResponse[]
   onApprovePlan: (planId: string) => void
-  onRejectPlan: (planId: string) => void
+  onRejectPlan: (planId: string, reason: string) => void
 }
 
 export default function ExecutionPanel({ plans, outputs, onApprovePlan, onRejectPlan }: ExecutionPanelProps) {
