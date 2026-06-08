@@ -23,7 +23,7 @@ def test_tc1_1_app_exists_and_title() -> None:
 def test_tc1_2_settings_defaults() -> None:
     """TC-1.2：Settings默认值和环境变量覆盖正确
 
-    Makefile的test-all/test-random注入ORBION_POSTGRES__DB=orbion_test，
+    conftest的_inject_test_env_vars注入ORBION_POSTGRES__DB=orbion_test，
     测试不应硬编码断言默认值，而是验证Settings正确反映当前环境。
     """
     s = Settings()

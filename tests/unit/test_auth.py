@@ -106,7 +106,7 @@ class TestJWTExpiration:
         from app.hub.auth.dependencies import get_current_user_from_token
 
         settings = Settings(jwt_secret=JWT_SECRET_TEST)
-        # 创建一个已过期的JWT（exp为1秒前）
+        # 创建一个已过期的JWT（exp为60秒前，超过leeway=30s阈值）
         expired_token = jwt.encode(
             {
                 "sub": "user-1",
@@ -114,7 +114,7 @@ class TestJWTExpiration:
                 "display_name": "Morris",
                 "is_admin": False,
                 "iss": "orbion",
-                "exp": int(time.time()) - 1,
+                "exp": int(time.time()) - 60,
                 "iat": int(time.time()) - 3600,
             },
             settings.jwt_secret,
@@ -123,6 +123,27 @@ class TestJWTExpiration:
         with pytest.raises(HTTPException) as exc_info:
             get_current_user_from_token(expired_token, settings)
         assert exc_info.value.status_code == 401
+
+    def test_iat_within_leeway_still_valid(self) -> None:
+        """iat在未来5秒（leeway=30s范围内）的JWT仍正常解码"""
+        from app.hub.auth.dependencies import get_current_user_from_token
+
+        settings = Settings(jwt_secret=JWT_SECRET_TEST)
+        token = jwt.encode(
+            {
+                "sub": "user-1",
+                "username": "morris",
+                "display_name": "Morris",
+                "is_admin": False,
+                "iss": "orbion",
+                "exp": int(time.time()) + 3600,
+                "iat": int(time.time()) + 5,
+            },
+            settings.jwt_secret,
+            algorithm="HS256",
+        )
+        user = get_current_user_from_token(token, settings)
+        assert user.id == "user-1"
 
 
 class TestGetCurrentUser:

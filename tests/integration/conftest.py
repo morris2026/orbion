@@ -134,15 +134,7 @@ async def postgres_pool() -> AsyncGenerator[asyncpg.Pool, None]:
 
 @pytest.fixture
 async def db_conn() -> AsyncGenerator[asyncpg.Connection, None]:
-    """共享DB连接fixture：测试前后清空所有业务表"""
+    """共享DB连接fixture——根conftest _clean_env已做动态TRUNCATE，此处只提供连接"""
     conn = await asyncpg.connect(get_settings().postgres.url)
-    await conn.execute("TRUNCATE event_log CASCADE")
-    await conn.execute(
-        "TRUNCATE task_outputs, execution_plans, thread_messages, project_members, threads, projects, users CASCADE"
-    )
     yield conn
-    await conn.execute("TRUNCATE event_log CASCADE")
-    await conn.execute(
-        "TRUNCATE task_outputs, execution_plans, thread_messages, project_members, threads, projects, users CASCADE"
-    )
     await conn.close()
