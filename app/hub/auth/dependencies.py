@@ -15,7 +15,11 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login", auto_error=False)
 
 
 def get_current_user_from_token(token: str, settings: Settings) -> User:
-    """从JWT token解析当前用户。过期/无效token抛出401。解码时验证iss声明。"""
+    """从JWT token解析当前用户。过期/无效token抛出401。解码时验证iss声明。
+
+    leeway=30s容忍时钟偏移（WSL2时钟同步回跳、多服务器NTP误差），
+    符合RFC 7519对时钟偏移容忍的推荐。
+    """
     try:
         payload = jwt.decode(
             token,
@@ -23,6 +27,7 @@ def get_current_user_from_token(token: str, settings: Settings) -> User:
             algorithms=["HS256"],
             options={"verify_iss": True},
             issuer=JWT_ISS,
+            leeway=30,
         )
     except jwt.ExpiredSignatureError:
         raise HTTPException(status_code=401, detail="Token has expired")

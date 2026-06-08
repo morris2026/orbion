@@ -2,7 +2,17 @@
 
 import asyncio
 import json
+import os
 import uuid
+
+# E2E独立于pytest进程运行，不依赖tests/conftest，自行定义测试密钥。
+# Why: pytest的JWT_SECRET_TEST与e2e的JWT_SECRET_E2E是不同值——
+# 避免跨进程耦合；e2e有自己的用户注册流程，无需共享pytest的token。
+# 两者均>=32 bytes以满足PyJWT HS256最低密钥长度要求。
+JWT_SECRET_E2E = "orbion-e2e-secret-key-at-least-32-by"
+
+os.environ.setdefault("ORBION_JWT_SECRET", JWT_SECRET_E2E)
+os.environ.setdefault("ORBION_POSTGRES__DB", "orbion_test")
 
 import asyncpg
 
@@ -103,15 +113,15 @@ app.main.StubModelAdapter = TestModelAdapter
 
 # 清空所有业务表，确保E2E测试数据隔离
 async def _clean_db() -> None:
-    """TRUNCATE所有业务表，确保每次E2E运行从空库开始"""
+    """动态发现所有业务表并TRUNCATE CASCADE，确保每次E2E运行从空库开始"""
     from app.config import get_settings
 
     settings = get_settings()
     conn = await asyncpg.connect(settings.postgres.url)
-    await conn.execute(
-        "TRUNCATE task_outputs, execution_plans, thread_messages, "
-        "project_members, threads, projects, event_log, users CASCADE"
-    )
+    rows = await conn.fetch("SELECT tablename FROM pg_tables WHERE schemaname = 'public'")
+    tables = ", ".join(r["tablename"] for r in rows)
+    if tables:
+        await conn.execute(f"TRUNCATE {tables} CASCADE")
     await conn.close()
 
 asyncio.run(_clean_db())
