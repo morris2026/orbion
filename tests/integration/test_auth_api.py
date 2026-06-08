@@ -9,7 +9,6 @@ from httpx import AsyncClient
 
 from app.config import get_settings
 
-settings = get_settings()
 
 
 async def _register_first_admin(client: AsyncClient) -> dict[str, Any]:

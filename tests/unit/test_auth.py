@@ -6,6 +6,7 @@ import jwt
 import pytest
 
 from app.config import Settings
+from tests.conftest import JWT_SECRET_TEST
 
 
 class TestPasswordHashing:
@@ -42,7 +43,7 @@ class TestJWTGenerationAndVerification:
         """payload含sub/username/display_name/is_admin/iss/exp/iat"""
         from app.hub.auth.service import create_access_token
 
-        settings = Settings()
+        settings = Settings(jwt_secret=JWT_SECRET_TEST)
         token = create_access_token(
             user_id="user-1",
             username="morris",
@@ -63,7 +64,7 @@ class TestJWTGenerationAndVerification:
         """HS256算法"""
         from app.hub.auth.service import create_access_token
 
-        settings = Settings()
+        settings = Settings(jwt_secret=JWT_SECRET_TEST)
         token = create_access_token(
             user_id="user-1",
             username="morris",
@@ -79,7 +80,7 @@ class TestJWTGenerationAndVerification:
         """密钥从config读取"""
         from app.hub.auth.service import create_access_token
 
-        settings = Settings(jwt_secret="test-secret-key")
+        settings = Settings(jwt_secret=JWT_SECRET_TEST)
         token = create_access_token(
             user_id="user-1",
             username="morris",
@@ -88,11 +89,11 @@ class TestJWTGenerationAndVerification:
             settings=settings,
         )
         # 用正确的密钥解码成功
-        payload = jwt.decode(token, "test-secret-key", algorithms=["HS256"])
+        payload = jwt.decode(token, JWT_SECRET_TEST, algorithms=["HS256"])
         assert payload["sub"] == "user-1"
         # 用错误的密钥解码失败
         with pytest.raises(jwt.InvalidSignatureError):
-            jwt.decode(token, "wrong-secret", algorithms=["HS256"])
+            jwt.decode(token, "wrong-secret-key-at-least-32-byte", algorithms=["HS256"])
 
 
 class TestJWTExpiration:
@@ -104,7 +105,7 @@ class TestJWTExpiration:
 
         from app.hub.auth.dependencies import get_current_user_from_token
 
-        settings = Settings()
+        settings = Settings(jwt_secret=JWT_SECRET_TEST)
         # 创建一个已过期的JWT（exp为1秒前）
         expired_token = jwt.encode(
             {
@@ -131,7 +132,7 @@ class TestGetCurrentUser:
         """返回User对象，字段与JWT payload一致"""
         from app.hub.auth.dependencies import get_current_user_from_token
 
-        settings = Settings()
+        settings = Settings(jwt_secret=JWT_SECRET_TEST)
         token = jwt.encode(
             {
                 "sub": "user-1",
@@ -157,7 +158,7 @@ class TestGetCurrentUser:
 
         from app.hub.auth.dependencies import get_current_user_from_token
 
-        settings = Settings()
+        settings = Settings(jwt_secret=JWT_SECRET_TEST)
         token = jwt.encode(
             {
                 "sub": "user-1",

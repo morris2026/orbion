@@ -95,8 +95,8 @@ class OrbionConfigFileParser(PydanticBaseSettingsSource):
 class Settings(BaseSettings):
     """合并配置：orbion.json 基础值 + ORBION_* 环境变量覆盖"""
 
-    # 密钥字段：只从环境变量读取，不出现在 orbion.json 中
-    jwt_secret: str = "orbion-dev-secret"
+    # 密钥字段：必须通过ORBION_*环境变量配置，无默认值，漏配启动报错
+    jwt_secret: str
     anthropic_api_key: str = ""
 
     # 非密钥字段：orbion.json 基础值，环境变量可覆盖

@@ -11,7 +11,6 @@ from app.hub.auth.repository import UserRepositoryProvider
 from app.hub.auth.service import create_access_token, hash_password
 from app.hub.events.bus import InProcessEventBus
 
-settings = get_settings()
 
 
 class StubAdapter:
@@ -29,7 +28,7 @@ async def _create_user(provider: UserRepositoryProvider, username: str, is_admin
         username=user.username,
         display_name=user.display_name,
         is_admin=user.is_admin,
-        settings=settings,
+        settings=get_settings(),
     )
     return {"id": user.id, "token": token, "username": user.username, "display_name": user.display_name}
 
