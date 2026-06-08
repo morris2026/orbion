@@ -220,8 +220,8 @@ test.describe('自我构建9点验证', () => {
     await messageInput.fill('这是我的观点')
     await page.getByRole('button', { name: /发送/ }).click()
 
-    // 消息依赖SSE推送显示，需要较长等待
-    await expect(page.getByText('这是我的观点')).toBeVisible({ timeout: 15000 })
+    // 乐观更新：POST返回后立即显示，不需等SSE
+    await expect(page.getByText('这是我的观点')).toBeVisible({ timeout: 5000 })
   })
 
   test('TC-21.3 验证点3：总结Agent产出摘要', async ({ page }) => {
@@ -371,8 +371,8 @@ test.describe('自我构建9点验证', () => {
     const messageInput = page.getByPlaceholder(/输入消息/)
     await messageInput.fill('实时更新测试消息')
     await page.getByRole('button', { name: /发送/ }).click()
-    // 消息依赖SSE推送
-    await expect(page.getByText('实时更新测试消息')).toBeVisible({ timeout: 15000 })
+    // 乐观更新：POST返回后立即显示
+    await expect(page.getByText('实时更新测试消息')).toBeVisible({ timeout: 5000 })
 
     await page.getByRole('button', { name: /请求总结/ }).click()
     await expect(page.getByText(/共识/)).toBeVisible({ timeout: 15000 })

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { apiGet, apiPost } from '@/lib/api'
 import { createSSEConnection, disconnectSSE } from '@/lib/sse'
 import type { SSERawEvent } from '@/lib/sse'
@@ -101,6 +101,10 @@ export function useWorkspace(options?: UseWorkspaceOptions) {
   const [plans, setPlans] = useState<PlanResponse[]>(init?.plans ?? [])
   const [outputs, setOutputs] = useState<OutputResponse[]>(init?.outputs ?? [])
 
+  // SSE回调需实时读取当前threadId，但不应触发连接重建
+  const selectedThreadIdRef = useRef(selectedThreadId)
+  useEffect(() => { selectedThreadIdRef.current = selectedThreadId })
+
   // 初始数据未注入时从API加载项目列表
   useEffect(() => {
     if (init?.projects) return
@@ -136,19 +140,24 @@ export function useWorkspace(options?: UseWorkspaceOptions) {
       .catch(() => {})
   }, [selectedProjectId]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // SSE实时更新
+  // SSE实时更新（只在切换项目时重建连接，切换线程不重建）
   useEffect(() => {
     if (!selectedProjectId) return
     const es = createSSEConnection(selectedProjectId, (raw: SSERawEvent) => {
       const type = raw.event_type
       if (type === 'message_created') {
         const event = raw as unknown as SSEMessageCreatedEvent
-        if (event.thread_id === selectedThreadId) {
-          setMessages((prev) => [...prev, mapMessageFromSSE(event)])
+        if (event.thread_id === selectedThreadIdRef.current) {
+          setMessages((prev) => {
+            // 去重前提：POST返回的MessageResponse.id 和 SSE推送的message_id 持同一个UUID
+            // （ThreadService.send_message 用同一个 message_id 构造两者）
+            if (prev.some(m => m.id === event.message_id)) return prev
+            return [...prev, mapMessageFromSSE(event)]
+          })
         }
       } else if (type === 'summary_generated') {
         const event = raw as unknown as SSESummaryGeneratedEvent
-        if (event.thread_id === selectedThreadId) {
+        if (event.thread_id === selectedThreadIdRef.current) {
           setMessages((prev) => [...prev, mapSummaryFromSSE(event)])
         }
       } else if (type === 'plan_proposed') {
@@ -180,15 +189,17 @@ export function useWorkspace(options?: UseWorkspaceOptions) {
       }
     })
     return () => disconnectSSE(es)
-  }, [selectedProjectId, selectedThreadId])
+  }, [selectedProjectId])
 
-  // 发送消息（含request_summary）
+  // 发送消息（乐观更新：POST返回后立即显示，SSE回传时去重）
   const handleSendMessage = useCallback(
     (opts: { content: string; request_summary?: boolean }) => {
       if (!selectedThreadId) return
-      apiPost(`/threads/${selectedThreadId}/messages`, {
+      apiPost<MessageResponse>(`/threads/${selectedThreadId}/messages`, {
         content: opts.content,
         request_summary: opts.request_summary ?? false,
+      }).then((response) => {
+        setMessages((prev) => [...prev, response])
       }).catch(() => {})
     },
     [selectedThreadId]
