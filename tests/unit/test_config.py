@@ -9,6 +9,7 @@ import pytest
 from pytest import MonkeyPatch
 
 from app.config import OrbionConfigSchema, PostgresConfigSchema, Settings
+from tests.conftest import JWT_SECRET_TEST
 
 
 def test_tc1_1_app_exists_and_title() -> None:
@@ -39,14 +40,14 @@ def test_tc1_3_settings_env_override(monkeypatch: MonkeyPatch) -> None:
     monkeypatch.setenv("ORBION_POSTGRES__DB", "testdb")
     monkeypatch.setenv("ORBION_POSTGRES__USER", "testuser")
     monkeypatch.setenv("ORBION_POSTGRES__PASSWORD", "testpass")
-    monkeypatch.setenv("ORBION_JWT_SECRET", "my-secret")
+    monkeypatch.setenv("ORBION_JWT_SECRET", JWT_SECRET_TEST)
     monkeypatch.setenv("ORBION_ANTHROPIC_API_KEY", "sk-test-key")
     monkeypatch.setenv("ORBION_REPO_PATH", "/tmp/repo")
     monkeypatch.setenv("ORBION_MEMORY_BASE_PATH", "/tmp/memory")
 
     s = Settings()
     assert s.postgres.url == "postgresql://testuser:testpass@testhost:5433/testdb"
-    assert s.jwt_secret == "my-secret"
+    assert s.jwt_secret == JWT_SECRET_TEST
     assert s.anthropic_api_key == "sk-test-key"
     assert s.repo_path == "/tmp/repo"
     assert s.memory_base_path == "/tmp/memory"
@@ -55,7 +56,7 @@ def test_tc1_3_settings_env_override(monkeypatch: MonkeyPatch) -> None:
 def test_orbion_config_schema_forbid_secrets() -> None:
     """OrbionConfigSchema extra='forbid' 阻止密钥字段出现在配置中"""
     with pytest.raises(Exception, match="Extra inputs are not permitted"):
-        OrbionConfigSchema.model_validate({"jwt_secret": "secret"})
+        OrbionConfigSchema.model_validate({"jwt_secret": JWT_SECRET_TEST})
     with pytest.raises(Exception, match="Extra inputs are not permitted"):
         OrbionConfigSchema.model_validate({"anthropic_api_key": "sk-key"})
 
@@ -74,21 +75,19 @@ def test_orbion_config_schema_defaults() -> None:
     assert config.postgres.port == 5432
 
 
-def test_config_file_parser_no_file_fallback() -> None:
+def test_config_file_parser_no_file_fallback(monkeypatch: MonkeyPatch) -> None:
     """无配置文件时回退到 OrbionConfigSchema 默认值，database 展开为4个字段"""
     from app.config import OrbionConfigFileParser
 
-    monkeypatch = MonkeyPatch()
     monkeypatch.setenv("ORBION_CONFIG_PATH", "/nonexistent/orbion.json")
     source = OrbionConfigFileParser(Settings)
     data = source()
     assert data["postgres"]["host"] == "localhost"
     assert data["event_store"] == "postgres"
     assert "database" not in data
-    monkeypatch.undo()
 
 
-def test_config_file_parser_expands_database() -> None:
+def test_config_file_parser_expands_database(monkeypatch: MonkeyPatch) -> None:
     """OrbionConfigFileParser 将 database 展开为4个per-feature字段"""
     from app.config import OrbionConfigFileParser
 
@@ -97,22 +96,18 @@ def test_config_file_parser_expands_database() -> None:
         f.flush()
         config_path = f.name
 
-    monkeypatch = MonkeyPatch()
     monkeypatch.setenv("ORBION_CONFIG_PATH", config_path)
-    try:
-        source = OrbionConfigFileParser(Settings)
-        data = source()
-        assert data["event_store"] == "postgres"
-        assert data["event_projections"] == "postgres"
-        assert data["project_read"] == "postgres"
-        assert data["user_repo"] == "postgres"
-        assert "database" not in data
-    finally:
-        monkeypatch.undo()
-        Path(config_path).unlink()
+    source = OrbionConfigFileParser(Settings)
+    data = source()
+    assert data["event_store"] == "postgres"
+    assert data["event_projections"] == "postgres"
+    assert data["project_read"] == "postgres"
+    assert data["user_repo"] == "postgres"
+    assert "database" not in data
+    Path(config_path).unlink()
 
 
-def test_config_file_parser_reads_file() -> None:
+def test_config_file_parser_reads_file(monkeypatch: MonkeyPatch) -> None:
     """配置文件存在时正确加载并校验"""
     from app.config import OrbionConfigFileParser
 
@@ -121,14 +116,10 @@ def test_config_file_parser_reads_file() -> None:
         f.flush()
         config_path = f.name
 
-    monkeypatch = MonkeyPatch()
     monkeypatch.setenv("ORBION_CONFIG_PATH", config_path)
-    try:
-        source = OrbionConfigFileParser(Settings)
-        data = source()
-        assert data["postgres"]["host"] == "custom-host"
-        assert data["postgres"]["port"] == 5433
-        assert data["postgres"]["db"] == "orbion"  # 默认值填充
-    finally:
-        monkeypatch.undo()
-        Path(config_path).unlink()
+    source = OrbionConfigFileParser(Settings)
+    data = source()
+    assert data["postgres"]["host"] == "custom-host"
+    assert data["postgres"]["port"] == 5433
+    assert data["postgres"]["db"] == "orbion"  # 默认值填充
+    Path(config_path).unlink()

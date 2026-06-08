@@ -1,9 +1,8 @@
-"""PostgreSQL测试基础设施：共享连接池、清理fixture、统一client fixture
+"""PostgreSQL测试基础设施：共享fixture、统一client fixture
 
-Why: 4个测试文件各自定义client fixture，只设置部分app.state属性；
---randomly随机化执行顺序时，前一个测试的fixture残留 CLOSED 对象污染app.state，
-导致后一个只设置了3个属性的client fixture遇到 stale projections/project_read 等报错。
-统一fixture设置所有app.state属性 + teardown时delete全部属性，彻底消除全局状态污染。
+env/DB/app.state清理由根conftest _clean_env fixture统一处理。
+此处只保留测试专用fixture（client/user_repo_provider/event_bus等），
+client fixture只负责资源关闭，不再删除app.state（根conftest兜底）。
 """
 
 from collections.abc import AsyncGenerator
@@ -28,24 +27,6 @@ from app.hub.events.projections import load_projections_impl
 from app.hub.events.store import load_store_impl
 from app.main import app
 
-settings = get_settings()
-
-# -- 所有app.state属性的完整列表，用于teardown清理 --
-_APP_STATE_ATTRS = [
-    "event_store",
-    "event_bus",
-    "event_projections",
-    "project_read",
-    "project_service",
-    "thread_read",
-    "thread_service",
-    "user_repo_provider",
-    "sse_channel",
-    "agent_runtime",
-    "agent_scheduler",
-    "agent_service",
-]
-
 
 class StubAdapter:
     """集成测试stub adapter——不需要真实LLM调用，返回固定ModelOutput"""
@@ -66,6 +47,7 @@ async def event_bus() -> InProcessEventBus:
 @pytest.fixture
 async def user_repo_provider() -> AsyncGenerator[UserRepositoryProvider, None]:
     """UserRepositoryProvider——连接真实PostgreSQL做用户CRUD"""
+    settings = get_settings()
     provider_cls = load_user_repo_provider(settings.user_repo)
     provider = provider_cls()
     await provider.connect()
@@ -87,11 +69,9 @@ async def client(
 ) -> AsyncGenerator[AsyncClient, None]:
     """httpx AsyncClient，初始化app.state的全部属性。
 
-    设置所有app.state属性（event_store/event_bus/event_projections/
-    project_read/project_service/thread_read/thread_service/
-    user_repo_provider/sse_channel/agent_runtime/agent_scheduler/agent_service），
     teardown时关闭资源并delete全部属性，消除全局状态污染。
     """
+    settings = get_settings()
     store_cls = load_store_impl(settings.event_store)
     event_store = store_cls()
     await event_store.connect()
@@ -133,18 +113,12 @@ async def client(
     async with AsyncClient(transport=transport, base_url="http://test") as c:
         yield c
 
-    # teardown: 关闭资源（逆序），然后删除app.state全部属性防止污染
+    # teardown: 关闭资源（逆序），app.state由根conftest兜底清理
     agent_scheduler.close()
     await thread_read.close()
     await project_read.close()
     await projections.close()
     await event_store.close()
-    # 删除所有app.state属性，确保下一个测试不会看到 stale CLOSED 对象
-    for attr in _APP_STATE_ATTRS:
-        try:
-            delattr(app.state, attr)
-        except AttributeError:
-            pass
 
 
 # -- DB fixture --
@@ -168,22 +142,6 @@ async def db_conn() -> AsyncGenerator[asyncpg.Connection, None]:
     )
     yield conn
     await conn.execute("TRUNCATE event_log CASCADE")
-    await conn.execute(
-        "TRUNCATE task_outputs, execution_plans, thread_messages, project_members, threads, projects, users CASCADE"
-    )
-    await conn.close()
-
-
-@pytest.fixture(autouse=True, scope="function")
-async def _clean_test_tables() -> None:
-    """自动清理所有业务表，确保每个测试从干净数据库开始
-    Why: TRUNCATE CASCADE比DELETE FROM更可靠——自动处理FK依赖并重置序列；
-    间歇性--randomly失败证明DELETE FROM在跨fixture并发时不够可靠
-    """
-    conn = await asyncpg.connect(get_settings().postgres.url)
-    # event_log无FK依赖，先单独TRUNCATE
-    await conn.execute("TRUNCATE event_log CASCADE")
-    # 其余表按FK依赖从叶子到根TRUNCATE
     await conn.execute(
         "TRUNCATE task_outputs, execution_plans, thread_messages, project_members, threads, projects, users CASCADE"
     )

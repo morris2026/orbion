@@ -30,7 +30,6 @@ from app.hub.events.types import (
 )
 from app.main import app
 
-settings = get_settings()
 
 
 # -- helpers --
@@ -45,7 +44,7 @@ async def _create_user(provider: UserRepositoryProvider, username: str, is_admin
         username=user.username,
         display_name=user.display_name,
         is_admin=user.is_admin,
-        settings=settings,
+        settings=get_settings(),
     )
     return {"id": user.id, "token": token, "username": user.username, "display_name": user.display_name}
 

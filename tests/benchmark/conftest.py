@@ -1,4 +1,7 @@
-"""性能基准测试conftest — 共享fixture、事件构造函数、基线数据持久化"""
+"""性能基准测试conftest — 共享fixture、事件构造函数、基线数据持久化
+
+DB TRUNCATE和env/app.state清理已移至根conftest _clean_env fixture统一处理。
+"""
 
 import json
 import os
@@ -62,20 +65,6 @@ async def projections(event_bus: InProcessEventBus) -> AsyncGenerator[PostgresEv
 @pytest.fixture
 async def sse_channel(event_bus: InProcessEventBus) -> SSEChannel:
     return SSEChannel(event_bus)
-
-
-@pytest.fixture(autouse=True, scope="function")
-async def _clean_tables() -> None:
-    import asyncpg
-
-    from app.config import get_settings
-
-    conn = await asyncpg.connect(get_settings().postgres.url)
-    await conn.execute("TRUNCATE event_log CASCADE")
-    await conn.execute(
-        "TRUNCATE task_outputs, execution_plans, thread_messages, project_members, threads, projects, users CASCADE"
-    )
-    await conn.close()
 
 
 def make_bench_event(
