@@ -45,8 +45,12 @@ export async function apiPost<T = unknown>(path: string, body: unknown): Promise
   return resp.json() as Promise<T>
 }
 
-export async function apiGet<T = unknown>(path: string): Promise<T> {
-  const resp = await fetch(path, {
+export async function apiGet<T = unknown>(path: string, params?: Record<string, string>): Promise<T> {
+  let url = path
+  if (params && Object.keys(params).length > 0) {
+    url = `${path}?${new URLSearchParams(params).toString()}`
+  }
+  const resp = await fetch(url, {
     method: 'GET',
     headers: buildHeaders(),
   })

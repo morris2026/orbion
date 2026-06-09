@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, renderHook, act } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import ThreadList from '@/components/ThreadList'
@@ -11,6 +11,7 @@ import Workspace from '@/pages/Workspace'
 import * as sseModule from '@/lib/sse'
 import * as authModule from '@/lib/auth'
 import type { UseWorkspaceOptions } from '@/hooks/useWorkspace'
+import { useWorkspace } from '@/hooks/useWorkspace'
 
 /** mock线程数据 */
 const mockThreads = [
@@ -243,5 +244,65 @@ describe('步骤20：前端三栏工作区完整交互', () => {
         expect(screen.getByText(/新计划任务/)).toBeInTheDocument()
       })
     })
+  })
+})
+
+describe('TC-3.10: 新回调不影响initialState', () => {
+  beforeEach(() => {
+    localStorage.clear()
+    vi.restoreAllMocks()
+    vi.unstubAllGlobals()
+  })
+
+  it('注入initialState后新回调存在且不修改初始值', async () => {
+    vi.spyOn(authModule, 'isAuthenticated').mockReturnValue(true)
+    vi.spyOn(authModule, 'isTokenExpired').mockReturnValue(false)
+    vi.spyOn(authModule, 'getIsAdmin').mockReturnValue(false)
+
+    vi.spyOn(sseModule, 'createSSEConnection').mockImplementation(() => ({ close: vi.fn() } as unknown as EventSource))
+    vi.spyOn(sseModule, 'disconnectSSE').mockImplementation(() => {})
+
+    // mock apiPost——handleCreateProject会调用
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ id: 'proj-new', name: '新项目', description: null, role: 'owner', created_at: '' }),
+    }))
+
+    const opts: UseWorkspaceOptions = {
+      initialState: {
+        projects: [{ id: 'proj-1', name: '项目1', description: null, role: 'owner', created_at: '' }],
+        selectedProjectId: 'proj-1',
+        threads: mockThreads,
+        selectedThreadId: 't1',
+        messages: mockMessages,
+        plans: [],
+        outputs: [],
+      },
+    }
+
+    const { result } = renderHook(() => useWorkspace(opts))
+
+    // 验证initialState正确注入
+    expect(result.current.projects).toEqual(opts.initialState!.projects)
+    expect(result.current.threads).toEqual(mockThreads)
+    expect(result.current.messages).toEqual(mockMessages)
+
+    // 验证6个新回调存在
+    expect(result.current.handleCreateProject).toBeDefined()
+    expect(result.current.handleCreateThread).toBeDefined()
+    expect(result.current.handleRegisterAgent).toBeDefined()
+    expect(result.current.handleAddMember).toBeDefined()
+    expect(result.current.handleApproveOutput).toBeDefined()
+    expect(result.current.handleRequestRevision).toBeDefined()
+
+    // 调用handleCreateProject后初始状态值不变
+    await act(async () => {
+      result.current.handleCreateProject({ name: '新项目', description: null })
+    })
+
+    expect(result.current.threads).toEqual(mockThreads)
+    expect(result.current.messages).toEqual(mockMessages)
+
+    vi.unstubAllGlobals()
   })
 })

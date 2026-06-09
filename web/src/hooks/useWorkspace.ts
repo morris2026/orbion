@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { apiGet, apiPost } from '@/lib/api'
 import { createSSEConnection, disconnectSSE } from '@/lib/sse'
 import type { SSERawEvent } from '@/lib/sse'
-import type { ProjectListItem, ThreadListItem, MessageResponse, PlanResponse, PlanTask, OutputResponse } from '@/types/api'
+import type { ProjectListItem, ThreadListItem, MessageResponse, PlanResponse, PlanTask, OutputResponse, CreateProjectRequest, CreateThreadRequest, RegisterAgentRequest, AddMemberRequest } from '@/types/api'
 import type {
   SSEMessageCreatedEvent,
   SSESummaryGeneratedEvent,
@@ -228,10 +228,71 @@ export function useWorkspace(options?: UseWorkspaceOptions) {
     []
   )
 
+  // 创建项目
+  const handleCreateProject = useCallback(
+    (req: CreateProjectRequest) => {
+      apiPost<ProjectListItem>('/projects', req).then((newProject) => {
+        setProjects((prev) => [...prev, newProject])
+      }).catch(() => {})
+    },
+    []
+  )
+
+  // 创建线程
+  const handleCreateThread = useCallback(
+    (req: CreateThreadRequest) => {
+      if (!selectedProjectId) return
+      apiPost<ThreadListItem>(`/projects/${selectedProjectId}/threads`, req).then((newThread) => {
+        setThreads((prev) => [...prev, newThread])
+        setSelectedThreadId(newThread.id)
+      }).catch(() => {})
+    },
+    [selectedProjectId]
+  )
+
+  // 注册Agent
+  const handleRegisterAgent = useCallback(
+    (req: RegisterAgentRequest) => {
+      if (!selectedProjectId) return
+      apiPost(`/projects/${selectedProjectId}/agents`, req).catch(() => {})
+    },
+    [selectedProjectId]
+  )
+
+  // 添加成员
+  const handleAddMember = useCallback(
+    (req: AddMemberRequest) => {
+      if (!selectedProjectId) return
+      apiPost(`/projects/${selectedProjectId}/members`, req).catch(() => {})
+    },
+    [selectedProjectId]
+  )
+
+  // 批准产出
+  const handleApproveOutput = useCallback(
+    (outputId: string, feedback?: string) => {
+      apiPost(`/outputs/${outputId}/approve`, { feedback: feedback ?? null }).catch(() => {})
+    },
+    []
+  )
+
+  // 要求修改产出
+  const handleRequestRevision = useCallback(
+    (outputId: string, issues: string[], suggestions?: string[]) => {
+      apiPost(`/outputs/${outputId}/request-revision`, {
+        issues,
+        suggestions: suggestions ?? [],
+      }).catch(() => {})
+    },
+    []
+  )
+
   return {
     projects, selectedProjectId, setSelectedProjectId,
     threads, selectedThreadId, setSelectedThreadId,
     messages, plans, outputs,
     handleSendMessage, handleApprovePlan, handleRejectPlan,
+    handleCreateProject, handleCreateThread, handleRegisterAgent,
+    handleAddMember, handleApproveOutput, handleRequestRevision,
   }
 }
