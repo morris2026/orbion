@@ -65,4 +65,38 @@ describe('api.ts — API调用封装层', () => {
 
     vi.unstubAllGlobals()
   })
+
+  it('TC-3.1: apiGet带params拼接查询字符串', async () => {
+    const mockResponse = [{ user_id: 'u1', username: 'alice', display_name: 'Alice', status: 'active', created_at: '' }]
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve(mockResponse),
+    }))
+
+    const result = await apiGet('/auth/users/search', { username: 'ali' })
+    expect(result).toEqual(mockResponse)
+    expect(fetch).toHaveBeenCalledWith('/auth/users/search?username=ali', {
+      method: 'GET',
+      headers: {},
+    })
+
+    vi.unstubAllGlobals()
+  })
+
+  it('TC-3.2: apiGet无params向后兼容', async () => {
+    const mockResponse = [{ id: 'proj-1', name: 'Test Project' }]
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve(mockResponse),
+    }))
+
+    const result = await apiGet('/projects')
+    expect(result).toEqual(mockResponse)
+    expect(fetch).toHaveBeenCalledWith('/projects', {
+      method: 'GET',
+      headers: {},
+    })
+
+    vi.unstubAllGlobals()
+  })
 })

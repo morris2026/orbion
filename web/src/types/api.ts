@@ -60,3 +60,31 @@ export interface OutputResponse {
   version: number
   created_at: string
 }
+
+export interface UserItem {
+  user_id: string
+  username: string
+  display_name: string
+  status: string
+  created_at: string
+}
+
+export interface CreateProjectRequest {
+  name: string
+  description: string | null
+}
+
+export interface CreateThreadRequest {
+  title: string
+}
+
+export interface RegisterAgentRequest {
+  agent_type: 'summary' | 'decompose' | 'execute'
+  model_id: string
+  display_name: string
+}
+
+export interface AddMemberRequest {
+  user_id: string
+  role: 'owner' | 'admin' | 'member' | 'viewer'
+}
