@@ -1,4 +1,4 @@
-"""步骤7认证模块UT：密码哈希、JWT、依赖注入、RegistrationPolicy"""
+"""认证模块测试：密码哈希、JWT、依赖注入、RegistrationPolicy"""
 
 import time
 

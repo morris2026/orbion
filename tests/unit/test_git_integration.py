@@ -1,4 +1,4 @@
-"""步骤17 UT：TC-17.1–17.4 — Git集成与审批后自动commit"""
+"""Git集成与审批后自动commit测试"""
 
 import os
 from datetime import UTC, datetime

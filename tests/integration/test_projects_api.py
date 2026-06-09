@@ -245,7 +245,7 @@ class TestManageMembersPermissionBit:
         assert resp.status_code == 403
 
 
-# -- TC-8 API测试（步骤9实现require_permission后可测试）--
+# -- TC-8 API测试（require_permission未实现，待后续可测试）--
 
 
 class TestRequirePermissionAllowed:
