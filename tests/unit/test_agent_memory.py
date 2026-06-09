@@ -1,4 +1,4 @@
-"""步骤14 UT：TC-14.1–14.7 — Agent层次化记忆管理"""
+"""Agent层次化记忆管理测试"""
 
 from datetime import UTC, datetime
 from pathlib import Path

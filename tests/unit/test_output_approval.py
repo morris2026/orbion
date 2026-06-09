@@ -1,4 +1,4 @@
-"""步骤16 UT：TC-16.1–16.6 — 任务产出审批API"""
+"""任务产出审批API测试"""
 
 import uuid
 from datetime import UTC, datetime

@@ -1,4 +1,4 @@
-"""步骤15 UT：TC-15.1–15.7 — 执行计划审批API"""
+"""执行计划审批API测试"""
 
 import uuid
 from datetime import UTC, datetime

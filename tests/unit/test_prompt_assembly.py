@@ -1,4 +1,4 @@
-"""步骤13 UT：TC-13.1–13.6 — 模型适配与Prompt组装流程"""
+"""模型适配与Prompt组装流程测试"""
 
 import json
 from datetime import UTC, datetime
@@ -184,7 +184,7 @@ async def test_tc13_4_prompt_input_merge() -> None:
     assert prompt.system_prompt != ""
     # context为空（MVP）
     assert prompt.context == ""
-    # memory为空（步骤14才实现）
+    # memory为空（记忆模块未实现）
     assert prompt.memory == ""
     # task非空
     assert prompt.task != ""

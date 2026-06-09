@@ -1,4 +1,4 @@
-"""步骤7认证API测试：注册、登录、审批端点；步骤1：用户列表与搜索API"""
+"""认证API与用户搜索测试"""
 
 import json
 import uuid

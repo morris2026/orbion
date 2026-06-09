@@ -37,7 +37,7 @@ const mockPlan = {
 /** mock产出diff */
 const mockDiff = '--- a/file.py\n+++ b/file.py\n@@ -1,3 +1,4 @@\n-old line\n+new line\n+added line'
 
-describe('步骤20：前端三栏工作区完整交互', () => {
+describe('前端三栏工作区完整交互', () => {
   beforeEach(() => {
     localStorage.clear()
     vi.restoreAllMocks()
