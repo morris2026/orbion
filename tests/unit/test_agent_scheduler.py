@@ -1,4 +1,4 @@
-"""AgentScheduler调度路由UT/集成：TC-12.2–12.5、TC-12.10"""
+"""AgentScheduler调度路由UT/集成：MVP-12.2–12.5、MVP-12.10"""
 
 from datetime import UTC, datetime
 from typing import Any
@@ -91,13 +91,13 @@ async def scheduler(event_bus: InProcessEventBus, runtime: AgentRuntime) -> Agen
     return AgentScheduler(event_bus, runtime)
 
 
-# -- TC-12.2: SummaryAgent→DiscussionMessageCreated调度 --
+# -- MVP-12.2: SummaryAgent→DiscussionMessageCreated调度 --
 
 
 async def test_tc12_2_summary_dispatch(
     event_bus: InProcessEventBus, runtime: AgentRuntime, scheduler: AgentScheduler, mock_adapter: DispatchRecorder
 ) -> None:
-    """TC-12.2: DiscussionMessageCreated(request_summary=true)→dispatch summary"""
+    """MVP-12.2: DiscussionMessageCreated(request_summary=true)→dispatch summary"""
     runtime.register("proj-1", SUMMARY_DECLARATION)
     event = _make_event(
         EventType.DiscussionMessageCreated, "proj-1", {"thread_id": "t1", "content": "hello", "request_summary": True}
@@ -107,13 +107,13 @@ async def test_tc12_2_summary_dispatch(
     assert mock_adapter.call_count >= 1
 
 
-# -- TC-12.3: DecomposeAgent→DiscussionSummaryGenerated调度 --
+# -- MVP-12.3: DecomposeAgent→DiscussionSummaryGenerated调度 --
 
 
 async def test_tc12_3_decompose_dispatch(
     event_bus: InProcessEventBus, runtime: AgentRuntime, scheduler: AgentScheduler, mock_adapter: DispatchRecorder
 ) -> None:
-    """TC-12.3: DiscussionSummaryGenerated→dispatch decompose"""
+    """MVP-12.3: DiscussionSummaryGenerated→dispatch decompose"""
     runtime.register("proj-1", DECOMPOSE_DECLARATION)
     event = _make_event(
         EventType.DiscussionSummaryGenerated,
@@ -132,13 +132,13 @@ async def test_tc12_3_decompose_dispatch(
     assert mock_adapter.call_count >= 1
 
 
-# -- TC-12.4: ExecuteAgent→ExecutionPlanApproved调度 --
+# -- MVP-12.4: ExecuteAgent→ExecutionPlanApproved调度 --
 
 
 async def test_tc12_4_execute_plan_approved(
     event_bus: InProcessEventBus, runtime: AgentRuntime, scheduler: AgentScheduler, mock_adapter: DispatchRecorder
 ) -> None:
-    """TC-12.4: ExecutionPlanApproved→dispatch execute"""
+    """MVP-12.4: ExecutionPlanApproved→dispatch execute"""
     runtime.register("proj-1", EXECUTE_DECLARATION)
     event = _make_event(EventType.ExecutionPlanApproved, "proj-1", {"plan_id": "p1", "approved_tasks": ["task1"]})
     await event_bus.publish(event)
@@ -146,13 +146,13 @@ async def test_tc12_4_execute_plan_approved(
     assert mock_adapter.call_count >= 1
 
 
-# -- TC-12.5: ExecuteAgent→TaskOutputRevisionRequested调度 --
+# -- MVP-12.5: ExecuteAgent→TaskOutputRevisionRequested调度 --
 
 
 async def test_tc12_5_execute_revision_requested(
     event_bus: InProcessEventBus, runtime: AgentRuntime, scheduler: AgentScheduler, mock_adapter: DispatchRecorder
 ) -> None:
-    """TC-12.5: TaskOutputRevisionRequested→dispatch execute"""
+    """MVP-12.5: TaskOutputRevisionRequested→dispatch execute"""
     runtime.register("proj-1", EXECUTE_DECLARATION)
     event = _make_event(
         EventType.TaskOutputRevisionRequested,
@@ -164,13 +164,13 @@ async def test_tc12_5_execute_revision_requested(
     assert mock_adapter.call_count >= 1
 
 
-# -- TC-12.10: Summary Agent阈值触发 --
+# -- MVP-12.10: Summary Agent阈值触发 --
 
 
 async def test_tc12_10_threshold_trigger(
     event_bus: InProcessEventBus, runtime: AgentRuntime, scheduler: AgentScheduler, mock_adapter: DispatchRecorder
 ) -> None:
-    """TC-12.10: 10条消息(request_summary=false)→第10条触发summary Agent"""
+    """MVP-12.10: 10条消息(request_summary=false)→第10条触发summary Agent"""
     runtime.register("proj-1", SUMMARY_DECLARATION)
 
     # 发送9条request_summary=false的消息→不触发
@@ -198,7 +198,7 @@ async def test_tc12_10_threshold_trigger(
 async def test_tc12_10_request_summary_immediate(
     event_bus: InProcessEventBus, runtime: AgentRuntime, scheduler: AgentScheduler, mock_adapter: DispatchRecorder
 ) -> None:
-    """TC-12.10补充: request_summary=true立即触发（不等待阈值）"""
+    """MVP-12.10补充: request_summary=true立即触发（不等待阈值）"""
     runtime.register("proj-1", SUMMARY_DECLARATION)
 
     # 只发1条request_summary=true的消息→立即触发

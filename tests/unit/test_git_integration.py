@@ -119,11 +119,11 @@ def _make_revision_requested_event(
     )
 
 
-# -- TC-17.1: 产出审批通过→Git commit --
+# -- MVP-17.1: 产出审批通过→Git commit --
 
 
 async def test_tc17_1_approve_triggers_commit(tmp_path: Path) -> None:
-    """TC-17.1: 产出审批通过→GitService执行commit→查询git log→有新commit
+    """MVP-17.1: 产出审批通过→GitService执行commit→查询git log→有新commit
     commit消息含产出信息；commit内容与file_paths和content一致
     """
     bus = InProcessEventBus()
@@ -159,11 +159,11 @@ async def test_tc17_1_approve_triggers_commit(tmp_path: Path) -> None:
     assert committed_content == "def foo(): pass"
 
 
-# -- TC-17.2: 产出要求修改→不触发commit --
+# -- MVP-17.2: 产出要求修改→不触发commit --
 
 
 async def test_tc17_2_revision_no_commit(tmp_path: Path) -> None:
-    """TC-17.2: 产出request-revision→查询git log→无新commit产生"""
+    """MVP-17.2: 产出request-revision→查询git log→无新commit产生"""
     bus = InProcessEventBus()
     projections = MockProjections(bus)
     output_id = "out-1"
@@ -189,12 +189,12 @@ async def test_tc17_2_revision_no_commit(tmp_path: Path) -> None:
     assert final_count == initial_count
 
 
-# -- TC-17.3: 产出审批拒绝→不触发commit --
+# -- MVP-17.3: 产出审批拒绝→不触发commit --
 
 
 async def test_tc17_3_rejection_no_commit(tmp_path: Path) -> None:
-    """TC-17.3: TaskOutputRevisionRequested事件不触发commit
-    （当前产出无reject端点，TC-17.3的意图与TC-17.2等价但独立验证）
+    """MVP-17.3: TaskOutputRevisionRequested事件不触发commit
+    （当前产出无reject端点，MVP-17.3的意图与MVP-17.2等价但独立验证）
     """
     bus = InProcessEventBus()
     projections = MockProjections(bus)
@@ -211,7 +211,7 @@ async def test_tc17_3_rejection_no_commit(tmp_path: Path) -> None:
     repo = git.Repo(repo_path)
     initial_count = len(list(repo.iter_commits()))
 
-    # 与TC-17.2相同事件类型，但独立output_id验证
+    # 与MVP-17.2相同事件类型，但独立output_id验证
     event = _make_revision_requested_event(output_id=output_id, task_id="t-2")
     await bus.publish(event)
     await bus.wait_for_pending()
@@ -220,11 +220,11 @@ async def test_tc17_3_rejection_no_commit(tmp_path: Path) -> None:
     assert final_count == initial_count
 
 
-# -- TC-17.4: 本地repo不存在→自动初始化 --
+# -- MVP-17.4: 本地repo不存在→自动初始化 --
 
 
 async def test_tc17_4_auto_init_repo(tmp_path: Path) -> None:
-    """TC-17.4: 删除本地repo→产出审批通过→repo自动初始化（git init）→commit成功执行"""
+    """MVP-17.4: 删除本地repo→产出审批通过→repo自动初始化（git init）→commit成功执行"""
     bus = InProcessEventBus()
     projections = MockProjections(bus)
     output_id = "out-1"

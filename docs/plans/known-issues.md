@@ -30,7 +30,7 @@
 
 **问题**：`parseMessage` 中 `/help` 使用 `trimmed === '/help'` 严格相等判断，用户输入 `/help summarize` 等带后缀的变体会被当作普通消息发送而非触发帮助显示。大多数IM应用（Slack/Discord）中 `/help` 带后缀仍触发帮助。
 
-**影响**：用户可能困惑，但TC-3.6只测试精确 `/help`，设计规格也未明确带后缀的行为，当前行为不偏离规格。如果后续需要支持 `/help` 带后缀，只需将 `===` 改为 `startsWith`。
+**影响**：用户可能困惑，但MVP-UI-3.6只测试精确 `/help`，设计规格也未明确带后缀的行为，当前行为不偏离规格。如果后续需要支持 `/help` 带后缀，只需将 `===` 改为 `startsWith`。
 
 **处置建议**：暂不修复。如用户反馈困惑，改为 `startsWith('/help')` 即可。
 
@@ -48,11 +48,11 @@
 
 ---
 
-## L-5: TC-3.10 只测试一个回调的 state 隔离
+## L-5: MVP-UI-3.10 只测试一个回调的 state 隔离
 
 **发现步骤**：步骤3（Workspace.test.tsx）
 
-**问题**：TC-3.10 只验证 `handleCreateProject` 不影响 initialState，没有测试其余5个回调（handleCreateThread、handleRegisterAgent 等）的 state 隔离。
+**问题**：MVP-UI-3.10 只验证 `handleCreateProject` 不影响 initialState，没有测试其余5个回调（handleCreateThread、handleRegisterAgent 等）的 state 隔离。
 
 **影响**：每个回调操作不同 state 切片（projects/threads/outputs），逻辑上不可能互相干扰，风险低。步骤5-8的 Dialog 测试会覆盖各回调的实际行为，间接验证 state 隔离。
 

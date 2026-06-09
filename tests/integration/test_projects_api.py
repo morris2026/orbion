@@ -1,4 +1,4 @@
-"""项目与成员管理API集成测试：TC-9.1–TC-9.7 + TC-8.8/8.9/8.11/8.12"""
+"""项目与成员管理API集成测试：MVP-9.1–MVP-9.7 + MVP-8.8/8.9/8.11/8.12"""
 
 import uuid
 from typing import Any
@@ -47,11 +47,11 @@ async def _create_project(
     return str(resp.json()["id"])
 
 
-# -- TC-9 测试 --
+# -- MVP-9 测试 --
 
 
 class TestCreateProject:
-    """TC-9.1: 创建项目→创建者自动成为Owner"""
+    """MVP-9.1: 创建项目→创建者自动成为Owner"""
 
     @pytest.mark.asyncio
     async def test_create_project_owner(
@@ -79,7 +79,7 @@ class TestCreateProject:
 
 
 class TestListProjects:
-    """TC-9.2: 列出用户参与的项目含role字段"""
+    """MVP-9.2: 列出用户参与的项目含role字段"""
 
     @pytest.mark.asyncio
     async def test_list_projects_with_role(
@@ -98,7 +98,7 @@ class TestListProjects:
 
 
 class TestProjectDetail:
-    """TC-9.3: 项目详情→非成员返回404"""
+    """MVP-9.3: 项目详情→非成员返回404"""
 
     @pytest.mark.asyncio
     async def test_project_detail_member_and_nonmember(
@@ -119,7 +119,7 @@ class TestProjectDetail:
 
 
 class TestAddMember:
-    """TC-9.4: 添加成员→默认Member角色"""
+    """MVP-9.4: 添加成员→默认Member角色"""
 
     @pytest.mark.asyncio
     async def test_add_member_default_role(
@@ -158,7 +158,7 @@ class TestAddMember:
 
 
 class TestAddMemberPermission:
-    """TC-9.5: 非Owner/Admin添加成员→403"""
+    """MVP-9.5: 非Owner/Admin添加成员→403"""
 
     @pytest.mark.asyncio
     async def test_member_cannot_add_member(
@@ -188,7 +188,7 @@ class TestAddMemberPermission:
 
 
 class TestProjectEventChain:
-    """TC-9.6: 项目创建事件链路 — ProjectCreated 含创建者信息"""
+    """MVP-9.6: 项目创建事件链路 — ProjectCreated 含创建者信息"""
 
     @pytest.mark.asyncio
     async def test_create_project_event_chain(
@@ -216,7 +216,7 @@ class TestProjectEventChain:
 
 
 class TestManageMembersPermissionBit:
-    """TC-9.7: MANAGE_MEMBERS权限位显式验证"""
+    """MVP-9.7: MANAGE_MEMBERS权限位显式验证"""
 
     @pytest.mark.asyncio
     async def test_viewer_cannot_add_member(
@@ -245,11 +245,11 @@ class TestManageMembersPermissionBit:
         assert resp.status_code == 403
 
 
-# -- TC-8 API测试（require_permission未实现，待后续可测试）--
+# -- MVP-8 API测试（require_permission未实现，待后续可测试）--
 
 
 class TestRequirePermissionAllowed:
-    """TC-8.8: require_permission有权限→请求继续"""
+    """MVP-8.8: require_permission有权限→请求继续"""
 
     @pytest.mark.asyncio
     async def test_owner_has_approve_plan(
@@ -271,7 +271,7 @@ class TestRequirePermissionAllowed:
 
 
 class TestRequirePermissionDenied:
-    """TC-8.9: require_permission无权限→403"""
+    """MVP-8.9: require_permission无权限→403"""
 
     @pytest.mark.asyncio
     async def test_viewer_no_manage_members(
@@ -299,7 +299,7 @@ class TestRequirePermissionDenied:
 
 
 class TestAdminRolePermission:
-    """TC-8.11: Admin角色权限验证"""
+    """MVP-8.11: Admin角色权限验证"""
 
     @pytest.mark.asyncio
     async def test_admin_can_manage_members(
@@ -330,7 +330,7 @@ class TestAdminRolePermission:
 
 
 class TestErrorResponseFormat:
-    """TC-8.12: 错误响应格式统一验证"""
+    """MVP-8.12: 错误响应格式统一验证"""
 
     @pytest.mark.asyncio
     async def test_401_no_jwt(self, client: AsyncClient) -> None:
@@ -404,7 +404,7 @@ class TestErrorResponseFormat:
 
 
 class TestListMembers:
-    """TC-9补充: 成员列表端点 — 验证创建者自动成为Owner + 添加成员可见"""
+    """MVP-9补充: 成员列表端点 — 验证创建者自动成为Owner + 添加成员可见"""
 
     @pytest.mark.asyncio
     async def test_list_members_after_project_creation(

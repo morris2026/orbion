@@ -44,7 +44,7 @@ describe('前端三栏工作区完整交互', () => {
     vi.unstubAllGlobals()
   })
 
-  describe('TC-20.1: 线程列表展示聚合字段', () => {
+  describe('MVP-20.1: 线程列表展示聚合字段', () => {
     it('has_summary标记：有摘要时显示标记', () => {
       const onSelect = vi.fn()
       render(<ThreadList threads={mockThreads} onSelect={onSelect} />)
@@ -77,7 +77,7 @@ describe('前端三栏工作区完整交互', () => {
     })
   })
 
-  describe('TC-20.2: 人类/Agent消息样式区分', () => {
+  describe('MVP-20.2: 人类/Agent消息样式区分', () => {
     it('participant_type="human"时普通样式', () => {
       render(<MessageItem message={mockMessages[0]} />)
       const container = screen.getByTestId('message-m1')
@@ -91,7 +91,7 @@ describe('前端三栏工作区完整交互', () => {
     })
   })
 
-  describe('TC-20.3: request_summary按钮', () => {
+  describe('MVP-20.3: request_summary按钮', () => {
     it('点击请求总结按钮触发onSendMessage回调，包含content和request_summary=true', async () => {
       const user = userEvent.setup()
       const onSendMessage = vi.fn()
@@ -115,7 +115,7 @@ describe('前端三栏工作区完整交互', () => {
     })
   })
 
-  describe('TC-20.4: 计划卡片审批操作', () => {
+  describe('MVP-20.4: 计划卡片审批操作', () => {
     it('approve按钮触发onApprove回调', async () => {
       const user = userEvent.setup()
       const onApprove = vi.fn()
@@ -145,7 +145,7 @@ describe('前端三栏工作区完整交互', () => {
     })
   })
 
-  describe('TC-20.5: 产出diff预览', () => {
+  describe('MVP-20.5: 产出diff预览', () => {
     it('diff内容正确渲染，包含增删行', () => {
       render(<OutputDiff diff={mockDiff} />)
       expect(screen.getByText(/old line/)).toBeInTheDocument()
@@ -154,7 +154,7 @@ describe('前端三栏工作区完整交互', () => {
     })
   })
 
-  describe('TC-20.6: SSE实时更新面板', () => {
+  describe('MVP-20.6: SSE实时更新面板', () => {
     /** 构建注入初始状态的Workspace配置 */
     const baseInitialState: UseWorkspaceOptions = {
       initialState: {
@@ -247,7 +247,7 @@ describe('前端三栏工作区完整交互', () => {
   })
 })
 
-describe('TC-3.10: 新回调不影响initialState', () => {
+describe('MVP-UI-3.10: 新回调不影响initialState', () => {
   beforeEach(() => {
     localStorage.clear()
     vi.restoreAllMocks()

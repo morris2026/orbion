@@ -1,4 +1,4 @@
-"""TC-1.1~TC-1.3：FastAPI应用启动与Settings配置测试"""
+"""MVP-1.1~MVP-1.3：FastAPI应用启动与Settings配置测试"""
 
 import json
 import os
@@ -13,7 +13,7 @@ from tests.conftest import JWT_SECRET_TEST
 
 
 def test_tc1_1_app_exists_and_title() -> None:
-    """TC-1.1：导入app.main模块，app对象存在，app.title为Orbion MVP"""
+    """MVP-1.1：导入app.main模块，app对象存在，app.title为Orbion MVP"""
     from app.main import app
 
     assert app is not None
@@ -21,7 +21,7 @@ def test_tc1_1_app_exists_and_title() -> None:
 
 
 def test_tc1_2_settings_defaults() -> None:
-    """TC-1.2：Settings默认值和环境变量覆盖正确
+    """MVP-1.2：Settings默认值和环境变量覆盖正确
 
     conftest的_inject_test_env_vars注入ORBION_POSTGRES__DB=orbion_test，
     测试不应硬编码断言默认值，而是验证Settings正确反映当前环境。
@@ -34,7 +34,7 @@ def test_tc1_2_settings_defaults() -> None:
 
 
 def test_tc1_3_settings_env_override(monkeypatch: MonkeyPatch) -> None:
-    """TC-1.3：环境变量覆盖Settings对应字段"""
+    """MVP-1.3：环境变量覆盖Settings对应字段"""
     monkeypatch.setenv("ORBION_POSTGRES__HOST", "testhost")
     monkeypatch.setenv("ORBION_POSTGRES__PORT", "5433")
     monkeypatch.setenv("ORBION_POSTGRES__DB", "testdb")

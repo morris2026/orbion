@@ -1,4 +1,4 @@
-"""TC-5.1–TC-5.11: EventProjections能力验证 — 遍历配套组合"""
+"""MVP-5.1–MVP-5.11: EventProjections能力验证 — 遍历配套组合"""
 
 from collections.abc import AsyncGenerator
 from typing import Any, Literal
@@ -94,7 +94,7 @@ async def seed_thread(postgres_pool: asyncpg.Pool, thread_id: str, project_id: s
 
 
 class TestDiscussionMessageCreatedProjection:
-    """TC-5.1: DiscussionMessageCreated → thread_messages投影"""
+    """MVP-5.1: DiscussionMessageCreated → thread_messages投影"""
 
     async def test_message_created_updates_thread_messages(
         self,
@@ -138,7 +138,7 @@ class TestDiscussionMessageCreatedProjection:
 
 
 class TestDiscussionSummaryGeneratedProjection:
-    """TC-5.2: DiscussionSummaryGenerated → thread_messages投影"""
+    """MVP-5.2: DiscussionSummaryGenerated → thread_messages投影"""
 
     async def test_summary_generated_updates_thread_messages(
         self,
@@ -182,7 +182,7 @@ class TestDiscussionSummaryGeneratedProjection:
 
 
 class TestExecutionPlanProposedProjection:
-    """TC-5.3: ExecutionPlanProposed → execution_plans投影"""
+    """MVP-5.3: ExecutionPlanProposed → execution_plans投影"""
 
     async def test_plan_proposed_creates_execution_plan(
         self,
@@ -235,7 +235,7 @@ class TestExecutionPlanProposedProjection:
 
 
 class TestExecutionPlanApprovedProjection:
-    """TC-5.4: ExecutionPlanApproved → execution_plans状态变更"""
+    """MVP-5.4: ExecutionPlanApproved → execution_plans状态变更"""
 
     async def test_plan_approved_updates_status(
         self,
@@ -298,7 +298,7 @@ class TestExecutionPlanApprovedProjection:
 
 
 class TestExecutionPlanRejectedProjection:
-    """TC-5.5: ExecutionPlanRejected → execution_plans状态变更"""
+    """MVP-5.5: ExecutionPlanRejected → execution_plans状态变更"""
 
     async def test_plan_rejected_updates_status(
         self,
@@ -358,7 +358,7 @@ class TestExecutionPlanRejectedProjection:
 
 
 class TestTaskOutputGeneratedProjection:
-    """TC-5.6: TaskOutputGenerated → task_outputs投影"""
+    """MVP-5.6: TaskOutputGenerated → task_outputs投影"""
 
     async def test_output_generated_creates_task_output(
         self,
@@ -428,7 +428,7 @@ class TestTaskOutputGeneratedProjection:
 
 
 class TestTaskOutputApprovedRevisionRequestedProjection:
-    """TC-5.7: TaskOutputApproved/RevisionRequested → task_outputs状态变更"""
+    """MVP-5.7: TaskOutputApproved/RevisionRequested → task_outputs状态变更"""
 
     async def test_output_approved_updates_status(
         self,
@@ -633,7 +633,7 @@ class TestProjectCreatedProjection:
 
 
 class TestProjectMembersProjection:
-    """TC-5.8: 成员添加 → project_members投影"""
+    """MVP-5.8: 成员添加 → project_members投影"""
 
     async def test_member_added_updates_project_members(
         self,
@@ -673,7 +673,7 @@ class TestProjectMembersProjection:
 
 
 class TestProjectionQueryStructuredData:
-    """TC-5.9: 投影查询返回结构化数据"""
+    """MVP-5.9: 投影查询返回结构化数据"""
 
     async def test_queries_return_structured_dicts(
         self,
@@ -718,7 +718,7 @@ class TestProjectionQueryStructuredData:
 
 
 class TestCorrelationIdChainTracking:
-    """TC-5.10: correlation_id多跳链路追踪"""
+    """MVP-5.10: correlation_id多跳链路追踪"""
 
     async def test_correlation_chain_tracks_full_collaboration(
         self,
@@ -773,7 +773,7 @@ class TestCorrelationIdChainTracking:
 
 
 class TestProjectMembersPrimaryKeyConstraint:
-    """TC-5.11: project_members联合主键约束"""
+    """MVP-5.11: project_members联合主键约束"""
 
     async def test_duplicate_member_insert_is_idempotent(
         self,

@@ -1,4 +1,4 @@
-"""SSE推送与事件流端点集成测试：TC-11.1–TC-11.6"""
+"""SSE推送与事件流端点集成测试：MVP-11.1–MVP-11.6"""
 
 import asyncio
 import json
@@ -80,11 +80,11 @@ def _make_event(
     )
 
 
-# -- TC-11.2: DiscussionMessageCreated→SSE推送message_created --
+# -- MVP-11.2: DiscussionMessageCreated→SSE推送message_created --
 
 
 async def test_tc11_2_message_created_push(event_bus: InProcessEventBus, sse_channel: SSEChannel) -> None:
-    """TC-11.2: DiscussionMessageCreated→SSE推送message_created，data含消息内容"""
+    """MVP-11.2: DiscussionMessageCreated→SSE推送message_created，data含消息内容"""
     project_id = "proj-test-2"
     queue: asyncio.Queue[dict[str, Any]] = asyncio.Queue()
     sse_channel.add_connection(project_id, queue)
@@ -109,11 +109,11 @@ async def test_tc11_2_message_created_push(event_bus: InProcessEventBus, sse_cha
     sse_channel.remove_connection(project_id, queue)
 
 
-# -- TC-11.3: DiscussionSummaryGenerated→SSE推送summary_generated --
+# -- MVP-11.3: DiscussionSummaryGenerated→SSE推送summary_generated --
 
 
 async def test_tc11_3_summary_generated_push(event_bus: InProcessEventBus, sse_channel: SSEChannel) -> None:
-    """TC-11.3: DiscussionSummaryGenerated→SSE推送summary_generated"""
+    """MVP-11.3: DiscussionSummaryGenerated→SSE推送summary_generated"""
     project_id = "proj-test-3"
     queue: asyncio.Queue[dict[str, Any]] = asyncio.Queue()
     sse_channel.add_connection(project_id, queue)
@@ -145,11 +145,11 @@ async def test_tc11_3_summary_generated_push(event_bus: InProcessEventBus, sse_c
     sse_channel.remove_connection(project_id, queue)
 
 
-# -- TC-11.4: 所有9种业务事件+agent_status_changed通过SSE推送 --
+# -- MVP-11.4: 所有9种业务事件+agent_status_changed通过SSE推送 --
 
 
 async def test_tc11_4_all_event_types_push(event_bus: InProcessEventBus, sse_channel: SSEChannel) -> None:
-    """TC-11.4: 所有9种业务事件+agent_status_changed通过SSE推送（共10种SSE event类型）"""
+    """MVP-11.4: 所有9种业务事件+agent_status_changed通过SSE推送（共10种SSE event类型）"""
     project_id = "proj-test-4"
     queue: asyncio.Queue[dict[str, Any]] = asyncio.Queue()
     sse_channel.add_connection(project_id, queue)
@@ -261,11 +261,11 @@ async def test_tc11_4_all_event_types_push(event_bus: InProcessEventBus, sse_cha
     sse_channel.remove_connection(project_id, queue)
 
 
-# -- TC-11.6: project_id过滤 --
+# -- MVP-11.6: project_id过滤 --
 
 
 async def test_tc11_6_project_id_filter(event_bus: InProcessEventBus, sse_channel: SSEChannel) -> None:
-    """TC-11.6: project_id过滤——订阅proj-A的SSE不收到proj-B的事件"""
+    """MVP-11.6: project_id过滤——订阅proj-A的SSE不收到proj-B的事件"""
     queue_a: asyncio.Queue[dict[str, Any]] = asyncio.Queue()
     queue_b: asyncio.Queue[dict[str, Any]] = asyncio.Queue()
     sse_channel.add_connection("proj-A", queue_a)
@@ -292,7 +292,7 @@ async def test_tc11_6_project_id_filter(event_bus: InProcessEventBus, sse_channe
     sse_channel.remove_connection("proj-B", queue_b)
 
 
-# -- TC-11.1: 建立SSE长连接 + 项目成员授权 --
+# -- MVP-11.1: 建立SSE长连接 + 项目成员授权 --
 
 
 async def test_tc11_1_sse_connection(
@@ -301,7 +301,7 @@ async def test_tc11_1_sse_connection(
     user_repo_provider: UserRepositoryProvider,
     db_conn: asyncpg.Connection,
 ) -> None:
-    """TC-11.1: 建立SSE长连接——Content-Type: text/event-stream + 项目成员授权检查
+    """MVP-11.1: 建立SSE长连接——Content-Type: text/event-stream + 项目成员授权检查
 
     httpx ASGITransport不支持SSE流式响应，client fixture初始化app.state后用ASGI直接调用。
     """
@@ -353,16 +353,16 @@ async def test_tc11_1_sse_connection(
         task.cancel()
 
 
-# -- TC-11.5: 无JWT→401 --
+# -- MVP-11.5: 无JWT→401 --
 
 
 async def test_tc11_5_no_jwt_rejected(client: AsyncClient) -> None:
-    """TC-11.5: 无JWT→连接拒绝，返回401"""
+    """MVP-11.5: 无JWT→连接拒绝，返回401"""
     response = await client.get("/events/stream?project_id=some-project")
     assert response.status_code == 401
 
 
-# -- TC-11.5b: 非项目成员→403 --
+# -- MVP-11.5b: 非项目成员→403 --
 
 
 async def test_tc11_5b_non_member_rejected(
@@ -371,7 +371,7 @@ async def test_tc11_5b_non_member_rejected(
     user_repo_provider: UserRepositoryProvider,
     db_conn: asyncpg.Connection,
 ) -> None:
-    """TC-11.5b: 非项目成员订阅项目SSE流→返回403"""
+    """MVP-11.5b: 非项目成员订阅项目SSE流→返回403"""
     admin = await _create_user(user_repo_provider, "sseadmin", is_admin=True)
     project = await _create_project(client, admin["token"])
     await event_bus.wait_for_pending()

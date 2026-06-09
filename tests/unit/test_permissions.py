@@ -6,7 +6,7 @@ from app.hub.permissions.roles import AGENT_ROLE_BITS, HUMAN_ROLE_BITS
 
 
 class TestHumanPermissionBitValues:
-    """TC-8.1: HumanPermission位值正确"""
+    """MVP-8.1: HumanPermission位值正确"""
 
     def test_all_bit_values(self) -> None:
         assert HumanPermission.VIEW_DISCUSSION == 1 << 0
@@ -30,7 +30,7 @@ class TestHumanPermissionBitValues:
 
 
 class TestAgentPermissionBitValues:
-    """TC-8.2: AgentPermission位值正确"""
+    """MVP-8.2: AgentPermission位值正确"""
 
     def test_all_bit_values(self) -> None:
         assert AgentPermission.QUERY_KNOWLEDGE == 1 << 0
@@ -53,7 +53,7 @@ class TestAgentPermissionBitValues:
 
 
 class TestHumanRoleMapping:
-    """TC-8.3: 人类角色→权限位映射"""
+    """MVP-8.3: 人类角色→权限位映射"""
 
     def test_owner_role(self) -> None:
         assert HUMAN_ROLE_BITS["owner"] == 4095
@@ -69,7 +69,7 @@ class TestHumanRoleMapping:
 
 
 class TestAgentRoleMapping:
-    """TC-8.4: Agent角色→权限位映射"""
+    """MVP-8.4: Agent角色→权限位映射"""
 
     def test_summary_agent(self) -> None:
         assert AGENT_ROLE_BITS["summary"] == 4
@@ -83,7 +83,7 @@ class TestAgentRoleMapping:
 
 
 class TestComputePermissionsDenyOverAllow:
-    """TC-8.5: compute_permissions deny胜过allow"""
+    """MVP-8.5: compute_permissions deny胜过allow"""
 
     def test_deny_overrides_allow(self) -> None:
         allow = HumanPermission.VIEW_DISCUSSION | HumanPermission.CREATE_MESSAGE
@@ -92,21 +92,21 @@ class TestComputePermissionsDenyOverAllow:
 
 
 class TestComputePermissionsAllowExists:
-    """TC-8.6: compute_permissions allow位存在"""
+    """MVP-8.6: compute_permissions allow位存在"""
 
     def test_allow_present(self) -> None:
         assert compute_permissions(HumanPermission.all_bits(), HumanPermission.APPROVE_PLAN, 0) is True
 
 
 class TestComputePermissionsNoAllow:
-    """TC-8.7: compute_permissions无allow位"""
+    """MVP-8.7: compute_permissions无allow位"""
 
     def test_allow_missing(self) -> None:
         assert compute_permissions(HumanPermission.VIEW_DISCUSSION, HumanPermission.APPROVE_PLAN, 0) is False
 
 
 class TestAdministratorBypass:
-    """TC-8.10: ADMINISTRATOR位绕过所有权限检查"""
+    """MVP-8.10: ADMINISTRATOR位绕过所有权限检查"""
 
     def test_administrator_passes_any_permission(self) -> None:
         allow = HumanPermission.ADMINISTRATOR

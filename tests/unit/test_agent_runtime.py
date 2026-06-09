@@ -1,4 +1,4 @@
-"""AgentRuntime状态机UT：TC-12.6、TC-12.7、TC-12.11"""
+"""AgentRuntime状态机UT：MVP-12.6、MVP-12.7、MVP-12.11"""
 
 from datetime import UTC, datetime
 
@@ -64,11 +64,11 @@ def _make_event(project_id: str = "proj-1") -> Event:
     )
 
 
-# -- TC-12.6: idle→running→idle --
+# -- MVP-12.6: idle→running→idle --
 
 
 async def test_tc12_6_idle_running_idle() -> None:
-    """TC-12.6: dispatch→running→产出完成→回到idle"""
+    """MVP-12.6: dispatch→running→产出完成→回到idle"""
     bus = InProcessEventBus()
     store = MockEventStore()
     adapter = MockModelAdapter(should_fail=False)
@@ -86,11 +86,11 @@ async def test_tc12_6_idle_running_idle() -> None:
     assert adapter.call_count == 1
 
 
-# -- TC-12.7: idle→running→error --
+# -- MVP-12.7: idle→running→error --
 
 
 async def test_tc12_7_idle_running_error() -> None:
-    """TC-12.7: dispatch→running→执行失败→error"""
+    """MVP-12.7: dispatch→running→执行失败→error"""
     bus = InProcessEventBus()
     store = MockEventStore()
     adapter = MockModelAdapter(should_fail=True)
@@ -108,11 +108,11 @@ async def test_tc12_7_idle_running_error() -> None:
     assert state.current_task is None
 
 
-# -- TC-12.11: Agent不并发执行 --
+# -- MVP-12.11: Agent不并发执行 --
 
 
 async def test_tc12_11_no_concurrent_execution() -> None:
-    """TC-12.11: Agent处于running时不接受新任务；回到idle后可再次dispatch
+    """MVP-12.11: Agent处于running时不接受新任务；回到idle后可再次dispatch
 
     dispatch是同步await调用，用create_task并发测试在pytest-asyncio函数级loop中会死锁。
     正确方案：直接设置running状态→dispatch被拒绝→恢复idle→dispatch成功。

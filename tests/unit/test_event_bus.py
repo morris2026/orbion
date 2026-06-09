@@ -1,4 +1,4 @@
-"""TC-3.1–TC-3.6: EventBus抽象接口与进程内实现"""
+"""MVP-3.1–MVP-3.6: EventBus抽象接口与进程内实现"""
 
 import asyncio
 import time
@@ -9,7 +9,7 @@ from app.hub.events.types import Event
 
 
 class TestEventBusPublishSubscribe:
-    """TC-3.1: publish后subscribe的handler收到Event"""
+    """MVP-3.1: publish后subscribe的handler收到Event"""
 
     async def test_handler_receives_event(self) -> None:
         bus = InProcessEventBus()
@@ -36,7 +36,7 @@ class TestEventBusPublishSubscribe:
 
 
 class TestEventBusUnsubscribe:
-    """TC-3.2: unsubscribe后不再收到事件"""
+    """MVP-3.2: unsubscribe后不再收到事件"""
 
     async def test_unsubscribe_stops_delivery(self) -> None:
         bus = InProcessEventBus()
@@ -63,7 +63,7 @@ class TestEventBusUnsubscribe:
 
 
 class TestEventBusMultipleHandlers:
-    """TC-3.3: 多handler订阅同一事件类型"""
+    """MVP-3.3: 多handler订阅同一事件类型"""
 
     async def test_all_handlers_receive_event(self) -> None:
         bus = InProcessEventBus()
@@ -97,7 +97,7 @@ class TestEventBusMultipleHandlers:
 
 
 class TestEventBusHandlerException:
-    """TC-3.4: handler异常不阻塞publish和其他handler"""
+    """MVP-3.4: handler异常不阻塞publish和其他handler"""
 
     async def test_bad_handler_does_not_block_publish_or_good_handler(self) -> None:
         bus = InProcessEventBus()
@@ -128,7 +128,7 @@ class TestEventBusHandlerException:
 
 
 class TestEventBusUnsubscribedEventType:
-    """TC-3.5: 未订阅的事件类型publish无异常"""
+    """MVP-3.5: 未订阅的事件类型publish无异常"""
 
     async def test_publish_unknown_event_type_no_exception(self) -> None:
         bus = InProcessEventBus()
@@ -146,7 +146,7 @@ class TestEventBusUnsubscribedEventType:
 
 
 class TestEventBusAsyncNonBlocking:
-    """TC-3.6: handler异步不阻塞publish"""
+    """MVP-3.6: handler异步不阻塞publish"""
 
     async def test_slow_handler_does_not_block_publish(self) -> None:
         bus = InProcessEventBus()

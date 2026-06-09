@@ -28,7 +28,7 @@ describe('App路由守卫', () => {
     vi.restoreAllMocks()
   })
 
-  describe('TC-19.7: JWT过期 → 重定向登录页', () => {
+  describe('MVP-19.7: JWT过期 → 重定向登录页', () => {
     it('存储过期JWT时访问工作区重定向到登录页', () => {
       // 存储一个已过期JWT
       const exp = Math.floor(Date.now() / 1000) - 3600
@@ -42,7 +42,7 @@ describe('App路由守卫', () => {
     })
   })
 
-  describe('TC-19.8: 未登录访问工作区 → 重定向登录页', () => {
+  describe('MVP-19.8: 未登录访问工作区 → 重定向登录页', () => {
     it('无JWT时访问工作区重定向到登录页', () => {
       // 不存储JWT
       renderApp('/workspace')
@@ -52,7 +52,7 @@ describe('App路由守卫', () => {
     })
   })
 
-  describe('TC-19.9: 登出流程', () => {
+  describe('MVP-19.9: 登出流程', () => {
     it('登出清除JWT并重定向登录页', async () => {
       const user = userEvent.setup()
       // 存储有效JWT

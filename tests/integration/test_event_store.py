@@ -1,4 +1,4 @@
-"""TC-4.1–TC-4.6: EventStore能力验证 — 遍历注册表中所有实现"""
+"""MVP-4.1–MVP-4.6: EventStore能力验证 — 遍历注册表中所有实现"""
 
 from collections.abc import AsyncGenerator
 from typing import Any, Literal
@@ -44,7 +44,7 @@ def make_event(
 
 
 class TestEventStoreAppend:
-    """TC-4.1: append写入事件可通过接口完整检索"""
+    """MVP-4.1: append写入事件可通过接口完整检索"""
 
     async def test_append_and_retrieve_event(self, event_store: EventStoreProtocol) -> None:
         event = make_event()
@@ -64,7 +64,7 @@ class TestEventStoreAppend:
 
 
 class TestEventStoreGetByCorrelation:
-    """TC-4.2: get_events_by_correlation按链路查询"""
+    """MVP-4.2: get_events_by_correlation按链路查询"""
 
     async def test_returns_events_with_same_correlation_id_sorted_by_time(
         self, event_store: EventStoreProtocol
@@ -89,7 +89,7 @@ class TestEventStoreGetByCorrelation:
 
 
 class TestEventStoreProjectIsolation:
-    """TC-4.3: get_events_by_project项目边界硬隔离"""
+    """MVP-4.3: get_events_by_project项目边界硬隔离"""
 
     async def test_returns_only_events_from_target_project(self, event_store: EventStoreProtocol) -> None:
         proj_a = str(uuid4())
@@ -104,7 +104,7 @@ class TestEventStoreProjectIsolation:
 
 
 class TestEventStoreEventTypeFilter:
-    """TC-4.4: event_type可选过滤"""
+    """MVP-4.4: event_type可选过滤"""
 
     async def test_filters_by_event_type(self, event_store: EventStoreProtocol) -> None:
         project_id = str(uuid4())
@@ -118,7 +118,7 @@ class TestEventStoreEventTypeFilter:
 
 
 class TestEventStoreCausationIdNull:
-    """TC-4.5: causation_id为null的事件"""
+    """MVP-4.5: causation_id为null的事件"""
 
     async def test_causation_id_null_stored_and_retrieved(self, event_store: EventStoreProtocol) -> None:
         event = make_event(causation_id=None)
@@ -130,7 +130,7 @@ class TestEventStoreCausationIdNull:
 
 
 class TestEventStoreDuplicateEventId:
-    """TC-4.6: 重复event_id写入"""
+    """MVP-4.6: 重复event_id写入"""
 
     async def test_duplicate_event_id_fails_without_corrupting_first_record(
         self, event_store: EventStoreProtocol
