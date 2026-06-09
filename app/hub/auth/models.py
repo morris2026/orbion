@@ -82,6 +82,16 @@ class RejectionRequest(BaseModel):
     reason: str | None = None
 
 
+class UserListItem(BaseModel):
+    """用户列表/搜索结果中的active用户项"""
+
+    user_id: str
+    username: str
+    display_name: str
+    status: str = "active"
+    created_at: datetime
+
+
 class TokenPayload(BaseModel):
     sub: str  # user_id
     username: str

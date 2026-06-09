@@ -20,6 +20,16 @@ class UserRecord(BaseModel):
     is_admin: bool = False
 
 
+class ActiveUserRecord(BaseModel):
+    """Repository返回的active用户摘要数据"""
+
+    id: str
+    username: str
+    display_name: str
+    status: str
+    created_at: datetime
+
+
 class PendingUserRecord(BaseModel):
     """Repository返回的待审批用户数据"""
 
@@ -57,6 +67,10 @@ class UserRepositoryProtocol(ABC):
     async def update_user_status(self, user_id: str, new_status: str) -> None: ...
     @abstractmethod
     async def list_pending_users(self) -> list[PendingUserRecord]: ...
+    @abstractmethod
+    async def list_active_users(self) -> list[ActiveUserRecord]: ...
+    @abstractmethod
+    async def search_users(self, username_prefix: str) -> list[ActiveUserRecord]: ...
 
 
 class UserRepositoryProvider(ABC):

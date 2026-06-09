@@ -12,7 +12,6 @@ from app.hub.auth.service import create_access_token, hash_password
 from app.hub.events.bus import InProcessEventBus
 
 
-
 class StubAdapter:
     """MVP stub adapter——API测试不需要LLM调用"""
 

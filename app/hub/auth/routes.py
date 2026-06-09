@@ -6,13 +6,14 @@ from typing import cast
 from fastapi import APIRouter, Depends, HTTPException, Request
 
 from app.config import Settings, get_settings
-from app.hub.auth.dependencies import require_admin_dependency
+from app.hub.auth.dependencies import get_current_user, require_admin_dependency
 from app.hub.auth.models import (
     ApprovalResponse,
     PendingUserResponse,
     RegistrationResponse,
     RejectionRequest,
     User,
+    UserListItem,
     UserLogin,
     UserRegister,
     UserResponse,
@@ -151,6 +152,41 @@ async def login(
             display_name=user_record.display_name,
             access_token=token,
         )
+
+
+@router.get("/users", response_model=list[UserListItem])
+async def list_active_users(
+    current_user: User = Depends(get_current_user),
+    provider: UserRepositoryProvider = Depends(_get_user_repo_provider),
+) -> list[UserListItem]:
+    """列出所有active用户，供AddMemberDialog全量列表"""
+    async with provider.scoped() as repo:
+        rows = await repo.list_active_users()
+        return [
+            UserListItem(
+                user_id=r.id, username=r.username, display_name=r.display_name, status=r.status, created_at=r.created_at
+            )
+            for r in rows
+        ]
+
+
+@router.get("/users/search", response_model=list[UserListItem])
+async def search_users(
+    username: str = "",
+    current_user: User = Depends(get_current_user),
+    provider: UserRepositoryProvider = Depends(_get_user_repo_provider),
+) -> list[UserListItem]:
+    """按前缀搜索active用户，供AddMemberDialog搜索框动态过滤"""
+    if not username.strip():
+        raise HTTPException(status_code=400, detail="username parameter is required and must not be empty")
+    async with provider.scoped() as repo:
+        rows = await repo.search_users(username.strip())
+        return [
+            UserListItem(
+                user_id=r.id, username=r.username, display_name=r.display_name, status=r.status, created_at=r.created_at
+            )
+            for r in rows
+        ]
 
 
 @router.get("/users/pending", response_model=list[PendingUserResponse])

@@ -8,7 +8,7 @@ from tempfile import NamedTemporaryFile
 import pytest
 from pytest import MonkeyPatch
 
-from app.config import OrbionConfigSchema, PostgresConfigSchema, Settings
+from app.config import OrbionConfigSchema, PostgresConfigSchema, Settings, get_settings
 from tests.conftest import JWT_SECRET_TEST
 
 
@@ -26,7 +26,7 @@ def test_tc1_2_settings_defaults() -> None:
     conftest的_inject_test_env_vars注入ORBION_POSTGRES__DB=orbion_test，
     测试不应硬编码断言默认值，而是验证Settings正确反映当前环境。
     """
-    s = Settings()
+    s = get_settings()
     expected_db = os.environ.get("ORBION_POSTGRES__DB", "orbion")
     expected_url = f"postgresql://orbion:orbion_dev@localhost:5432/{expected_db}"
     assert s.postgres.db == expected_db
@@ -45,7 +45,7 @@ def test_tc1_3_settings_env_override(monkeypatch: MonkeyPatch) -> None:
     monkeypatch.setenv("ORBION_REPO_PATH", "/tmp/repo")
     monkeypatch.setenv("ORBION_MEMORY_BASE_PATH", "/tmp/memory")
 
-    s = Settings()
+    s = get_settings()
     assert s.postgres.url == "postgresql://testuser:testpass@testhost:5433/testdb"
     assert s.jwt_secret == JWT_SECRET_TEST
     assert s.anthropic_api_key == "sk-test-key"

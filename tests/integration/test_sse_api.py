@@ -30,8 +30,6 @@ from app.hub.events.types import (
 )
 from app.main import app
 
-
-
 # -- helpers --
 
 

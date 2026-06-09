@@ -13,7 +13,6 @@ from app.hub.auth.service import create_access_token, hash_password
 from app.hub.events.bus import InProcessEventBus
 from app.hub.permissions.roles import HUMAN_ROLE_BITS
 
-
 # -- helper --
 
 
