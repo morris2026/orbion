@@ -1,4 +1,4 @@
-"""步骤7认证API测试：注册、登录、审批端点"""
+"""步骤7认证API测试：注册、登录、审批端点；步骤1：用户列表与搜索API"""
 
 import json
 import uuid
@@ -6,9 +6,6 @@ from typing import Any
 
 import asyncpg
 from httpx import AsyncClient
-
-from app.config import get_settings
-
 
 
 async def _register_first_admin(client: AsyncClient) -> dict[str, Any]:
@@ -242,3 +239,145 @@ class TestRegistrationEventStore:
         assert payload["username"] == "admin"
         assert payload["status"] == "active"
         assert payload["is_admin"] is True
+
+
+class TestUserListSearch:
+    """TC-1.1~1.8: 用户列表与搜索API"""
+
+    async def test_list_active_users(self, client: AsyncClient, db_conn: asyncpg.Connection) -> None:
+        """TC-1.1: 全量active用户列表不含pending/rejected"""
+        admin_data = await _register_first_admin(client)
+        # 注册pending用户
+        await _register_pending_user(client, "1")
+        # 注册另一个pending用户然后reject
+        pending2 = await _register_pending_user(client, "2")
+        await client.post(
+            f"/auth/users/{pending2['user_id']}/reject",
+            headers={"Authorization": f"Bearer {admin_data['access_token']}"},
+        )
+
+        resp = await client.get(
+            "/auth/users",
+            headers={"Authorization": f"Bearer {admin_data['access_token']}"},
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        # 只含active用户，不含pending/rejected
+        assert len(data) == 1
+        assert data[0]["username"] == "admin"
+        assert data[0]["status"] == "active"
+
+    async def test_search_prefix_match(self, client: AsyncClient, db_conn: asyncpg.Connection) -> None:
+        """TC-1.2: 前缀搜索返回匹配的active用户"""
+        admin_data = await _register_first_admin(client)
+        # 审批一个用户使其active
+        pending = await _register_pending_user(client)
+        await client.post(
+            f"/auth/users/{pending['user_id']}/approve",
+            headers={"Authorization": f"Bearer {admin_data['access_token']}"},
+        )
+        # 登录获取新用户token（验证其确实active）
+        login_resp = await client.post(
+            "/auth/login",
+            json={"username": "pending_user", "password": "pendingpass123"},
+        )
+        assert login_resp.status_code == 200
+        new_user_token = login_resp.json()["access_token"]
+
+        resp = await client.get(
+            "/auth/users/search?username=pen",
+            headers={"Authorization": f"Bearer {new_user_token}"},
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert len(data) >= 1
+        usernames = [u["username"] for u in data]
+        assert "pending_user" in usernames
+
+    async def test_search_no_match(self, client: AsyncClient, db_conn: asyncpg.Connection) -> None:
+        """TC-1.3: 无匹配搜索返回空列表"""
+        admin_data = await _register_first_admin(client)
+        resp = await client.get(
+            "/auth/users/search?username=zzz",
+            headers={"Authorization": f"Bearer {admin_data['access_token']}"},
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data == []
+
+    async def test_search_case_insensitive(self, client: AsyncClient, db_conn: asyncpg.Connection) -> None:
+        """TC-1.4: 搜索大小写不敏感"""
+        admin_data = await _register_first_admin(client)
+        # 大小写搜索结果相同
+        resp_lower = await client.get(
+            "/auth/users/search?username=adm",
+            headers={"Authorization": f"Bearer {admin_data['access_token']}"},
+        )
+        resp_upper = await client.get(
+            "/auth/users/search?username=ADM",
+            headers={"Authorization": f"Bearer {admin_data['access_token']}"},
+        )
+        assert resp_lower.json() == resp_upper.json()
+
+    async def test_list_unauthenticated_401(self, client: AsyncClient, db_conn: asyncpg.Connection) -> None:
+        """TC-1.5: 未认证访问全量列表返回401"""
+        resp = await client.get("/auth/users")
+        assert resp.status_code == 401
+
+    async def test_search_unauthenticated_401(self, client: AsyncClient, db_conn: asyncpg.Connection) -> None:
+        """TC-1.6: 未认证访问搜索返回401"""
+        resp = await client.get("/auth/users/search?username=test")
+        assert resp.status_code == 401
+
+    async def test_search_missing_param_400(self, client: AsyncClient, db_conn: asyncpg.Connection) -> None:
+        """TC-1.7: 搜索参数缺失返回400"""
+        admin_data = await _register_first_admin(client)
+        resp = await client.get(
+            "/auth/users/search",
+            headers={"Authorization": f"Bearer {admin_data['access_token']}"},
+        )
+        assert resp.status_code == 400
+
+    async def test_search_empty_string_400(self, client: AsyncClient, db_conn: asyncpg.Connection) -> None:
+        """TC-1.8: 空字符串搜索返回400"""
+        admin_data = await _register_first_admin(client)
+        resp = await client.get(
+            "/auth/users/search?username=",
+            headers={"Authorization": f"Bearer {admin_data['access_token']}"},
+        )
+        assert resp.status_code == 400
+
+    async def test_search_underscore_not_wildcard(self, client: AsyncClient, db_conn: asyncpg.Connection) -> None:
+        """LIKE通配符转义：搜索含_的前缀不会误匹配"""
+        admin_data = await _register_first_admin(client)
+        # admin用户名不含_，搜索"adm_"不应匹配admin（_不是通配符）
+        resp = await client.get(
+            "/auth/users/search?username=adm_",
+            headers={"Authorization": f"Bearer {admin_data['access_token']}"},
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert len(data) == 0
+
+    async def test_list_active_users_includes_created_at(
+        self, client: AsyncClient, db_conn: asyncpg.Connection
+    ) -> None:
+        """列表和搜索结果包含created_at字段"""
+        admin_data = await _register_first_admin(client)
+        resp = await client.get(
+            "/auth/users",
+            headers={"Authorization": f"Bearer {admin_data['access_token']}"},
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert len(data) == 1
+        assert "created_at" in data[0]
+
+        search_resp = await client.get(
+            "/auth/users/search?username=adm",
+            headers={"Authorization": f"Bearer {admin_data['access_token']}"},
+        )
+        assert search_resp.status_code == 200
+        search_data = search_resp.json()
+        assert len(search_data) >= 1
+        assert "created_at" in search_data[0]

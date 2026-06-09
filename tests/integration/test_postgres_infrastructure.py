@@ -2,12 +2,12 @@
 
 import asyncpg
 
-from app.config import Settings
+from app.config import get_settings
 
 
 async def test_postgres_connection() -> None:
     """asyncpg连接 postgres.url，SELECT 1成功"""
-    settings = Settings()
+    settings = get_settings()
     conn = await asyncpg.connect(settings.postgres.url)
     try:
         result = await conn.fetchval("SELECT 1")
@@ -18,7 +18,7 @@ async def test_postgres_connection() -> None:
 
 async def test_postgres_migration_creates_tables_and_indexes() -> None:
     """执行migrations/001_initial.sql，验证8张表和所有索引创建成功"""
-    settings = Settings()
+    settings = get_settings()
     conn = await asyncpg.connect(settings.postgres.url)
     try:
         await conn.execute(

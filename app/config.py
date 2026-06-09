@@ -131,4 +131,5 @@ class Settings(BaseSettings):
 
 def get_settings() -> Settings:
     """模块级便利函数，返回 Settings 实例"""
-    return Settings()
+    # pydantic_settings 环境变量注入，mypy 无法推断 jwt_secret
+    return Settings()  # type: ignore[call-arg]

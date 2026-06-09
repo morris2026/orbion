@@ -7,6 +7,7 @@ import pytest
 
 from app.hub.auth.postgres_repo import PostgresUserRepository, PostgresUserRepositoryProvider
 from app.hub.auth.repository import (
+    ActiveUserRecord,
     PendingUserRecord,
     UserRecord,
     UserRepositoryProtocol,
@@ -51,6 +52,15 @@ class TestUserRecordModels:
 
         with pytest.raises(ValidationError):
             PendingUserRecord(id="user-4", username="p2", display_name="P2", status="pending")  # type: ignore[call-arg]
+
+    def test_active_user_record(self) -> None:
+        """ActiveUserRecord字段"""
+        record = ActiveUserRecord(
+            id="user-5", username="alice", display_name="Alice", status="active", created_at=datetime.now()
+        )
+        assert record.status == "active"
+        assert record.username == "alice"
+        assert record.created_at is not None
 
 
 class TestUserRepositoryProtocolConformance:

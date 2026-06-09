@@ -8,6 +8,7 @@ import asyncpg
 
 from app.config import get_settings
 from app.hub.auth.repository import (
+    ActiveUserRecord,
     PendingUserRecord,
     UserRecord,
     UserRepositoryProtocol,
@@ -130,6 +131,25 @@ class PostgresUserRepository(UserRepositoryProtocol):
         )
         return [_row_to_pending_record(row) for row in rows]
 
+    async def list_active_users(self) -> list[ActiveUserRecord]:
+        self._ensure_open()
+        rows = await self._conn.fetch(
+            "SELECT id, username, display_name, status, created_at FROM users WHERE status = 'active' ORDER BY username"
+        )
+        return [_row_to_active_record(row) for row in rows]
+
+    async def search_users(self, username_prefix: str) -> list[ActiveUserRecord]:
+        self._ensure_open()
+        # 转义LIKE通配符%和_——username允许包含_，不转义会误匹配
+        escaped = username_prefix.replace("%", "\\%").replace("_", "\\_")
+        rows = await self._conn.fetch(
+            "SELECT id, username, display_name, status, created_at "
+            "FROM users WHERE status = 'active' AND LOWER(username) LIKE LOWER($1) ESCAPE '\\' "
+            "ORDER BY username",
+            escaped + "%",
+        )
+        return [_row_to_active_record(row) for row in rows]
+
 
 def _row_to_user_record(row: asyncpg.Record) -> UserRecord:
     return UserRecord(
@@ -144,6 +164,16 @@ def _row_to_user_record(row: asyncpg.Record) -> UserRecord:
 
 def _row_to_pending_record(row: asyncpg.Record) -> PendingUserRecord:
     return PendingUserRecord(
+        id=str(row["id"]),
+        username=row["username"],
+        display_name=row["display_name"],
+        status=row["status"],
+        created_at=row["created_at"],
+    )
+
+
+def _row_to_active_record(row: asyncpg.Record) -> ActiveUserRecord:
+    return ActiveUserRecord(
         id=str(row["id"]),
         username=row["username"],
         display_name=row["display_name"],

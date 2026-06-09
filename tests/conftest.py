@@ -8,9 +8,9 @@
 """
 
 import os
+from collections.abc import AsyncGenerator, Generator
 
 import pytest
-
 
 # 测试专用常量——>=32 bytes，消除PyJWT InsecureKeyLengthWarning
 JWT_SECRET_TEST = "orbion-test-secret-key-at-least-32-by"
@@ -41,9 +41,7 @@ async def _truncate_all_tables(db_url: str) -> None:
     global _DB_TABLES_CACHE
     conn = await asyncpg.connect(db_url)
     if _DB_TABLES_CACHE is None:
-        rows = await conn.fetch(
-            "SELECT tablename FROM pg_tables WHERE schemaname = 'public'"
-        )
+        rows = await conn.fetch("SELECT tablename FROM pg_tables WHERE schemaname = 'public'")
         _DB_TABLES_CACHE = ", ".join(r["tablename"] for r in rows)
     await conn.execute(f"TRUNCATE {_DB_TABLES_CACHE} CASCADE")
     await conn.close()
@@ -62,7 +60,7 @@ def _clear_app_state() -> None:
 
 
 @pytest.fixture(autouse=True, scope="session")
-def _inject_test_env_vars() -> None:
+def _inject_test_env_vars() -> Generator[None, None, None]:
     """注入测试必需环境变量，确保直接pytest也能运行（不依赖Makefile）
 
     Why: jwt_secret无默认值，直接pytest时缺少ORBION_JWT_SECRET会ValidationError。
@@ -81,7 +79,7 @@ def _inject_test_env_vars() -> None:
 
 
 @pytest.fixture(autouse=True, scope="function")
-async def _clean_env(request: pytest.FixtureRequest) -> None:
+async def _clean_env(request: pytest.FixtureRequest) -> AsyncGenerator[None, None]:
     """每个测试前后统一清理：env vars + DB + app.state
 
     setup: env snapshot → DB TRUNCATE (仅集成/基准测试，缓存表名避免重复查询)
@@ -94,8 +92,9 @@ async def _clean_env(request: pytest.FixtureRequest) -> None:
     is_unit_test = "tests/unit" in str(request.path)
     if not is_unit_test:
         try:
-            from app.config import get_settings
             import asyncpg
+
+            from app.config import get_settings
 
             await _truncate_all_tables(get_settings().postgres.url)
         except (OSError, asyncpg.PostgresConnectionError):

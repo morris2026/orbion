@@ -12,8 +12,6 @@ from app.hub.auth.repository import UserRepositoryProvider
 from app.hub.auth.service import create_access_token, hash_password
 from app.hub.events.bus import InProcessEventBus
 
-
-
 # -- helper --
 
 
