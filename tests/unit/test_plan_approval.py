@@ -141,11 +141,11 @@ def _make_member_roles(project_id: str, user_id: str, roles: int) -> dict[str, A
     return {"participant_id": user_id, "project_id": project_id, "roles": roles}
 
 
-# -- TC-15.1: 计划列表可按thread_id和status过滤 --
+# -- MVP-15.1: 计划列表可按thread_id和status过滤 --
 
 
 async def test_tc15_1_plan_list_filter() -> None:
-    """TC-15.1: 创建多个计划（不同thread_id和status）→
+    """MVP-15.1: 创建多个计划（不同thread_id和status）→
     GET /projects/{id}/plans?thread_id=X&status=proposed
     只返回符合条件的计划
     """
@@ -165,11 +165,11 @@ async def test_tc15_1_plan_list_filter() -> None:
     assert result[0]["id"] == "plan-a"
 
 
-# -- TC-15.2: 部分审批→状态approved+事件发布+投影更新 --
+# -- MVP-15.2: 部分审批→状态approved+事件发布+投影更新 --
 
 
 async def test_tc15_2_partial_approve() -> None:
-    """TC-15.2: POST approve（只批准部分task_id）→
+    """MVP-15.2: POST approve（只批准部分task_id）→
     计划状态变为approved；approved_tasks只有批准的task；
     EventStore有ExecutionPlanApproved事件
     """
@@ -200,11 +200,11 @@ async def test_tc15_2_partial_approve() -> None:
     assert evt.payload["approved_tasks"] == ["t-1"]
 
 
-# -- TC-15.3: 拒绝+修改意见→状态rejected+事件发布 --
+# -- MVP-15.3: 拒绝+修改意见→状态rejected+事件发布 --
 
 
 async def test_tc15_3_reject_with_suggestions() -> None:
-    """TC-15.3: POST reject（reason+suggestions）→
+    """MVP-15.3: POST reject（reason+suggestions）→
     计划状态变为rejected；EventStore有ExecutionPlanRejected事件；
     reason和suggestions在payload中
     """
@@ -237,21 +237,21 @@ async def test_tc15_3_reject_with_suggestions() -> None:
     assert evt.payload["suggestions"] == ["简化流程", "减少依赖"]
 
 
-# -- TC-15.4: APPROVE_PLAN权限位检查 --
+# -- MVP-15.4: APPROVE_PLAN权限位检查 --
 
 
 async def test_tc15_4_approve_permission_check() -> None:
-    """TC-15.4: Viewer角色用户 → POST /plans/{id}/approve → 返回403"""
+    """MVP-15.4: Viewer角色用户 → POST /plans/{id}/approve → 返回403"""
     # Viewer只有VIEW_DISCUSSION权限(bit 0)
     viewer_roles = HumanPermission.VIEW_DISCUSSION
     assert not compute_permissions(viewer_roles, HumanPermission.APPROVE_PLAN)
 
 
-# -- TC-15.5: 计划状态机proposed→approved/rejected --
+# -- MVP-15.5: 计划状态机proposed→approved/rejected --
 
 
 async def test_tc15_5_state_machine() -> None:
-    """TC-15.5: proposed计划 → approve → 状态approved；
+    """MVP-15.5: proposed计划 → approve → 状态approved；
     proposed计划 → reject → 状态rejected
     """
     bus = InProcessEventBus()
@@ -289,22 +289,22 @@ async def test_tc15_5_state_machine() -> None:
     assert result2["status"] == "rejected"
 
 
-# -- TC-15.6: REJECT_PLAN权限位验证 --
+# -- MVP-15.6: REJECT_PLAN权限位验证 --
 
 
 async def test_tc15_6_reject_permission_check() -> None:
-    """TC-15.6: Viewer角色 POST reject → 403（需REJECT_PLAN权限位，
+    """MVP-15.6: Viewer角色 POST reject → 403（需REJECT_PLAN权限位，
     Viewer只有VIEW_DISCUSSION）
     """
     viewer_roles = HumanPermission.VIEW_DISCUSSION
     assert not compute_permissions(viewer_roles, HumanPermission.REJECT_PLAN)
 
 
-# -- TC-15.7: 计划错误路径 --
+# -- MVP-15.7: 计划错误路径 --
 
 
 async def test_tc15_7_error_paths() -> None:
-    """TC-15.7: 对已approved计划再次approve → 非法状态转换抛ValueError；
+    """MVP-15.7: 对已approved计划再次approve → 非法状态转换抛ValueError；
     对不存在的plan_id调用approve → 抛ValueError；
     对已rejected计划再次reject → 非法状态转换抛ValueError
     """

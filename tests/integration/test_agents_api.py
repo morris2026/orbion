@@ -1,4 +1,4 @@
-"""Agent管理API集成测试：TC-12.1、TC-12.8、TC-12.9、TC-12.12"""
+"""Agent管理API集成测试：MVP-12.1、MVP-12.8、MVP-12.9、MVP-12.12"""
 
 from typing import Any
 
@@ -40,7 +40,7 @@ async def _create_project(client: AsyncClient, token: str) -> dict[str, Any]:
     return dict(resp.json())
 
 
-# -- TC-12.1: 注册Agent→project_members投影+权限位自动分配 --
+# -- MVP-12.1: 注册Agent→project_members投影+权限位自动分配 --
 
 
 async def test_tc12_1_register_agent(
@@ -49,7 +49,7 @@ async def test_tc12_1_register_agent(
     user_repo_provider: UserRepositoryProvider,
     db_conn: asyncpg.Connection,
 ) -> None:
-    """TC-12.1: POST /projects/{id}/agents→AgentResponse + project_members投影有Agent成员"""
+    """MVP-12.1: POST /projects/{id}/agents→AgentResponse + project_members投影有Agent成员"""
     admin = await _create_user(user_repo_provider, "agentadmin", is_admin=True)
     project = await _create_project(client, admin["token"])
     await event_bus.wait_for_pending()
@@ -83,7 +83,7 @@ async def test_tc12_1_register_agent(
     assert row["status"] == "idle"
 
 
-# -- TC-12.8: Agent列表含状态 --
+# -- MVP-12.8: Agent列表含状态 --
 
 
 async def test_tc12_8_agent_list(
@@ -92,7 +92,7 @@ async def test_tc12_8_agent_list(
     user_repo_provider: UserRepositoryProvider,
     db_conn: asyncpg.Connection,
 ) -> None:
-    """TC-12.8: GET /projects/{id}/agents→返回列表含每个Agent的status字段"""
+    """MVP-12.8: GET /projects/{id}/agents→返回列表含每个Agent的status字段"""
     admin = await _create_user(user_repo_provider, "listadmin", is_admin=True)
     project = await _create_project(client, admin["token"])
     await event_bus.wait_for_pending()
@@ -127,7 +127,7 @@ async def test_tc12_8_agent_list(
         assert agent["status"] == "idle"
 
 
-# -- TC-12.9: Agent详细状态 --
+# -- MVP-12.9: Agent详细状态 --
 
 
 async def test_tc12_9_agent_status(
@@ -136,7 +136,7 @@ async def test_tc12_9_agent_status(
     user_repo_provider: UserRepositoryProvider,
     db_conn: asyncpg.Connection,
 ) -> None:
-    """TC-12.9: GET /projects/{id}/agents/{id}/status→AgentStatus含completed_count/error_count"""
+    """MVP-12.9: GET /projects/{id}/agents/{id}/status→AgentStatus含completed_count/error_count"""
     admin = await _create_user(user_repo_provider, "statusadmin", is_admin=True)
     project = await _create_project(client, admin["token"])
     await event_bus.wait_for_pending()
@@ -162,7 +162,7 @@ async def test_tc12_9_agent_status(
     assert status_data["current_task"] is None
 
 
-# -- TC-12.12: Agent管理API权限检查 --
+# -- MVP-12.12: Agent管理API权限检查 --
 
 
 async def test_tc12_12_permission_check(
@@ -171,7 +171,7 @@ async def test_tc12_12_permission_check(
     user_repo_provider: UserRepositoryProvider,
     db_conn: asyncpg.Connection,
 ) -> None:
-    """TC-12.12: Member角色POST /projects/{id}/agents→403（需MANAGE_AGENTS权限）"""
+    """MVP-12.12: Member角色POST /projects/{id}/agents→403（需MANAGE_AGENTS权限）"""
     admin = await _create_user(user_repo_provider, "permadmin", is_admin=True)
     project = await _create_project(client, admin["token"])
     await event_bus.wait_for_pending()

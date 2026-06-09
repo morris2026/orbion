@@ -38,7 +38,7 @@ describe('Login页面', () => {
     vi.restoreAllMocks()
   })
 
-  describe('TC-19.1: 注册表单 → pending状态提示', () => {
+  describe('MVP-19.1: 注册表单 → pending状态提示', () => {
     it('非首个用户注册后显示等待管理员审批提示', async () => {
       const user = userEvent.setup()
       // 非首个用户注册返回pending状态
@@ -73,7 +73,7 @@ describe('Login页面', () => {
     })
   })
 
-  describe('TC-19.2: 第一个用户注册 → 自动审批 → 跳转工作区', () => {
+  describe('MVP-19.2: 第一个用户注册 → 自动审批 → 跳转工作区', () => {
     it('首个用户注册后自动获得JWT并跳转', async () => {
       const user = userEvent.setup()
       vi.spyOn(authModule, 'setToken')
@@ -106,7 +106,7 @@ describe('Login页面', () => {
     })
   })
 
-  describe('TC-19.3: 登录表单 → JWT存储 → 跳转工作区', () => {
+  describe('MVP-19.3: 登录表单 → JWT存储 → 跳转工作区', () => {
     it('登录成功后JWT存储', async () => {
       const user = userEvent.setup()
       vi.spyOn(authModule, 'setToken')
@@ -134,7 +134,7 @@ describe('Login页面', () => {
     })
   })
 
-  describe('TC-19.4: pending用户登录 → 403提示', () => {
+  describe('MVP-19.4: pending用户登录 → 403提示', () => {
     it('pending用户登录显示等待审批提示', async () => {
       const user = userEvent.setup()
 

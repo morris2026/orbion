@@ -10,7 +10,7 @@ from tests.conftest import JWT_SECRET_TEST
 
 
 class TestPasswordHashing:
-    """TC-7.17: 密码哈希与验证"""
+    """MVP-7.17: 密码哈希与验证"""
 
     def test_hash_and_verify_correct_password(self) -> None:
         """正确密码验证成功"""
@@ -37,7 +37,7 @@ class TestPasswordHashing:
 
 
 class TestJWTGenerationAndVerification:
-    """TC-7.16: JWT生成和验证"""
+    """MVP-7.16: JWT生成和验证"""
 
     def test_jwt_contains_required_fields(self) -> None:
         """payload含sub/username/display_name/is_admin/iss/exp/iat"""
@@ -97,7 +97,7 @@ class TestJWTGenerationAndVerification:
 
 
 class TestJWTExpiration:
-    """TC-7.8: JWT过期"""
+    """MVP-7.8: JWT过期"""
 
     def test_expired_jwt_raises_401(self) -> None:
         """过期JWT抛出401异常"""
@@ -147,7 +147,7 @@ class TestJWTExpiration:
 
 
 class TestGetCurrentUser:
-    """TC-7.9: get_current_user正常返回"""
+    """MVP-7.9: get_current_user正常返回"""
 
     def test_decode_valid_jwt_returns_user(self) -> None:
         """返回User对象，字段与JWT payload一致"""
@@ -199,7 +199,7 @@ class TestGetCurrentUser:
 
 
 class TestRequireAdmin:
-    """TC-7.10: require_admin拦截非管理员"""
+    """MVP-7.10: require_admin拦截非管理员"""
 
     def test_non_admin_raises_403(self) -> None:
         """is_admin=false抛出403"""
@@ -227,7 +227,7 @@ class TestRequireAdmin:
 
 
 class TestAdminApprovalPolicyProtocol:
-    """TC-7.19: AdminApprovalPolicy Protocol契约验证"""
+    """MVP-7.19: AdminApprovalPolicy Protocol契约验证"""
 
     def test_admin_approval_policy_satisfies_protocol(self) -> None:
         """AdminApprovalPolicy满足RegistrationPolicy Protocol"""

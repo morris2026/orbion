@@ -113,11 +113,11 @@ def _make_output_dict(
     }
 
 
-# -- TC-16.1: 产出列表可按plan_id过滤 --
+# -- MVP-16.1: 产出列表可按plan_id过滤 --
 
 
 async def test_tc16_1_output_list_filter() -> None:
-    """TC-16.1: 创建多个产出（不同plan_id）→
+    """MVP-16.1: 创建多个产出（不同plan_id）→
     GET /projects/{id}/outputs?plan_id=X → 只返回该plan_id的产出
     """
     bus = InProcessEventBus()
@@ -135,11 +135,11 @@ async def test_tc16_1_output_list_filter() -> None:
     assert result[1]["id"] == "out-c"
 
 
-# -- TC-16.2: 产出审批通过→状态approved+事件发布 --
+# -- MVP-16.2: 产出审批通过→状态approved+事件发布 --
 
 
 async def test_tc16_2_approve_output() -> None:
-    """TC-16.2: POST approve → 产出状态变为approved；
+    """MVP-16.2: POST approve → 产出状态变为approved；
     EventStore有TaskOutputApproved事件
     """
     bus = InProcessEventBus()
@@ -167,11 +167,11 @@ async def test_tc16_2_approve_output() -> None:
     assert evt.payload["feedback"] == "代码质量不错"
 
 
-# -- TC-16.3: 产出要求修改→状态revision_requested+事件发布 --
+# -- MVP-16.3: 产出要求修改→状态revision_requested+事件发布 --
 
 
 async def test_tc16_3_request_revision() -> None:
-    """TC-16.3: POST request-revision（issues+suggestions）→
+    """MVP-16.3: POST request-revision（issues+suggestions）→
     产出状态变为revision_requested；EventStore有TaskOutputRevisionRequested事件；
     issues和suggestions在payload中
     """
@@ -204,11 +204,11 @@ async def test_tc16_3_request_revision() -> None:
     assert evt.payload["issues"] == ["缺少错误处理", "变量命名不规范"]
 
 
-# -- TC-16.4: 产出状态机generated→approved/revision_requested --
+# -- MVP-16.4: 产出状态机generated→approved/revision_requested --
 
 
 async def test_tc16_4_state_machine() -> None:
-    """TC-16.4: generated产出→approve→状态approved；
+    """MVP-16.4: generated产出→approve→状态approved；
     generated产出→request-revision→状态revision_requested
     """
     bus = InProcessEventBus()
@@ -245,11 +245,11 @@ async def test_tc16_4_state_machine() -> None:
     assert result2["status"] == "revision_requested"
 
 
-# -- TC-16.5: 产出version自增 --
+# -- MVP-16.5: 产出version自增 --
 
 
 async def test_tc16_5_version_increment() -> None:
-    """TC-16.5: Agent生成产出（version=1）→ request-revision →
+    """MVP-16.5: Agent生成产出（version=1）→ request-revision →
     Agent重新生成产出 → 新产出version=2
     """
     bus = InProcessEventBus()
@@ -282,11 +282,11 @@ async def test_tc16_5_version_increment() -> None:
     assert v2_found
 
 
-# -- TC-16.6: 产出错误路径 --
+# -- MVP-16.6: 产出错误路径 --
 
 
 async def test_tc16_6_error_paths() -> None:
-    """TC-16.6: 非法状态转换和不存在ID的错误路径"""
+    """MVP-16.6: 非法状态转换和不存在ID的错误路径"""
     bus = InProcessEventBus()
     store = MockEventStore()
     projections = MockProjections(bus)

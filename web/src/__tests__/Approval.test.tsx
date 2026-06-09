@@ -45,7 +45,7 @@ describe('Approval审批面板', () => {
     vi.restoreAllMocks()
   })
 
-  describe('TC-19.5: 管理员审批面板 → 待审批用户列表', () => {
+  describe('MVP-19.5: 管理员审批面板 → 待审批用户列表', () => {
     it('列出pending用户，每个有approve/reject按钮', async () => {
       // 设置admin JWT
       authModule.setToken(createJWT({ sub: 'admin-1', username: 'admin', is_admin: true }))
@@ -72,7 +72,7 @@ describe('Approval审批面板', () => {
     })
   })
 
-  describe('TC-19.6: 管理员审批操作 → 用户变为active', () => {
+  describe('MVP-19.6: 管理员审批操作 → 用户变为active', () => {
     it('点击approve按钮 → API调用 → 用户从列表移除', async () => {
       const user = userEvent.setup()
       authModule.setToken(createJWT({ sub: 'admin-1', username: 'admin', is_admin: true }))

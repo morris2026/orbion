@@ -58,11 +58,11 @@ def _make_event(
     )
 
 
-# -- TC-14.1: 层次加载平台→项目→Agent --
+# -- MVP-14.1: 层次加载平台→项目→Agent --
 
 
 async def test_tc14_1_three_level_loading(tmp_path: Path) -> None:
-    """TC-14.1: 写入3层memory.md→load_memory_chain(project_id, agent_type)
+    """MVP-14.1: 写入3层memory.md→load_memory_chain(project_id, agent_type)
     返回3层内容拼接，顺序为平台→项目→Agent
     """
     mem = AgentMemory(str(tmp_path))
@@ -80,11 +80,11 @@ async def test_tc14_1_three_level_loading(tmp_path: Path) -> None:
     assert result.index("项目级") < result.index("Agent级")
 
 
-# -- TC-14.2: 任务级memory加载 --
+# -- MVP-14.2: 任务级memory加载 --
 
 
 async def test_tc14_2_task_level_loading(tmp_path: Path) -> None:
-    """TC-14.2: 写入4层memory.md→load_memory_chain(project_id, agent_type, correlation_id)
+    """MVP-14.2: 写入4层memory.md→load_memory_chain(project_id, agent_type, correlation_id)
     返回4层内容拼接，任务层在最末
     """
     mem = AgentMemory(str(tmp_path))
@@ -98,11 +98,11 @@ async def test_tc14_2_task_level_loading(tmp_path: Path) -> None:
     assert result.index("Agent") < result.index("任务级上下文")
 
 
-# -- TC-14.3: 后加载覆盖前面的设置 --
+# -- MVP-14.3: 后加载覆盖前面的设置 --
 
 
 async def test_tc14_3_layer_override(tmp_path: Path) -> None:
-    """TC-14.3: 平台层写"使用英文"→Agent层写"使用中文"→最终"使用中文"生效
+    """MVP-14.3: 平台层写"使用英文"→Agent层写"使用中文"→最终"使用中文"生效
     后加载覆盖前面的设置（类似CSS层叠）
     """
     mem = AgentMemory(str(tmp_path))
@@ -116,11 +116,11 @@ async def test_tc14_3_layer_override(tmp_path: Path) -> None:
     assert result.index("使用英文") < result.index("使用中文")
 
 
-# -- TC-14.4: 不存在的层级→空字符串 --
+# -- MVP-14.4: 不存在的层级→空字符串 --
 
 
 async def test_tc14_4_missing_levels(tmp_path: Path) -> None:
-    """TC-14.4: 只写平台层→load_memory_chain（无项目层和Agent层文件）
+    """MVP-14.4: 只写平台层→load_memory_chain（无项目层和Agent层文件）
     返回平台层内容+空内容，不报错
     """
     mem = AgentMemory(str(tmp_path))
@@ -130,11 +130,11 @@ async def test_tc14_4_missing_levels(tmp_path: Path) -> None:
     assert "平台内容" in result
 
 
-# -- TC-14.5: write_memory写入指定层级 --
+# -- MVP-14.5: write_memory写入指定层级 --
 
 
 async def test_tc14_5_write_memory(tmp_path: Path) -> None:
-    """TC-14.5: write_memory("project/proj-1/agents/summary", "内容")→read_memory验证
+    """MVP-14.5: write_memory("project/proj-1/agents/summary", "内容")→read_memory验证
     文件创建成功，内容正确
     """
     mem = AgentMemory(str(tmp_path))
@@ -145,11 +145,11 @@ async def test_tc14_5_write_memory(tmp_path: Path) -> None:
     assert "先列共识点" in content
 
 
-# -- TC-14.6: reset_agent_memory清空内容 --
+# -- MVP-14.6: reset_agent_memory清空内容 --
 
 
 async def test_tc14_6_reset_memory(tmp_path: Path) -> None:
-    """TC-14.6: write_memory→reset_agent_memory→read_memory
+    """MVP-14.6: write_memory→reset_agent_memory→read_memory
     返回空字符串，文件仍存在（不删除）
     """
     mem = AgentMemory(str(tmp_path))
@@ -162,11 +162,11 @@ async def test_tc14_6_reset_memory(tmp_path: Path) -> None:
     assert (tmp_path / "project" / "proj-1" / "agents" / "summary" / "memory.md").exists()
 
 
-# -- TC-14.7: memory注入PromptInput --
+# -- MVP-14.7: memory注入PromptInput --
 
 
 async def test_tc14_7_memory_in_prompt(tmp_path: Path) -> None:
-    """TC-14.7: 写入memory→Agent执行prompt组装→检查PromptInput.memory字段
+    """MVP-14.7: 写入memory→Agent执行prompt组装→检查PromptInput.memory字段
     memory内容出现在PromptInput.memory中
     """
     mem = AgentMemory(str(tmp_path))

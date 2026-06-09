@@ -1,4 +1,4 @@
-"""讨论线程与消息API集成测试：TC-10.1–TC-10.7"""
+"""讨论线程与消息API集成测试：MVP-10.1–MVP-10.7"""
 
 import uuid
 from typing import Any
@@ -70,11 +70,11 @@ async def _send_message(
     return dict(resp.json())
 
 
-# -- TC-10 测试 --
+# -- MVP-10 测试 --
 
 
 class TestCreateThread:
-    """TC-10.1: 创建线程"""
+    """MVP-10.1: 创建线程"""
 
     @pytest.mark.asyncio
     async def test_create_thread(
@@ -113,7 +113,7 @@ class TestCreateThread:
 
 
 class TestThreadListAggregation:
-    """TC-10.2: 线程列表含聚合字段"""
+    """MVP-10.2: 线程列表含聚合字段"""
 
     @pytest.mark.asyncio
     async def test_thread_list_aggregation(
@@ -151,7 +151,7 @@ class TestThreadListAggregation:
 
 
 class TestSendMessageEventChain:
-    """TC-10.3: 发送消息→事件持久化+投影更新"""
+    """MVP-10.3: 发送消息→事件持久化+投影更新"""
 
     @pytest.mark.asyncio
     async def test_send_message_event_chain(
@@ -203,7 +203,7 @@ class TestSendMessageEventChain:
 
 
 class TestMessageCursorPagination:
-    """TC-10.4: 消息列表游标分页"""
+    """MVP-10.4: 消息列表游标分页"""
 
     @pytest.mark.asyncio
     async def test_message_cursor_pagination(
@@ -260,7 +260,7 @@ class TestMessageCursorPagination:
 
 
 class TestRequestSummaryFlag:
-    """TC-10.5: request_summary标志"""
+    """MVP-10.5: request_summary标志"""
 
     @pytest.mark.asyncio
     async def test_request_summary_flag(
@@ -299,7 +299,7 @@ class TestRequestSummaryFlag:
 
 
 class TestNonMemberSendMessage:
-    """TC-10.6: 非项目成员发送消息→403"""
+    """MVP-10.6: 非项目成员发送消息→403"""
 
     @pytest.mark.asyncio
     async def test_non_member_send_message(
@@ -347,7 +347,7 @@ class TestNonMemberSendMessage:
 
 
 class TestMessageErrorPaths:
-    """TC-10.7: 消息发送错误路径"""
+    """MVP-10.7: 消息发送错误路径"""
 
     @pytest.mark.asyncio
     async def test_empty_content(

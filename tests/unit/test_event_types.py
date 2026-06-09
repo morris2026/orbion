@@ -1,14 +1,14 @@
-"""TC-2.2~TC-2.4：Event模型、EventType枚举、EventPayload schema测试"""
+"""MVP-2.2~MVP-2.4：Event模型、EventType枚举、EventPayload schema测试"""
 
 import pytest
 from pydantic import ValidationError
 
 
 class TestEventModel:
-    """TC-2.2：Event模型校验"""
+    """MVP-2.2：Event模型校验"""
 
     def test_tc2_2_event_valid_creation(self) -> None:
-        """TC-2.2：正常创建Event实例"""
+        """MVP-2.2：正常创建Event实例"""
         from app.hub.events.types import Event
 
         event = Event(
@@ -25,7 +25,7 @@ class TestEventModel:
         assert event.participant_type == "human"
 
     def test_tc2_2_event_project_id_required(self) -> None:
-        """TC-2.2：project_id缺失报错"""
+        """MVP-2.2：project_id缺失报错"""
         from app.hub.events.types import Event
 
         with pytest.raises(ValidationError):
@@ -39,7 +39,7 @@ class TestEventModel:
             )  # type: ignore[call-arg]
 
     def test_tc2_2_event_participant_type_invalid(self) -> None:
-        """TC-2.2：participant_type不在human/agent范围报错"""
+        """MVP-2.2：participant_type不在human/agent范围报错"""
         from app.hub.events.types import Event
 
         with pytest.raises(ValidationError):
@@ -54,7 +54,7 @@ class TestEventModel:
             )
 
     def test_tc2_2_event_varchar_max_length(self) -> None:
-        """TC-2.2：VARCHAR字段超长报错（与event_log表约束对齐）"""
+        """MVP-2.2：VARCHAR字段超长报错（与event_log表约束对齐）"""
         from app.hub.events.types import (
             EVENT_PARTICIPANT_ID_MAX_LEN,
             EVENT_PROJECT_ID_MAX_LEN,
@@ -96,7 +96,7 @@ class TestEventModel:
             )
 
     def test_tc2_2_event_payload_default_empty_dict(self) -> None:
-        """TC-2.2：payload默认为空dict"""
+        """MVP-2.2：payload默认为空dict"""
         from app.hub.events.types import Event
 
         event = Event(
@@ -111,10 +111,10 @@ class TestEventModel:
 
 
 class TestEventTypeEnum:
-    """TC-2.3：EventType枚举完整性"""
+    """MVP-2.3：EventType枚举完整性"""
 
     def test_tc2_3_all_11_event_types_exist(self) -> None:
-        """TC-2.3：11个MVP事件类型全部存在"""
+        """MVP-2.3：11个MVP事件类型全部存在"""
         from app.hub.events.types import EventType
 
         expected_types = [
@@ -135,7 +135,7 @@ class TestEventTypeEnum:
         assert set(expected_types) == set(actual_names), f"缺少事件类型: {set(expected_types) - set(actual_names)}"
 
     def test_tc2_3_event_type_values_match_names(self) -> None:
-        """TC-2.3：EventType枚举值与字符串名称一致"""
+        """MVP-2.3：EventType枚举值与字符串名称一致"""
         from app.hub.events.types import EventType
 
         for et in EventType:
@@ -143,10 +143,10 @@ class TestEventTypeEnum:
 
 
 class TestDiscussionMessageCreatedPayload:
-    """TC-2.4.1：DiscussionMessageCreated payload"""
+    """MVP-2.4.1：DiscussionMessageCreated payload"""
 
     def test_tc2_4_1_valid_creation(self) -> None:
-        """TC-2.4.1：正常创建"""
+        """MVP-2.4.1：正常创建"""
         from app.hub.events.types import DiscussionMessageCreatedPayload
 
         payload = DiscussionMessageCreatedPayload(thread_id="t-1", content="hello")
@@ -156,35 +156,35 @@ class TestDiscussionMessageCreatedPayload:
         assert payload.message_id == ""
 
     def test_tc2_4_1_thread_id_required(self) -> None:
-        """TC-2.4.1：thread_id缺失报错"""
+        """MVP-2.4.1：thread_id缺失报错"""
         from app.hub.events.types import DiscussionMessageCreatedPayload
 
         with pytest.raises(ValidationError):
             DiscussionMessageCreatedPayload(content="hello")  # type: ignore[call-arg]
 
     def test_tc2_4_1_content_required(self) -> None:
-        """TC-2.4.1：content缺失报错"""
+        """MVP-2.4.1：content缺失报错"""
         from app.hub.events.types import DiscussionMessageCreatedPayload
 
         with pytest.raises(ValidationError):
             DiscussionMessageCreatedPayload(thread_id="t-1")  # type: ignore[call-arg]
 
     def test_tc2_4_1_content_non_str_type(self) -> None:
-        """TC-2.4.1：content非str类型报错"""
+        """MVP-2.4.1：content非str类型报错"""
         from app.hub.events.types import DiscussionMessageCreatedPayload
 
         with pytest.raises(ValidationError):
             DiscussionMessageCreatedPayload(thread_id="t-1", content=123)  # type: ignore[arg-type]
 
     def test_tc2_4_1_request_summary_default_false(self) -> None:
-        """TC-2.4.1：request_summary默认false"""
+        """MVP-2.4.1：request_summary默认false"""
         from app.hub.events.types import DiscussionMessageCreatedPayload
 
         payload = DiscussionMessageCreatedPayload(thread_id="t-1", content="hello")
         assert payload.request_summary is False
 
     def test_tc2_4_1_message_id_default_empty(self) -> None:
-        """TC-2.4.1：message_id默认空字符串"""
+        """MVP-2.4.1：message_id默认空字符串"""
         from app.hub.events.types import DiscussionMessageCreatedPayload
 
         payload = DiscussionMessageCreatedPayload(thread_id="t-1", content="hello", message_id="m-1")
@@ -192,10 +192,10 @@ class TestDiscussionMessageCreatedPayload:
 
 
 class TestDiscussionSummaryGeneratedPayload:
-    """TC-2.4.2：DiscussionSummaryGenerated payload"""
+    """MVP-2.4.2：DiscussionSummaryGenerated payload"""
 
     def test_tc2_4_2_valid_creation(self) -> None:
-        """TC-2.4.2：正常创建"""
+        """MVP-2.4.2：正常创建"""
         from app.hub.events.types import DiscussionSummaryGeneratedPayload
 
         payload = DiscussionSummaryGeneratedPayload(
@@ -210,7 +210,7 @@ class TestDiscussionSummaryGeneratedPayload:
         assert payload.consensus_points == ["共识1"]
 
     def test_tc2_4_2_consensus_points_required(self) -> None:
-        """TC-2.4.2：consensus_points缺失报错"""
+        """MVP-2.4.2：consensus_points缺失报错"""
         from app.hub.events.types import DiscussionSummaryGeneratedPayload
 
         with pytest.raises(ValidationError):
@@ -223,7 +223,7 @@ class TestDiscussionSummaryGeneratedPayload:
             )
 
     def test_tc2_4_2_list_int_type_error(self) -> None:
-        """TC-2.4.2：传入list[int]类型报错"""
+        """MVP-2.4.2：传入list[int]类型报错"""
         from app.hub.events.types import DiscussionSummaryGeneratedPayload
 
         with pytest.raises(ValidationError):
@@ -238,10 +238,10 @@ class TestDiscussionSummaryGeneratedPayload:
 
 
 class TestExecutionPlanProposedPayload:
-    """TC-2.4.3：ExecutionPlanProposed payload"""
+    """MVP-2.4.3：ExecutionPlanProposed payload"""
 
     def test_tc2_4_3_valid_creation(self) -> None:
-        """TC-2.4.3：正常创建"""
+        """MVP-2.4.3：正常创建"""
         from app.hub.events.types import ExecutionPlanProposedPayload, PlanTaskItem
 
         payload = ExecutionPlanProposedPayload(
@@ -260,7 +260,7 @@ class TestExecutionPlanProposedPayload:
         assert payload.plan_id == "p-1"
 
     def test_tc2_4_3_plan_id_required(self) -> None:
-        """TC-2.4.3：plan_id缺失报错"""
+        """MVP-2.4.3：plan_id缺失报错"""
         from app.hub.events.types import ExecutionPlanProposedPayload, PlanTaskItem
 
         with pytest.raises(ValidationError):
@@ -278,7 +278,7 @@ class TestExecutionPlanProposedPayload:
             )
 
     def test_tc2_4_3_thread_id_required(self) -> None:
-        """TC-2.4.3：thread_id缺失报错"""
+        """MVP-2.4.3：thread_id缺失报错"""
         from app.hub.events.types import ExecutionPlanProposedPayload, PlanTaskItem
 
         with pytest.raises(ValidationError):
@@ -296,7 +296,7 @@ class TestExecutionPlanProposedPayload:
             )
 
     def test_tc2_4_3_task_priority_invalid(self) -> None:
-        """TC-2.4.3：priority非法值报错"""
+        """MVP-2.4.3：priority非法值报错"""
         from app.hub.events.types import PlanTaskItem
 
         with pytest.raises(ValidationError):
@@ -310,10 +310,10 @@ class TestExecutionPlanProposedPayload:
 
 
 class TestExecutionPlanApprovedPayload:
-    """TC-2.4.4：ExecutionPlanApproved payload"""
+    """MVP-2.4.4：ExecutionPlanApproved payload"""
 
     def test_tc2_4_4_valid_creation(self) -> None:
-        """TC-2.4.4：正常创建"""
+        """MVP-2.4.4：正常创建"""
         from app.hub.events.types import ExecutionPlanApprovedPayload
 
         payload = ExecutionPlanApprovedPayload(plan_id="p-1", approved_tasks=["task-1"])
@@ -322,14 +322,14 @@ class TestExecutionPlanApprovedPayload:
         assert payload.modifications is None
 
     def test_tc2_4_4_approved_tasks_required(self) -> None:
-        """TC-2.4.4：approved_tasks缺失报错"""
+        """MVP-2.4.4：approved_tasks缺失报错"""
         from app.hub.events.types import ExecutionPlanApprovedPayload
 
         with pytest.raises(ValidationError):
             ExecutionPlanApprovedPayload(plan_id="p-1")  # type: ignore[call-arg]
 
     def test_tc2_4_4_modifications_optional(self) -> None:
-        """TC-2.4.4：modifications选填，默认None"""
+        """MVP-2.4.4：modifications选填，默认None"""
         from app.hub.events.types import ExecutionPlanApprovedPayload
 
         payload = ExecutionPlanApprovedPayload(plan_id="p-1", approved_tasks=["task-1"])
@@ -344,24 +344,24 @@ class TestExecutionPlanApprovedPayload:
 
 
 class TestExecutionPlanRejectedPayload:
-    """TC-2.4.5：ExecutionPlanRejected payload"""
+    """MVP-2.4.5：ExecutionPlanRejected payload"""
 
     def test_tc2_4_5_valid_creation(self) -> None:
-        """TC-2.4.5：正常创建"""
+        """MVP-2.4.5：正常创建"""
         from app.hub.events.types import ExecutionPlanRejectedPayload
 
         payload = ExecutionPlanRejectedPayload(plan_id="p-1", reason="不满意", suggestions=["修改建议1"])
         assert payload.reason == "不满意"
 
     def test_tc2_4_5_reason_required(self) -> None:
-        """TC-2.4.5：reason缺失报错"""
+        """MVP-2.4.5：reason缺失报错"""
         from app.hub.events.types import ExecutionPlanRejectedPayload
 
         with pytest.raises(ValidationError):
             ExecutionPlanRejectedPayload(suggestions=["修改建议1"], plan_id="p-1")  # type: ignore[call-arg]
 
     def test_tc2_4_5_suggestions_required(self) -> None:
-        """TC-2.4.5：suggestions缺失报错"""
+        """MVP-2.4.5：suggestions缺失报错"""
         from app.hub.events.types import ExecutionPlanRejectedPayload
 
         with pytest.raises(ValidationError):
@@ -369,10 +369,10 @@ class TestExecutionPlanRejectedPayload:
 
 
 class TestTaskOutputGeneratedPayload:
-    """TC-2.4.6：TaskOutputGenerated payload"""
+    """MVP-2.4.6：TaskOutputGenerated payload"""
 
     def test_tc2_4_6_valid_creation(self) -> None:
-        """TC-2.4.6：正常创建"""
+        """MVP-2.4.6：正常创建"""
         from app.hub.events.types import TaskOutputGeneratedPayload
 
         payload = TaskOutputGeneratedPayload(
@@ -387,7 +387,7 @@ class TestTaskOutputGeneratedPayload:
         assert payload.diff is None
 
     def test_tc2_4_6_required_fields(self) -> None:
-        """TC-2.4.6：task_id/plan_id/output_id/output_type/content必填"""
+        """MVP-2.4.6：task_id/plan_id/output_id/output_type/content必填"""
         from app.hub.events.types import TaskOutputGeneratedPayload
 
         with pytest.raises(ValidationError):
@@ -397,7 +397,7 @@ class TestTaskOutputGeneratedPayload:
             )
 
     def test_tc2_4_6_output_type_invalid(self) -> None:
-        """TC-2.4.6：output_type非法值报错"""
+        """MVP-2.4.6：output_type非法值报错"""
         from app.hub.events.types import TaskOutputGeneratedPayload
 
         with pytest.raises(ValidationError):
@@ -410,7 +410,7 @@ class TestTaskOutputGeneratedPayload:
             )
 
     def test_tc2_4_6_diff_optional(self) -> None:
-        """TC-2.4.6：diff选填（output_type=code时）"""
+        """MVP-2.4.6：diff选填（output_type=code时）"""
         from app.hub.events.types import TaskOutputGeneratedPayload
 
         payload = TaskOutputGeneratedPayload(
@@ -424,7 +424,7 @@ class TestTaskOutputGeneratedPayload:
         assert payload.diff == "diff内容"
 
     def test_tc2_4_6_file_paths_optional(self) -> None:
-        """TC-2.4.6：file_paths选填"""
+        """MVP-2.4.6：file_paths选填"""
         from app.hub.events.types import TaskOutputGeneratedPayload
 
         payload = TaskOutputGeneratedPayload(
@@ -439,10 +439,10 @@ class TestTaskOutputGeneratedPayload:
 
 
 class TestTaskOutputApprovedPayload:
-    """TC-2.4.7：TaskOutputApproved payload"""
+    """MVP-2.4.7：TaskOutputApproved payload"""
 
     def test_tc2_4_7_valid_creation(self) -> None:
-        """TC-2.4.7：正常创建"""
+        """MVP-2.4.7：正常创建"""
         from app.hub.events.types import TaskOutputApprovedPayload
 
         payload = TaskOutputApprovedPayload(output_id="o-1")
@@ -450,14 +450,14 @@ class TestTaskOutputApprovedPayload:
         assert payload.feedback is None
 
     def test_tc2_4_7_output_id_required(self) -> None:
-        """TC-2.4.7：output_id必填"""
+        """MVP-2.4.7：output_id必填"""
         from app.hub.events.types import TaskOutputApprovedPayload
 
         with pytest.raises(ValidationError):
             TaskOutputApprovedPayload()  # type: ignore[call-arg]
 
     def test_tc2_4_7_feedback_optional(self) -> None:
-        """TC-2.4.7：feedback选填，默认None"""
+        """MVP-2.4.7：feedback选填，默认None"""
         from app.hub.events.types import TaskOutputApprovedPayload
 
         payload = TaskOutputApprovedPayload(output_id="o-1", feedback="做得不错")
@@ -465,10 +465,10 @@ class TestTaskOutputApprovedPayload:
 
 
 class TestTaskOutputRevisionRequestedPayload:
-    """TC-2.4.8：TaskOutputRevisionRequested payload"""
+    """MVP-2.4.8：TaskOutputRevisionRequested payload"""
 
     def test_tc2_4_8_valid_creation(self) -> None:
-        """TC-2.4.8：正常创建"""
+        """MVP-2.4.8：正常创建"""
         from app.hub.events.types import TaskOutputRevisionRequestedPayload
 
         payload = TaskOutputRevisionRequestedPayload(
@@ -480,7 +480,7 @@ class TestTaskOutputRevisionRequestedPayload:
         assert payload.output_id == "o-1"
 
     def test_tc2_4_8_required_fields(self) -> None:
-        """TC-2.4.8：output_id/task_id/issues/suggestions必填"""
+        """MVP-2.4.8：output_id/task_id/issues/suggestions必填"""
         from app.hub.events.types import TaskOutputRevisionRequestedPayload
 
         with pytest.raises(ValidationError):
@@ -497,24 +497,24 @@ class TestTaskOutputRevisionRequestedPayload:
 
 
 class TestMemberAddedPayload:
-    """TC-2.4.9：MemberAdded payload — 纯领域字段roles"""
+    """MVP-2.4.9：MemberAdded payload — 纯领域字段roles"""
 
     def test_tc2_4_9_valid_creation(self) -> None:
-        """TC-2.4.9：正常创建"""
+        """MVP-2.4.9：正常创建"""
         from app.hub.events.types import MemberAddedPayload
 
         payload = MemberAddedPayload(roles=["owner"])
         assert payload.roles == ["owner"]
 
     def test_tc2_4_9_roles_default_empty_list(self) -> None:
-        """TC-2.4.9：roles默认空列表"""
+        """MVP-2.4.9：roles默认空列表"""
         from app.hub.events.types import MemberAddedPayload
 
         payload = MemberAddedPayload()
         assert payload.roles == []
 
     def test_tc2_4_9_roles_with_multiple_values(self) -> None:
-        """TC-2.4.9：roles支持多个角色"""
+        """MVP-2.4.9：roles支持多个角色"""
         from app.hub.events.types import MemberAddedPayload
 
         payload = MemberAddedPayload(roles=["owner", "member"])

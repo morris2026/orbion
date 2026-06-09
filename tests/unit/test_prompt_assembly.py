@@ -79,11 +79,11 @@ def _make_history_event(
     )
 
 
-# -- TC-13.1: system_prompt组装 --
+# -- MVP-13.1: system_prompt组装 --
 
 
 async def test_tc13_1_system_prompt() -> None:
-    """TC-13.1: 从AgentDeclaration取role/goal/backstory→组装system_prompt
+    """MVP-13.1: 从AgentDeclaration取role/goal/backstory→组装system_prompt
     system_prompt含role/goal/backstory三段内容
     """
     bus = InProcessEventBus()
@@ -101,11 +101,11 @@ async def test_tc13_1_system_prompt() -> None:
     assert "你是一个讨论总结 Agent" in prompt.system_prompt
 
 
-# -- TC-13.2: history从correlation_id事件链获取 --
+# -- MVP-13.2: history从correlation_id事件链获取 --
 
 
 async def test_tc13_2_history_from_correlation() -> None:
-    """TC-13.2: mock EventStore返回事件列表→转换为EventSummary
+    """MVP-13.2: mock EventStore返回事件列表→转换为EventSummary
     human→role="user"，agent→role="assistant"；字段正确
     """
     bus = InProcessEventBus()
@@ -133,11 +133,11 @@ async def test_tc13_2_history_from_correlation() -> None:
     assert "第一条总结" in h2.content
 
 
-# -- TC-13.3: task描述转换规则 --
+# -- MVP-13.3: task描述转换规则 --
 
 
 async def test_tc13_3_task_conversion() -> None:
-    """TC-13.3: 4种事件payload→转换为task描述"""
+    """MVP-13.3: 4种事件payload→转换为task描述"""
     bus = InProcessEventBus()
     store = MockEventStore()
     adapter = AsyncMock()
@@ -162,11 +162,11 @@ async def test_tc13_3_task_conversion() -> None:
     assert "修改意见" in task_revision
 
 
-# -- TC-13.4: PromptInput合并 --
+# -- MVP-13.4: PromptInput合并 --
 
 
 async def test_tc13_4_prompt_input_merge() -> None:
-    """TC-13.4: 组装7步各部分→合并为PromptInput
+    """MVP-13.4: 组装7步各部分→合并为PromptInput
     system_prompt/context(memory=空)/task/history字段齐全
     """
     bus = InProcessEventBus()
@@ -192,11 +192,11 @@ async def test_tc13_4_prompt_input_merge() -> None:
     assert len(prompt.history) >= 1
 
 
-# -- TC-13.5: mock ModelAdapter→产出解析→新事件构建 --
+# -- MVP-13.5: mock ModelAdapter→产出解析→新事件构建 --
 
 
 async def test_tc13_5_output_to_new_event() -> None:
-    """TC-13.5: dispatch→mock ModelAdapter→产出→新事件构建
+    """MVP-13.5: dispatch→mock ModelAdapter→产出→新事件构建
     event_type与AgentDeclaration.output_event_type一致；
     correlation_id继承触发事件；causation_id指向触发事件event_id；
     payload内容与ModelOutput对应
@@ -296,11 +296,11 @@ async def test_publish_output_json_array_fallback_to_content() -> None:
     assert new_event.payload["content"] == '["a", "b"]'
 
 
-# -- TC-13.6: ClaudeAdapter调用格式 --
+# -- MVP-13.6: ClaudeAdapter调用格式 --
 
 
 async def test_tc13_6_claude_adapter_format() -> None:
-    """TC-13.6: 构建PromptInput→ClaudeAdapter._build_system/_build_messages
+    """MVP-13.6: 构建PromptInput→ClaudeAdapter._build_system/_build_messages
     system含role/goal/backstory+memory+context；
     messages含history(user/assistant映射)+task(user role)
     """
@@ -347,11 +347,11 @@ async def test_tc13_6_claude_adapter_format() -> None:
     assert messages[-1]["content"] == "请总结以下讨论"
 
 
-# -- TC-13.6补充: memory/context为空时不添加段落 --
+# -- MVP-13.6补充: memory/context为空时不添加段落 --
 
 
 async def test_tc13_6_empty_memory_context() -> None:
-    """TC-13.6补充: memory/context为空时，_build_system不添加段落标题"""
+    """MVP-13.6补充: memory/context为空时，_build_system不添加段落标题"""
     adapter = ClaudeAdapter(api_key="sk-test-key")
 
     prompt = PromptInput(
