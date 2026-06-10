@@ -13,22 +13,14 @@ describe('CreateProjectDialog', () => {
     localStorage.clear()
   })
 
-  describe('MVP-UI-5.1: 正常创建（含自动创建默认线程）', () => {
-    it('输入名称+描述 → 提交 → onCreateProject收到数据；自动创建默认线程→onSelectThread收到ID', async () => {
+  describe('MVP-UI-5.1: 正常创建（含默认线程ID）', () => {
+    it('输入名称+描述 → 提交 → onCreateProject收到含default_thread_id的数据；onSelectThread收到项目ID和默认线程ID', async () => {
       const user = userEvent.setup()
       const onCreateProject = vi.fn()
       const onSelectThread = vi.fn()
       const onClose = vi.fn()
 
-      vi.spyOn(apiModule, 'apiPost').mockImplementation((path: string, body: unknown) => {
-        if (path === '/projects') {
-          return Promise.resolve({ id: 'new-proj', name: '新项目', description: '新描述', role: 'owner', default_thread_id: 'dt-new', created_at: '' })
-        }
-        if (path.includes('/threads')) {
-          return Promise.resolve({ id: 'dt-new', title: '新项目', status: 'active', type: 'discussion', has_summary: false, pending_plan_count: 0, message_count: 0, created_at: '' })
-        }
-        return Promise.reject(new Error('未知路径'))
-      })
+      vi.spyOn(apiModule, 'apiPost').mockResolvedValue({ id: 'new-proj', name: '新项目', description: '新描述', role: 'owner', default_thread_id: 'dt-new', created_at: '' })
 
       render(<CreateProjectDialog open={true} onClose={onClose} onCreateProject={onCreateProject} onSelectThread={onSelectThread} />)
 
@@ -37,37 +29,31 @@ describe('CreateProjectDialog', () => {
       await user.click(screen.getByRole('button', { name: /创建/i }))
 
       await waitFor(() => {
-        expect(onCreateProject).toHaveBeenCalledWith({ name: '新项目', description: '新描述' })
+        expect(onCreateProject).toHaveBeenCalledWith({ id: 'new-proj', name: '新项目', description: '新描述', role: 'owner', default_thread_id: 'dt-new', created_at: '' })
         expect(onSelectThread).toHaveBeenCalledWith('new-proj', 'dt-new')
+        expect(onClose).toHaveBeenCalled()
       })
     })
   })
 
-  describe('MVP-UI-5.2: 自动创建默认线程失败', () => {
-    it('创建项目成功 → 创建默认线程API失败 → onClose未调用，onCreateProject被调用（项目已存在）', async () => {
+  describe('MVP-UI-5.2: 同名项目409', () => {
+    it('创建项目API返回409 → Dialog显示错误提示，不关闭', async () => {
       const user = userEvent.setup()
       const onClose = vi.fn()
       const onCreateProject = vi.fn()
       const onSelectThread = vi.fn()
 
-      vi.spyOn(apiModule, 'apiPost').mockImplementation((path: string) => {
-        if (path === '/projects') {
-          return Promise.resolve({ id: 'new-proj', name: '新项目', description: null, role: 'owner', default_thread_id: 'dt-new', created_at: '' })
-        }
-        return Promise.reject(new apiModule.ApiError(500, '服务器错误'))
-      })
+      vi.spyOn(apiModule, 'apiPost').mockRejectedValue(new apiModule.ApiError(409, '项目名称已存在'))
 
       render(<CreateProjectDialog open={true} onClose={onClose} onCreateProject={onCreateProject} onSelectThread={onSelectThread} />)
 
-      await user.type(screen.getByLabelText(/项目名称/i), '新项目')
+      await user.type(screen.getByLabelText(/项目名称/i), '已存在的项目')
       await user.click(screen.getByRole('button', { name: /创建/i }))
 
       await waitFor(() => {
-        expect(screen.getByText(/失败/i)).toBeInTheDocument()
+        expect(screen.getByText(/项目名称已存在/i)).toBeInTheDocument()
       })
-      // 项目已在后端创建成功，应通知父组件
-      expect(onCreateProject).toHaveBeenCalled()
-      // 默认线程创建失败，不应调用onSelectThread
+      expect(onCreateProject).not.toHaveBeenCalled()
       expect(onSelectThread).not.toHaveBeenCalled()
       expect(onClose).not.toHaveBeenCalled()
     })
@@ -91,25 +77,23 @@ describe('CreateProjectDialog', () => {
   })
 
   describe('MVP-UI-5.5: 描述可选', () => {
-    it('只输入名称 → 提交成功，description=null', async () => {
+    it('只输入名称 → 提交成功，default_thread_id从响应中获取', async () => {
       const user = userEvent.setup()
       const onCreateProject = vi.fn()
+      const onSelectThread = vi.fn()
       const onClose = vi.fn()
 
-      vi.spyOn(apiModule, 'apiPost').mockImplementation((path: string) => {
-        if (path === '/projects') {
-          return Promise.resolve({ id: 'p1', name: '只名称', description: null, role: 'owner', default_thread_id: 'dt1', created_at: '' })
-        }
-        return Promise.resolve({ id: 'dt1', title: '只名称', status: 'active', type: 'discussion', has_summary: false, pending_plan_count: 0, message_count: 0, created_at: '' })
-      })
+      vi.spyOn(apiModule, 'apiPost').mockResolvedValue({ id: 'p1', name: '只名称', description: null, role: 'owner', default_thread_id: 'dt1', created_at: '' })
 
-      render(<CreateProjectDialog open={true} onClose={onClose} onCreateProject={onCreateProject} onSelectThread={vi.fn()} />)
+      render(<CreateProjectDialog open={true} onClose={onClose} onCreateProject={onCreateProject} onSelectThread={onSelectThread} />)
 
       await user.type(screen.getByLabelText(/项目名称/i), '只名称')
       await user.click(screen.getByRole('button', { name: /创建/i }))
 
       await waitFor(() => {
-        expect(onCreateProject).toHaveBeenCalledWith({ name: '只名称', description: null })
+        expect(onCreateProject).toHaveBeenCalledWith({ id: 'p1', name: '只名称', description: null, role: 'owner', default_thread_id: 'dt1', created_at: '' })
+        expect(onSelectThread).toHaveBeenCalledWith('p1', 'dt1')
+        expect(onClose).toHaveBeenCalled()
       })
     })
   })
@@ -139,7 +123,7 @@ describe('CreateThreadDialog', () => {
 
       await waitFor(() => {
         expect(apiModule.apiPost).toHaveBeenCalledWith('/projects/proj-1/threads', { title: '新线程', type: 'discussion' })
-        expect(onCreateThread).toHaveBeenCalledWith('proj-1', { title: '新线程', type: 'discussion' })
+        expect(onCreateThread).toHaveBeenCalledWith('proj-1', { id: 't-new', title: '新线程', status: 'active', type: 'discussion', has_summary: false, pending_plan_count: 0, message_count: 0, created_at: '' })
       })
     })
   })

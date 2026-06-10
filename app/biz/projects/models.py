@@ -3,12 +3,20 @@
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class ProjectCreate(BaseModel):
-    name: str = Field(min_length=1, max_length=128)
+    name: str = Field(max_length=128)
     description: str | None = None
+
+    @field_validator("name")
+    @classmethod
+    def strip_name(cls, v: str) -> str:
+        v = v.strip()
+        if len(v) < 1:
+            raise ValueError("项目名称不能为空")
+        return v
 
 
 class ProjectResponse(BaseModel):
@@ -16,6 +24,7 @@ class ProjectResponse(BaseModel):
     name: str
     description: str | None
     tenant_id: str = "default"
+    default_thread_id: str | None = None
     created_at: datetime
 
 
@@ -24,6 +33,7 @@ class ProjectListItem(BaseModel):
     name: str
     description: str | None
     role: str
+    default_thread_id: str | None = None
     created_at: datetime
 
 

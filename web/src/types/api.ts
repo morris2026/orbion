@@ -5,7 +5,7 @@ export interface ProjectListItem {
   name: string
   description: string | null
   role: string
-  default_thread_id?: string
+  default_thread_id: string | null
   created_at: string
 }
 

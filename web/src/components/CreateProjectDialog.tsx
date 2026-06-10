@@ -10,12 +10,12 @@ import {
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { apiPost, ApiError } from '@/lib/api'
-import type { CreateProjectRequest, ProjectListItem, ThreadListItem } from '@/types/api'
+import type { ProjectListItem } from '@/types/api'
 
 interface CreateProjectDialogProps {
   open: boolean
   onClose: () => void
-  onCreateProject: (req: CreateProjectRequest) => void
+  onCreateProject: (project: ProjectListItem) => void
   onSelectThread: (projectId: string, threadId: string) => void
 }
 
@@ -32,24 +32,16 @@ export default function CreateProjectDialog({ open, onClose, onCreateProject, on
     setSubmitting(true)
     setError(null)
     try {
+      // 后端原子创建项目+默认线程，响应含default_thread_id
       const newProject: ProjectListItem = await apiPost('/projects', {
         name: name.trim(),
         description: description.trim() || null,
       })
-      // 创建项目后自动创建默认线程
-      try {
-        const defaultThread: ThreadListItem = await apiPost(`/projects/${newProject.id}/threads`, {
-          title: newProject.name,
-          type: 'discussion',
-        })
-        onCreateProject({ name: name.trim(), description: description.trim() || null })
-        onSelectThread(newProject.id, defaultThread.id)
-        onClose()
-      } catch {
-        // 默认线程失败——项目已在后端存在，通知父组件但不关闭Dialog
-        onCreateProject({ name: name.trim(), description: description.trim() || null })
-        setError('项目创建成功，但默认线程创建失败')
+      onCreateProject(newProject)
+      if (newProject.default_thread_id) {
+        onSelectThread(newProject.id, newProject.default_thread_id)
       }
+      onClose()
     } catch (e) {
       if (e instanceof ApiError) {
         setError(`创建失败：${e.detail}`)
@@ -66,7 +58,7 @@ export default function CreateProjectDialog({ open, onClose, onCreateProject, on
       <DialogContent>
         <DialogHeader>
           <DialogTitle>新建项目</DialogTitle>
-          <DialogDescription>创建一个新项目并自动生成默认讨论线程</DialogDescription>
+          <DialogDescription>创建一个新项目，后端将自动创建默认讨论线程</DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
           <div>

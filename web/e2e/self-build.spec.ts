@@ -41,7 +41,10 @@ async function loginAs(page, username: string, password: string) {
   await page.waitForURL(/\/workspace/)
 }
 
-/** 辅助：创建项目（唯一名称，避免跨test数据冲突） */
+/** 辅助：创建项目（唯一名称，避免跨test数据冲突）
+ * Why: createProject的projection异步添加creator为member+default thread，
+ * 后续API调用（members/threads）必须等projection完成才能返回正确数据。
+ */
 async function createProject(page, suffix: string) {
   const name = `E2E项目_${suffix}_${Date.now()}`
   const headers = await authHeaders(page)
@@ -51,7 +54,17 @@ async function createProject(page, suffix: string) {
   })
   expect(response.ok()).toBeTruthy()
   const project = await response.json()
-  return { ...project, name }
+
+  // 等待projection完成：members API能返回数据
+  for (let attempt = 0; attempt < 10; attempt++) {
+    const membersResp = await page.request.get(`/projects/${project.id}/members`, { headers })
+    if (membersResp.ok()) {
+      const members = await membersResp.json()
+      if (members.length > 0) return { ...project, name }
+    }
+    await page.waitForTimeout(500)
+  }
+  throw new Error(`project members projection not ready after 5s for project ${project.id}`)
 }
 
 /** 辅助：注册3种agent到项目（summary/decompose/execute）
@@ -190,7 +203,7 @@ test.describe('自我构建9点验证', () => {
     const project = await createProject(page, '21_1')
     expect(project.id).toBeTruthy()
 
-    // 创建者自动成为Owner — 通过成员列表API验证
+    // 创建者自动成为Owner — 通过成员列表API验证（createProject已等投影完成）
     const headers = await authHeaders(page)
     const membersResp = await page.request.get(`/projects/${project.id}/members`, { headers })
     expect(membersResp.ok()).toBeTruthy()
