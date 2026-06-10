@@ -65,7 +65,7 @@ class PostgresThreadRead(ThreadReadProtocol):
                ) AS message_count
                FROM threads t
                WHERE t.project_id = $1
-               ORDER BY t.created_at DESC""",
+               ORDER BY t.title ASC""",
             uuid.UUID(project_id),
         )
         results = [_row_to_dict(r) for r in rows]

@@ -90,9 +90,11 @@ export default function ProjectTree({
             </Tooltip>
           </div>
 
-          {/* 项目列表 */}
-          {projects.map((project) => {
-            const projectThreads = threads.filter((t) => t.project_id === project.id && t.id !== (project.default_thread_id ?? ''))
+          {/* 项目列表——按名称排序 */}
+          {[...projects].sort((a, b) => a.name.localeCompare(b.name)).map((project) => {
+            const projectThreads = threads
+              .filter((t) => t.project_id === project.id && t.id !== (project.default_thread_id ?? ''))
+              .sort((a, b) => a.title.localeCompare(b.title))
             const projectUnread = projectUnreadCount(projectThreads, selectedThreadId)
             const isSelected = selectedProjectId === project.id
             const isExpanded = expandedProjects.has(project.id)

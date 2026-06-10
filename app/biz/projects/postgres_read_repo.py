@@ -40,7 +40,7 @@ class PostgresProjectRead(ProjectReadProtocol):
                FROM projects p
                JOIN project_members pm ON pm.project_id = p.id
                WHERE pm.participant_id = $1 AND pm.type = 'human'
-               ORDER BY p.created_at DESC, p.id""",
+               ORDER BY p.name ASC, p.id""",
             user_id,
         )
         results = [_row_to_dict(r) for r in rows]

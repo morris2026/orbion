@@ -92,7 +92,7 @@ export default function Workspace({ workspaceOptions }: WorkspaceProps) {
         open={showCreateProject}
         onClose={() => setShowCreateProject(false)}
         onCreateProject={(project) => {
-          ws.setProjects((prev) => [...prev, project])
+          ws.setProjects((prev) => [...prev, project].sort((a, b) => a.name.localeCompare(b.name)))
           ws.setSelectedProjectId(project.id)
         }}
         onSelectThread={(projectId, threadId) => {
@@ -107,7 +107,7 @@ export default function Workspace({ workspaceOptions }: WorkspaceProps) {
             projectId={dialogProjectId}
             onClose={() => setShowCreateThread(false)}
             onCreateThread={(projectId, thread) => {
-              ws.setThreads((prev) => [...prev, thread])
+              ws.setThreads((prev) => [...prev, thread].sort((a, b) => a.title.localeCompare(b.title)))
               ws.setSelectedProjectId(projectId)
               ws.setSelectedThreadId(thread.id)
             }}

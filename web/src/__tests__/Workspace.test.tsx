@@ -357,24 +357,29 @@ describe('useWorkspace: 重启后加载已有数据', () => {
     vi.unstubAllGlobals()
   })
 
-  it('无initialState时通过API加载项目列表', async () => {
-    const existingProjects: ProjectListItem[] = [
-      { id: 'proj-1', name: '已有项目', description: '描述', role: 'owner', default_thread_id: 'dt-1', created_at: '2024-01-01T00:00:00Z' },
-      { id: 'proj-2', name: '另一项目', description: null, role: 'member', default_thread_id: 'dt-2', created_at: '2024-01-02T00:00:00Z' },
+  it('无initialState时通过API加载项目列表并按名称排序', async () => {
+    const unsortedProjects: ProjectListItem[] = [
+      { id: 'proj-2', name: 'Zeta项目', description: null, role: 'member', default_thread_id: 'dt-2', created_at: '2024-01-02T00:00:00Z' },
+      { id: 'proj-1', name: 'Alpha项目', description: '描述', role: 'owner', default_thread_id: 'dt-1', created_at: '2024-01-01T00:00:00Z' },
     ]
+    const sortedProjects = [...unsortedProjects].sort((a, b) => a.name.localeCompare(b.name))
 
     vi.spyOn(authModule, 'isAuthenticated').mockReturnValue(true)
     vi.spyOn(authModule, 'isTokenExpired').mockReturnValue(false)
     vi.spyOn(sseModule, 'createSSEConnection').mockImplementation(() => ({ close: vi.fn() } as unknown as EventSource))
     vi.spyOn(sseModule, 'disconnectSSE').mockImplementation(() => {})
-    vi.spyOn(apiModule, 'apiGet').mockResolvedValue(existingProjects)
+    // apiGet按URL区分：/projects返回项目列表，/projects/:id/threads返回空线程
+    vi.spyOn(apiModule, 'apiGet').mockImplementation((url: string) => {
+      if (url === '/projects') return Promise.resolve(unsortedProjects)
+      return Promise.resolve([])
+    })
 
     const { result } = renderHook(() => useWorkspace())
 
     expect(result.current.projects).toEqual([])
 
     await waitFor(() => {
-      expect(result.current.projects).toEqual(existingProjects)
+      expect(result.current.projects).toEqual(sortedProjects)
     })
 
     expect(apiModule.apiGet).toHaveBeenCalledWith('/projects')
@@ -791,6 +796,48 @@ describe('MVP-UI-4.x: ProjectTree组件', () => {
       const proj2Container = screen.getByTestId('project-proj-2')
       expect(proj2Container.textContent).toContain('线程B')
       expect(proj2Container.textContent).not.toContain('线程A')
+    })
+  })
+
+  describe('MVP-UI-4.17: 字母序排序', () => {
+    it('项目按名称字母序排列', () => {
+      const unsortedProjects: ProjectListItem[] = [
+        { id: 'proj-3', name: 'Zeta项目', description: null, role: 'owner', default_thread_id: 'dt-3', created_at: '2024-03-01T00:00:00Z' },
+        { id: 'proj-2', name: 'Beta项目', description: null, role: 'member', default_thread_id: 'dt-2', created_at: '2024-02-01T00:00:00Z' },
+        { id: 'proj-1', name: 'Alpha项目', description: '描述', role: 'owner', default_thread_id: 'dt-1', created_at: '2024-01-01T00:00:00Z' },
+      ]
+      render(<ProjectTree {...treeProps} projects={unsortedProjects} />)
+
+      // 渲染顺序应为 Alpha → Beta → Zeta
+      // 用textContent定位项目节点顺序——检查项目名称在DOM中的出现顺序
+      const projectNames = unsortedProjects.map(p => p.name).sort((a, b) => a.localeCompare(b))
+      const container = screen.getByText('Orbion').closest('.p-4')!
+      // Alpha出现在Zeta之前
+      const alphaIndex = container.textContent!.indexOf(projectNames[0])
+      const betaIndex = container.textContent!.indexOf(projectNames[1])
+      const zetaIndex = container.textContent!.indexOf(projectNames[2])
+      expect(alphaIndex).toBeLessThan(betaIndex)
+      expect(betaIndex).toBeLessThan(zetaIndex)
+    })
+
+    it('线程按标题字母序排列', async () => {
+      const unsortedThreads: ThreadListItem[] = [
+        { id: 'dt-1', project_id: 'proj-1', title: '默认1', status: 'active', type: 'discussion', has_summary: false, pending_plan_count: 0, message_count: 0, created_at: '2024-01-01T00:00:00Z' },
+        { id: 't3', project_id: 'proj-1', title: '线程Z', status: 'active', type: 'discussion', has_summary: false, pending_plan_count: 0, message_count: 0, created_at: '2024-03-01T00:00:00Z' },
+        { id: 't1', project_id: 'proj-1', title: '线程A', status: 'active', type: 'discussion', has_summary: false, pending_plan_count: 0, message_count: 0, created_at: '2024-01-01T00:00:00Z' },
+        { id: 't2', project_id: 'proj-1', title: '线程B', status: 'active', type: 'discussion', has_summary: false, pending_plan_count: 0, message_count: 0, created_at: '2024-02-01T00:00:00Z' },
+        { id: 'dt-2', project_id: 'proj-2', title: '默认2', status: 'active', type: 'discussion', has_summary: false, pending_plan_count: 0, message_count: 0, created_at: '2024-01-02T00:00:00Z' },
+      ]
+      // proj-1默认展开（selectedProjectId='proj-1'）
+      render(<ProjectTree {...treeProps} threads={unsortedThreads} />)
+
+      // proj-1下的非默认线程按标题排序：线程A → 线程B → 线程Z
+      const proj1Container = screen.getByTestId('project-proj-1')
+      const threadNodes = proj1Container.querySelectorAll('[data-testid^="thread-"]')
+      expect(threadNodes.length).toBe(3)
+      expect(threadNodes[0]).toHaveAttribute('data-testid', 'thread-t1') // 线程A
+      expect(threadNodes[1]).toHaveAttribute('data-testid', 'thread-t2') // 线程B
+      expect(threadNodes[2]).toHaveAttribute('data-testid', 'thread-t3') // 线程Z
     })
   })
 })
