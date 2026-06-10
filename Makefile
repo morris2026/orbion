@@ -1,4 +1,4 @@
-.PHONY: format lint lint-fix type test test-front test-integration test-all test-random test-e2e db-init audit check clean clean-all docker-up docker-down staging staging-clean staging-down staging-logs
+.PHONY: format lint lint-fix type type-front test test-front test-integration test-all test-random test-e2e db-init audit check clean clean-all docker-up docker-down staging staging-clean staging-down staging-logs
 
 format:
 	.venv/bin/ruff format app/ tests/
@@ -11,6 +11,9 @@ lint-fix:
 
 type:
 	.venv/bin/mypy app/ tests/
+
+type-front:
+	cd web && npx tsc --noEmit
 
 test:
 	.venv/bin/python -m pytest tests/unit/ --cov=app --cov-fail-under=80
@@ -39,15 +42,15 @@ db-init:
 audit:
 	.venv/bin/pip-audit
 
-check: format lint type test-all test-front audit
+check: format lint type type-front test-all test-front audit
 
 docker-up:
-	docker compose up -d
+	docker compose -p orbion-dev -f docker-compose.dev.yml up -d
 
 docker-down:
-	docker compose down
+	docker compose -p orbion-dev -f docker-compose.dev.yml down
 
-clean:
+clean: docker-down
 	find app/ tests/ -type d -name __pycache__ -exec rm -rf {} +
 	rm -rf .pytest_cache/ .ruff_cache/ .mypy_cache/ htmlcov/ .coverage node_modules/
 
@@ -61,7 +64,7 @@ staging-clean:
 	bash scripts/deploy-staging.sh --clean
 
 staging-down:
-	docker compose -f docker-compose.staging.yml down
+	docker compose -p orbion-staging -f docker-compose.staging.yml down
 
 staging-logs:
-	docker compose -f docker-compose.staging.yml logs -f
+	docker compose -p orbion-staging -f docker-compose.staging.yml logs -f
