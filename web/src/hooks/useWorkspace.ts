@@ -110,7 +110,7 @@ export function useWorkspace(options?: UseWorkspaceOptions) {
     if (init?.projects) return
     apiGet<ProjectListItem[]>('/projects')
       .then((projects) => {
-        setProjects(projects)
+        setProjects([...projects].sort((a, b) => a.name.localeCompare(b.name)))
         // 并行加载所有项目的线程
         Promise.all(
           projects.map((p) =>
@@ -118,7 +118,7 @@ export function useWorkspace(options?: UseWorkspaceOptions) {
               .catch(() => [] as ThreadListItem[])
           )
         ).then((results) => {
-          setThreads(results.flat())
+          setThreads(results.flat().sort((a, b) => a.title.localeCompare(b.title)))
         })
       })
       .catch(() => {})
@@ -234,7 +234,7 @@ export function useWorkspace(options?: UseWorkspaceOptions) {
   const handleCreateProject = useCallback(
     (req: CreateProjectRequest) => {
       apiPost<ProjectListItem>('/projects', req).then((newProject) => {
-        setProjects((prev) => [...prev, newProject])
+        setProjects((prev) => [...prev, newProject].sort((a, b) => a.name.localeCompare(b.name)))
       }).catch(() => {})
     },
     []
@@ -245,7 +245,7 @@ export function useWorkspace(options?: UseWorkspaceOptions) {
     (req: CreateThreadRequest) => {
       if (!selectedProjectId) return
       apiPost<ThreadListItem>(`/projects/${selectedProjectId}/threads`, req).then((newThread) => {
-        setThreads((prev) => [...prev, newThread])
+        setThreads((prev) => [...prev, newThread].sort((a, b) => a.title.localeCompare(b.title)))
         setSelectedThreadId(newThread.id)
       }).catch(() => {})
     },
