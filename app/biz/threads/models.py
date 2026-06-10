@@ -21,6 +21,7 @@ class ThreadResponse(BaseModel):
 
 class ThreadListItem(BaseModel):
     id: str
+    project_id: str
     title: str
     status: str
     type: str

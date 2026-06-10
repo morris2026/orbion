@@ -11,6 +11,7 @@ export interface ProjectListItem {
 
 export interface ThreadListItem {
   id: string
+  project_id: string
   title: string
   status: 'active' | 'archived' | 'resolved'
   type: string

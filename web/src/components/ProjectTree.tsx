@@ -1,6 +1,6 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import type { ProjectListItem, ThreadListItem } from '@/types/api'
-import { PlusIcon, UserPlusIcon, BotIcon } from 'lucide-react'
+import { PlusIcon, UserPlusIcon, BotIcon, ChevronRightIcon, ChevronDownIcon } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { ScrollArea } from '@/components/ui/scroll-area'
@@ -11,7 +11,7 @@ interface ProjectTreeProps {
   threads: ThreadListItem[]
   selectedProjectId: string | null
   selectedThreadId: string | null
-  onSelectThread: (threadId: string) => void
+  onSelectThread: (threadId: string | null) => void
   onSelectProject: (projectId: string) => void
   onCreateProject: () => void
   onCreateThread: (projectId: string) => void
@@ -21,10 +21,10 @@ interface ProjectTreeProps {
 
 /** 计算项目的总未读数，排除当前选中线程的未读 */
 function projectUnreadCount(
-  allThreads: ThreadListItem[],
+  threads: ThreadListItem[],
   selectedThreadId: string | null,
 ): number {
-  return allThreads.reduce(
+  return threads.reduce(
     (sum, t) => sum + (t.id === selectedThreadId ? 0 : (t.unread_count ?? 0)),
     0,
   )
@@ -46,6 +46,15 @@ export default function ProjectTree({
   // 用 JS state 统一控制按钮可见性
   const [hoveredProjectId, setHoveredProjectId] = useState<string | null>(null)
   const [openTooltipProjectId, setOpenTooltipProjectId] = useState<string | null>(null)
+  const [expandedProjects, setExpandedProjects] = useState<Set<string>>(
+    new Set(selectedProjectId ? [selectedProjectId] : [])
+  )
+  // 外部选中项目时自动展开
+  useEffect(() => {
+    if (selectedProjectId && !expandedProjects.has(selectedProjectId)) {
+      setExpandedProjects((prev) => new Set([...prev, selectedProjectId]))
+    }
+  }, [selectedProjectId])
 
   if (projects.length === 0) {
     return (
@@ -66,12 +75,6 @@ export default function ProjectTree({
     )
   }
 
-  const selectedProject = projects.find((p) => p.id === selectedProjectId)
-  // 选中项目的非默认线程（子线程）
-  const childThreads = selectedProject
-    ? threads.filter((t) => t.id !== (selectedProject.default_thread_id ?? ''))
-    : []
-
   return (
     <TooltipProvider delay={0}>
       <ScrollArea className="h-full">
@@ -89,25 +92,43 @@ export default function ProjectTree({
 
           {/* 项目列表 */}
           {projects.map((project) => {
-            const projectUnread = projectUnreadCount(selectedProjectId === project.id ? threads : [], selectedThreadId)
+            const projectThreads = threads.filter((t) => t.project_id === project.id && t.id !== (project.default_thread_id ?? ''))
+            const projectUnread = projectUnreadCount(projectThreads, selectedThreadId)
+            const isSelected = selectedProjectId === project.id
+            const isExpanded = expandedProjects.has(project.id)
             return (
               <div
                 key={project.id}
                 data-testid={`project-${project.id}`}
-                data-selected={selectedProjectId === project.id ? 'true' : undefined}
+                data-selected={isSelected ? 'true' : undefined}
               >
                 {/* 项目节点 */}
                 <div
-                  className={`flex items-center justify-between p-2 rounded cursor-pointer transition-colors ${selectedProjectId === project.id && !selectedThreadId ? 'bg-accent' : 'hover:bg-muted'}`}
+                  className={`flex items-center justify-between p-2 rounded cursor-pointer transition-colors ${isSelected && selectedThreadId === project.default_thread_id ? 'bg-accent' : 'hover:bg-muted'}`}
                   onClick={() => {
                     onSelectProject(project.id)
                     const dtId = project.default_thread_id ?? ''
                     if (dtId) onSelectThread(dtId)
+                    // 切换折叠
+                    setExpandedProjects((prev) => {
+                      const next = new Set(prev)
+                      if (isExpanded) {
+                        next.delete(project.id)
+                      } else {
+                        next.add(project.id)
+                      }
+                      return next
+                    })
                   }}
                   onMouseEnter={() => setHoveredProjectId(project.id)}
                   onMouseLeave={() => setHoveredProjectId(null)}
                 >
                   <div className="flex items-center gap-2">
+                    {projectThreads.length > 0
+                      ? isExpanded
+                        ? <ChevronDownIcon className="h-4 w-4 shrink-0" />
+                        : <ChevronRightIcon className="h-4 w-4 shrink-0" />
+                      : <span className="h-4 w-4 shrink-0" />}
                     <span className="text-sm font-medium">{project.name}</span>
                     {/* 项目级未读聚合：非选中项目显示蓝色圆点 */}
                     {projectUnread > 0 && (
@@ -137,10 +158,10 @@ export default function ProjectTree({
                   </div>
                 </div>
 
-                {/* 选中项目的子线程 */}
-                {selectedProjectId === project.id && childThreads.length > 0 && (
+                {/* 展开项目的子线程 */}
+                {isExpanded && projectThreads.length > 0 && (
                   <div className="ml-4 space-y-1">
-                    {childThreads.map((thread) => {
+                    {projectThreads.map((thread) => {
                       const uc = thread.unread_count ?? 0
                       const showUnread = uc > 0 && selectedThreadId !== thread.id
                       return (
@@ -150,7 +171,7 @@ export default function ProjectTree({
                           data-selected={selectedThreadId === thread.id ? 'true' : undefined}
                           data-unread={showUnread ? 'true' : undefined}
                           className={`flex items-center justify-between p-2 rounded cursor-pointer transition-colors ${selectedThreadId === thread.id ? 'bg-accent' : 'hover:bg-muted'}`}
-                          onClick={() => onSelectThread(thread.id)}
+                          onClick={() => { onSelectProject(thread.project_id); onSelectThread(thread.id) }}
                         >
                           <div className="flex items-center gap-2">
                             <span className="text-sm">{thread.title}</span>
