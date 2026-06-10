@@ -15,10 +15,12 @@ import type { UseWorkspaceOptions } from '@/hooks/useWorkspace'
 import { useWorkspace } from '@/hooks/useWorkspace'
 import type { ProjectListItem, ThreadListItem } from '@/types/api'
 
-/** mock线程数据 */
+/** mock线程数据（含project_id和默认线程） */
 const mockThreads: ThreadListItem[] = [
-  { id: 't1', title: '线程1', status: 'active', type: 'discussion', has_summary: true, pending_plan_count: 2, message_count: 5, unread_count: 3, created_at: '2024-01-01T00:00:00Z' },
-  { id: 't2', title: '线程2', status: 'active', type: 'discussion', has_summary: false, pending_plan_count: 0, message_count: 3, unread_count: 0, created_at: '2024-01-02T00:00:00Z' },
+  { id: 'dt-1', project_id: 'proj-1', title: '默认线程1', status: 'active', type: 'discussion', has_summary: false, pending_plan_count: 0, message_count: 0, unread_count: 0, created_at: '2024-01-01T00:00:00Z' },
+  { id: 't1', project_id: 'proj-1', title: '线程1', status: 'active', type: 'discussion', has_summary: true, pending_plan_count: 2, message_count: 5, unread_count: 3, created_at: '2024-01-01T00:00:00Z' },
+  { id: 't2', project_id: 'proj-1', title: '线程2', status: 'active', type: 'discussion', has_summary: false, pending_plan_count: 0, message_count: 3, unread_count: 0, created_at: '2024-01-02T00:00:00Z' },
+  { id: 'dt-2', project_id: 'proj-2', title: '默认线程2', status: 'active', type: 'discussion', has_summary: false, pending_plan_count: 0, message_count: 0, unread_count: 0, created_at: '2024-01-02T00:00:00Z' },
 ]
 
 /** mock项目数据 */
@@ -462,8 +464,8 @@ describe('MVP-UI-4.x: ProjectTree组件', () => {
     })
   })
 
-  describe('MVP-UI-4.3: 点击项目选中默认线程', () => {
-    it('点击项目 → onSelectProject和onSelectThread分别收到项目ID和默认线程ID', async () => {
+  describe('MVP-UI-4.3: 点击项目选中项目和默认线程', () => {
+    it('点击项目 → onSelectProject收到项目ID，onSelectThread收到默认线程ID', async () => {
       const user = userEvent.setup()
       const onSelectThread = vi.fn()
       const onSelectProject = vi.fn()
@@ -476,13 +478,15 @@ describe('MVP-UI-4.x: ProjectTree组件', () => {
   })
 
   describe('MVP-UI-4.4: 点击子线程', () => {
-    it('点击线程 → onSelectThread收到线程ID', async () => {
+    it('点击线程 → onSelectThread收到线程ID，onSelectProject收到项目ID', async () => {
       const user = userEvent.setup()
       const onSelectThread = vi.fn()
-      render(<ProjectTree {...treeProps} onSelectThread={onSelectThread} />)
+      const onSelectProject = vi.fn()
+      render(<ProjectTree {...treeProps} onSelectThread={onSelectThread} onSelectProject={onSelectProject} />)
 
       await user.click(screen.getByText('线程1'))
       expect(onSelectThread).toHaveBeenCalledWith('t1')
+      expect(onSelectProject).toHaveBeenCalledWith('proj-1')
     })
   })
 
@@ -496,7 +500,7 @@ describe('MVP-UI-4.x: ProjectTree组件', () => {
 
     it('unread_count === 1 → 显示蓝色圆点', () => {
       const singleUnreadThreads: ThreadListItem[] = [
-        { id: 't1', title: '线程1', status: 'active', type: 'discussion', has_summary: false, pending_plan_count: 0, message_count: 0, unread_count: 1, created_at: '2024-01-01T00:00:00Z' },
+        { id: 't1', project_id: 'proj-1', title: '线程1', status: 'active', type: 'discussion', has_summary: false, pending_plan_count: 0, message_count: 0, unread_count: 1, created_at: '2024-01-01T00:00:00Z' },
       ]
       render(<ProjectTree {...treeProps} threads={singleUnreadThreads} />)
 
@@ -551,7 +555,7 @@ describe('MVP-UI-4.x: ProjectTree组件', () => {
     it('只有默认线程 → 不显示子节点', () => {
       // 提供包含默认线程的threads数组，默认线程不显示为子节点
       const onlyDefaultThreads: ThreadListItem[] = [
-        { id: 'dt-1', title: '默认线程', status: 'active', type: 'discussion', has_summary: false, pending_plan_count: 0, message_count: 0, unread_count: 0, created_at: '2024-01-01T00:00:00Z' },
+        { id: 'dt-1', project_id: 'proj-1', title: '默认线程', status: 'active', type: 'discussion', has_summary: false, pending_plan_count: 0, message_count: 0, unread_count: 0, created_at: '2024-01-01T00:00:00Z' },
       ]
       render(<ProjectTree {...treeProps} threads={onlyDefaultThreads} />)
 
@@ -653,6 +657,140 @@ describe('MVP-UI-4.x: ProjectTree组件', () => {
       // message_count
       expect(screen.getByText(/5.*消息/)).toBeInTheDocument()
       expect(screen.getByText(/3.*消息/)).toBeInTheDocument()
+    })
+  })
+
+  describe('MVP-UI-4.13: 选中高亮——点谁高亮谁', () => {
+    it('选中项目+默认线程 → 项目高亮（用户点了项目行）', () => {
+      render(<ProjectTree {...treeProps} selectedThreadId='dt-1' />)
+
+      const projectRow = screen.getByTestId('project-proj-1').firstElementChild!
+      expect(projectRow.className).toContain('bg-accent')
+    })
+
+    it('选中非默认线程 → 线程高亮，项目不高亮', () => {
+      render(<ProjectTree {...treeProps} selectedThreadId='t1' />)
+
+      const t1Row = screen.getByTestId('thread-t1')
+      expect(t1Row.className).toContain('bg-accent')
+
+      const projectRow = screen.getByTestId('project-proj-1').firstElementChild!
+      expect(projectRow.className).not.toContain('bg-accent')
+    })
+
+    it('未选中任何线程 → 项目不高亮', () => {
+      render(<ProjectTree {...treeProps} selectedThreadId={null} />)
+
+      const projectRow = screen.getByTestId('project-proj-1').firstElementChild!
+      expect(projectRow.className).not.toContain('bg-accent')
+    })
+  })
+
+  describe('MVP-UI-4.14: 折叠/展开——点击项目切换', () => {
+    it('点击项目 → 选中项目+切换折叠', async () => {
+      const user = userEvent.setup()
+      const onSelectProject = vi.fn()
+      render(<ProjectTree {...treeProps} selectedProjectId={null} selectedThreadId={null} onSelectProject={onSelectProject} />)
+
+      expect(screen.queryByText('线程1')).not.toBeInTheDocument()
+
+      await user.click(screen.getByText('项目Alpha'))
+      expect(onSelectProject).toHaveBeenCalledWith('proj-1')
+
+      // 展开后线程可见
+      await waitFor(() => {
+        expect(screen.getByText('线程1')).toBeInTheDocument()
+      })
+    })
+
+    it('再次点击项目 → 折叠，线程隐藏', async () => {
+      const user = userEvent.setup()
+      render(<ProjectTree {...treeProps} />)
+
+      expect(screen.getByText('线程1')).toBeInTheDocument()
+
+      await user.click(screen.getByText('项目Alpha'))
+
+      await waitFor(() => {
+        expect(screen.queryByText('线程1')).not.toBeInTheDocument()
+      })
+    })
+
+    it('点击项目B不影响项目A的折叠状态', async () => {
+      const user = userEvent.setup()
+      render(<ProjectTree {...treeProps} />)
+
+      expect(screen.getByText('线程1')).toBeInTheDocument()
+
+      await user.click(screen.getByText('项目Beta'))
+
+      // 项目A的线程仍然可见
+      expect(screen.getByText('线程1')).toBeInTheDocument()
+    })
+  })
+
+  describe('MVP-UI-4.15: 箭头显示条件', () => {
+    it('有非默认线程的项目 → 显示箭头', () => {
+      render(<ProjectTree {...treeProps} />)
+
+      // proj-1有t1/t2两个非默认线程 → 箭头存在
+      const proj1Chevrons = screen.getByTestId('project-proj-1').querySelectorAll('svg.shrink-0')
+      expect(proj1Chevrons.length).toBeGreaterThanOrEqual(1)
+    })
+
+    it('只有默认线程的项目 → 不显示箭头（显示占位）', () => {
+      const noExtraThreads: ThreadListItem[] = [
+        { id: 'dt-1', project_id: 'proj-1', title: '默认', status: 'active', type: 'discussion', has_summary: false, pending_plan_count: 0, message_count: 0, created_at: '2024-01-01T00:00:00Z' },
+        { id: 'dt-2', project_id: 'proj-2', title: '默认', status: 'active', type: 'discussion', has_summary: false, pending_plan_count: 0, message_count: 0, created_at: '2024-01-02T00:00:00Z' },
+      ]
+      render(<ProjectTree {...treeProps} threads={noExtraThreads} />)
+
+      // proj-1只有默认线程 → 无箭头svg，有占位span
+      const proj1Svgs = screen.getByTestId('project-proj-1').querySelectorAll('svg.shrink-0')
+      expect(proj1Svgs.length).toBe(0)
+
+      // 占位span存在（h-4 w-4）
+      const placeholder = screen.getByTestId('project-proj-1').querySelector('.h-4.w-4.shrink-0')
+      expect(placeholder).toBeInTheDocument()
+      expect(placeholder!.tagName).toBe('SPAN')
+    })
+  })
+
+  describe('MVP-UI-4.16: 线程按project_id过滤', () => {
+    it('线程只显示在所属项目下，不跨项目', async () => {
+      const crossProjectThreads: ThreadListItem[] = [
+        { id: 'dt-1', project_id: 'proj-1', title: '默认1', status: 'active', type: 'discussion', has_summary: false, pending_plan_count: 0, message_count: 0, created_at: '2024-01-01T00:00:00Z' },
+        { id: 't1', project_id: 'proj-1', title: '线程A', status: 'active', type: 'discussion', has_summary: false, pending_plan_count: 0, message_count: 0, created_at: '2024-01-01T00:00:00Z' },
+        { id: 'dt-2', project_id: 'proj-2', title: '默认2', status: 'active', type: 'discussion', has_summary: false, pending_plan_count: 0, message_count: 0, created_at: '2024-01-02T00:00:00Z' },
+        { id: 't3', project_id: 'proj-2', title: '线程B', status: 'active', type: 'discussion', has_summary: false, pending_plan_count: 0, message_count: 0, created_at: '2024-01-02T00:00:00Z' },
+      ]
+
+      // 展开两个项目
+      const user = userEvent.setup()
+      render(<ProjectTree {...treeProps} threads={crossProjectThreads} selectedProjectId={null} selectedThreadId={null} />)
+
+      // 展开proj-1
+      const proj1Arrow = screen.getByTestId('project-proj-1').querySelector('svg.shrink-0')
+      await user.click(proj1Arrow!)
+
+      // 展开proj-2
+      const proj2Arrow = screen.getByTestId('project-proj-2').querySelector('svg.shrink-0')
+      await user.click(proj2Arrow!)
+
+      // 线程A只在proj-1下，线程B只在proj-2下
+      await waitFor(() => {
+        expect(screen.getByText('线程A')).toBeInTheDocument()
+        expect(screen.getByText('线程B')).toBeInTheDocument()
+      })
+
+      // 确认线程A在proj-1的容器内，线程B在proj-2的容器内
+      const proj1Container = screen.getByTestId('project-proj-1')
+      expect(proj1Container.textContent).toContain('线程A')
+      expect(proj1Container.textContent).not.toContain('线程B')
+
+      const proj2Container = screen.getByTestId('project-proj-2')
+      expect(proj2Container.textContent).toContain('线程B')
+      expect(proj2Container.textContent).not.toContain('线程A')
     })
   })
 })
@@ -817,7 +955,7 @@ describe('MVP-UI-6.x: ProjectTree与Dialog联动', () => {
       vi.spyOn(sseModule, 'disconnectSSE').mockImplementation(() => {})
       vi.spyOn(apiModule, 'apiGet').mockResolvedValue([])
       vi.spyOn(apiModule, 'apiPost').mockResolvedValue({
-        id: 'thread-new', title: '新讨论线程', status: 'active', type: 'discussion',
+        id: 'thread-new', project_id: 'proj-1', title: '新讨论线程', status: 'active', type: 'discussion',
         has_summary: false, pending_plan_count: 0, message_count: 0, created_at: '',
       })
 

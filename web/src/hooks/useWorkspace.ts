@@ -105,22 +105,24 @@ export function useWorkspace(options?: UseWorkspaceOptions) {
   const selectedThreadIdRef = useRef(selectedThreadId)
   useEffect(() => { selectedThreadIdRef.current = selectedThreadId })
 
-  // 初始数据未注入时从API加载项目列表
+  // 初始数据未注入时从API加载项目列表，然后加载所有项目的线程
   useEffect(() => {
     if (init?.projects) return
     apiGet<ProjectListItem[]>('/projects')
-      .then(setProjects)
+      .then((projects) => {
+        setProjects(projects)
+        // 并行加载所有项目的线程
+        Promise.all(
+          projects.map((p) =>
+            apiGet<ThreadListItem[]>(`/projects/${p.id}/threads`)
+              .catch(() => [] as ThreadListItem[])
+          )
+        ).then((results) => {
+          setThreads(results.flat())
+        })
+      })
       .catch(() => {})
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
-
-  // 选中项目后加载线程（初始数据未注入时）
-  useEffect(() => {
-    if (!selectedProjectId) return
-    if (init?.threads && init?.selectedProjectId === selectedProjectId) return
-    apiGet<ThreadListItem[]>(`/projects/${selectedProjectId}/threads`)
-      .then(setThreads)
-      .catch(() => {})
-  }, [selectedProjectId]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // 选中线程后加载消息（初始数据未注入时）
   useEffect(() => {

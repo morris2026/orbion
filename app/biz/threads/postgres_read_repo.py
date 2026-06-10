@@ -50,7 +50,7 @@ class PostgresThreadRead(ThreadReadProtocol):
         """线程列表含聚合字段：has_summary、pending_plan_count、message_count"""
         pool = self._require_pool()
         rows = await pool.fetch(
-            """SELECT t.id, t.title, t.status, t.type, t.created_at,
+            """SELECT t.id, t.project_id, t.title, t.status, t.type, t.created_at,
                EXISTS(
                    SELECT 1 FROM thread_messages tm
                    WHERE tm.thread_id = t.id AND tm.event_type = 'DiscussionSummaryGenerated'
