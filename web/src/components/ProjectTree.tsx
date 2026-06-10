@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import type { ProjectListItem, ThreadListItem } from '@/types/api'
 import { PlusIcon, UserPlusIcon, BotIcon } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
@@ -41,6 +42,11 @@ export default function ProjectTree({
   onAddMember,
   onRegisterAgent,
 }: ProjectTreeProps) {
+  // tooltip hover 协调：CSS group-hover 无法感知 portaled tooltip 的打开状态，
+  // 用 JS state 统一控制按钮可见性
+  const [hoveredProjectId, setHoveredProjectId] = useState<string | null>(null)
+  const [openTooltipProjectId, setOpenTooltipProjectId] = useState<string | null>(null)
+
   if (projects.length === 0) {
     return (
       <TooltipProvider delay={0}>
@@ -92,12 +98,14 @@ export default function ProjectTree({
               >
                 {/* 项目节点 */}
                 <div
-                  className="flex items-center justify-between p-2 rounded cursor-pointer hover:bg-muted transition-colors group"
+                  className="flex items-center justify-between p-2 rounded cursor-pointer hover:bg-muted transition-colors"
                   onClick={() => {
                     onSelectProject(project.id)
                     const dtId = project.default_thread_id ?? ''
                     if (dtId) onSelectThread(dtId)
                   }}
+                  onMouseEnter={() => setHoveredProjectId(project.id)}
+                  onMouseLeave={() => setHoveredProjectId(null)}
                 >
                   <div className="flex items-center gap-2">
                     <span className="text-sm font-medium">{project.name}</span>
@@ -106,21 +114,21 @@ export default function ProjectTree({
                       <span className="inline-block h-2 w-2 rounded-full bg-blue-500" data-testid={`project-${project.id}-unread`} />
                     )}
                   </div>
-                  {/* 图标按钮组 */}
-                  <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <Tooltip>
+                  {/* 图标按钮组：JS state 控制可见性（hover 或 tooltip 打开时显示） */}
+                  <div className={`flex gap-1 transition-opacity ${hoveredProjectId === project.id || openTooltipProjectId === project.id ? 'opacity-100' : 'opacity-0'}`}>
+                    <Tooltip onOpenChange={(open) => { setOpenTooltipProjectId(open ? project.id : null) }}>
                       <TooltipTrigger render={<Button variant="ghost" size="icon" className="h-5 w-5" onClick={(e) => { e.stopPropagation(); onCreateThread(project.id) }} aria-label={`新建线程-${project.id}`} />}>
                           <PlusIcon className="h-3 w-3" />
                         </TooltipTrigger>
                       <TooltipContent>新建线程</TooltipContent>
                     </Tooltip>
-                    <Tooltip>
+                    <Tooltip onOpenChange={(open) => { setOpenTooltipProjectId(open ? project.id : null) }}>
                       <TooltipTrigger render={<Button variant="ghost" size="icon" className="h-5 w-5" onClick={(e) => { e.stopPropagation(); onAddMember(project.id) }} aria-label={`添加成员-${project.id}`} />}>
                           <UserPlusIcon className="h-3 w-3" />
                         </TooltipTrigger>
                       <TooltipContent>添加成员</TooltipContent>
                     </Tooltip>
-                    <Tooltip>
+                    <Tooltip onOpenChange={(open) => { setOpenTooltipProjectId(open ? project.id : null) }}>
                       <TooltipTrigger render={<Button variant="ghost" size="icon" className="h-5 w-5" onClick={(e) => { e.stopPropagation(); onRegisterAgent(project.id) }} aria-label={`注册Agent-${project.id}`} />}>
                           <BotIcon className="h-3 w-3" />
                         </TooltipTrigger>

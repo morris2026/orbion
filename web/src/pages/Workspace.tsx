@@ -1,9 +1,14 @@
+import { useState } from 'react'
 import { clearToken, getIsAdmin } from '@/lib/auth'
 import { useNavigate } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import ProjectTree from '@/components/ProjectTree'
 import DiscussionPanel from '@/components/DiscussionPanel'
 import ExecutionPanel from '@/components/ExecutionPanel'
+import CreateProjectDialog from '@/components/CreateProjectDialog'
+import CreateThreadDialog from '@/components/CreateThreadDialog'
+import AddMemberDialog from '@/components/AddMemberDialog'
+import RegisterAgentDialog from '@/components/RegisterAgentDialog'
 import { useWorkspace } from '@/hooks/useWorkspace'
 import type { UseWorkspaceOptions } from '@/hooks/useWorkspace'
 
@@ -15,9 +20,20 @@ export default function Workspace({ workspaceOptions }: WorkspaceProps) {
   const navigate = useNavigate()
   const ws = useWorkspace(workspaceOptions)
 
+  const [showCreateProject, setShowCreateProject] = useState(false)
+  const [showCreateThread, setShowCreateThread] = useState(false)
+  const [showAddMember, setShowAddMember] = useState(false)
+  const [showRegisterAgent, setShowRegisterAgent] = useState(false)
+  const [dialogProjectId, setDialogProjectId] = useState<string | null>(null)
+
   const handleLogout = () => {
     clearToken()
     navigate('/login')
+  }
+
+  const openProjectDialog = (setter: React.Dispatch<React.SetStateAction<boolean>>, projectId: string) => {
+    setDialogProjectId(projectId)
+    setter(true)
   }
 
   return (
@@ -31,11 +47,10 @@ export default function Workspace({ workspaceOptions }: WorkspaceProps) {
           selectedThreadId={ws.selectedThreadId}
           onSelectThread={ws.setSelectedThreadId}
           onSelectProject={ws.setSelectedProjectId}
-          // projectId将由Dialog收集后传入，当前用selectedProjectId作占位（步骤6修复）
-          onCreateProject={() => ws.handleCreateProject({ name: '', description: null })}
-          onCreateThread={(_projectId) => ws.handleCreateThread({ title: '', type: 'discussion' })}
-          onAddMember={(_projectId) => ws.handleAddMember({ user_id: '', role: 'member' })}
-          onRegisterAgent={(_projectId) => ws.handleRegisterAgent({ agent_type: 'summary', model_id: '', display_name: '' })}
+          onCreateProject={() => setShowCreateProject(true)}
+          onCreateThread={(projectId) => openProjectDialog(setShowCreateThread, projectId)}
+          onAddMember={(projectId) => openProjectDialog(setShowAddMember, projectId)}
+          onRegisterAgent={(projectId) => openProjectDialog(setShowRegisterAgent, projectId)}
         />
       </aside>
 
@@ -71,6 +86,46 @@ export default function Workspace({ workspaceOptions }: WorkspaceProps) {
           />
         </div>
       </aside>
+
+      {/* Dialogs */}
+      <CreateProjectDialog
+        open={showCreateProject}
+        onClose={() => setShowCreateProject(false)}
+        onCreateProject={(project) => {
+          ws.setProjects((prev) => [...prev, project])
+          ws.setSelectedProjectId(project.id)
+        }}
+        onSelectThread={(projectId, threadId) => {
+          ws.setSelectedProjectId(projectId)
+          ws.setSelectedThreadId(threadId)
+        }}
+      />
+      {dialogProjectId && (
+        <>
+          <CreateThreadDialog
+            open={showCreateThread}
+            projectId={dialogProjectId}
+            onClose={() => setShowCreateThread(false)}
+            onCreateThread={(projectId, thread) => {
+              ws.setThreads((prev) => [...prev, thread])
+              ws.setSelectedProjectId(projectId)
+              ws.setSelectedThreadId(thread.id)
+            }}
+          />
+          <AddMemberDialog
+            open={showAddMember}
+            projectId={dialogProjectId}
+            onClose={() => setShowAddMember(false)}
+            onAddMember={(projectId) => ws.setSelectedProjectId(projectId)}
+          />
+          <RegisterAgentDialog
+            open={showRegisterAgent}
+            projectId={dialogProjectId}
+            onClose={() => setShowRegisterAgent(false)}
+            onRegisterAgent={(projectId) => ws.setSelectedProjectId(projectId)}
+          />
+        </>
+      )}
     </div>
   )
 }

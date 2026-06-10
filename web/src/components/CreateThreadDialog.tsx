@@ -10,13 +10,13 @@ import {
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { apiPost, ApiError } from '@/lib/api'
-import type { CreateThreadRequest } from '@/types/api'
+import type { ThreadListItem } from '@/types/api'
 
 interface CreateThreadDialogProps {
   open: boolean
   projectId: string
   onClose: () => void
-  onCreateThread: (projectId: string, req: CreateThreadRequest) => void
+  onCreateThread: (projectId: string, thread: ThreadListItem) => void
 }
 
 export default function CreateThreadDialog({ open, projectId, onClose, onCreateThread }: CreateThreadDialogProps) {
@@ -31,11 +31,11 @@ export default function CreateThreadDialog({ open, projectId, onClose, onCreateT
     setSubmitting(true)
     setError(null)
     try {
-      await apiPost(`/projects/${projectId}/threads`, {
+      const newThread: ThreadListItem = await apiPost(`/projects/${projectId}/threads`, {
         title: title.trim(),
         type: 'discussion',
       })
-      onCreateThread(projectId, { title: title.trim(), type: 'discussion' })
+      onCreateThread(projectId, newThread)
       onClose()
     } catch (e) {
       if (e instanceof ApiError) {

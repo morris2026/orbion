@@ -132,10 +132,12 @@ class TaskOutputRevisionRequestedPayload(BaseModel):
 
 
 class ProjectCreatedPayload(BaseModel):
-    """ProjectCreated payload — 纯领域字段：项目名和描述"""
+    """ProjectCreated payload — 领域字段 + 默认线程数据"""
 
     name: str
     description: str | None = None
+    default_thread_id: str | None = None
+    default_thread_title: str | None = None
 
 
 class MemberAddedPayload(BaseModel):

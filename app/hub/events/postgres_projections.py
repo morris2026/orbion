@@ -64,7 +64,9 @@ class PostgresEventProjections(EventProjectionsProtocol):
         payload = event.payload
         async with pool.acquire() as conn:
             async with conn.transaction():
-                # MVP阶段暂不实现租户隔离，tenant_id由DB DEFAULT填充，投影handler不写入
+                default_thread_id = payload.get("default_thread_id")
+
+                # 步骤1：插入项目行（先不带default_thread_id，因threads.project_id FK依赖projects行）
                 await conn.execute(
                     "INSERT INTO projects (id, name, description, created_at) "
                     "VALUES ($1, $2, $3, $4) ON CONFLICT (id) DO NOTHING",
@@ -73,7 +75,7 @@ class PostgresEventProjections(EventProjectionsProtocol):
                     payload.get("description"),
                     event.created_at or datetime.now(UTC),
                 )
-                # creator 自动成为 owner member（原子事务，FK依赖在事务内解决）
+                # 步骤2：creator 自动成为 owner member
                 await conn.execute(
                     "INSERT INTO project_members "
                     "(participant_id, project_id, type, display_name, roles) "
@@ -85,6 +87,25 @@ class PostgresEventProjections(EventProjectionsProtocol):
                     event.participant_display_name,
                     HUMAN_ROLE_BITS["owner"],
                 )
+                # 步骤3：插入默认线程行（projects行已存在，threads.project_id FK满足）
+                if default_thread_id:
+                    default_thread_title = payload.get("default_thread_title", payload["name"])
+                    await conn.execute(
+                        "INSERT INTO threads (id, project_id, title, status, type, created_by, created_at) "
+                        "VALUES ($1, $2, $3, 'active', 'discussion', $4, $5) "
+                        "ON CONFLICT (id) DO NOTHING",
+                        UUID(default_thread_id),
+                        UUID(event.project_id),
+                        default_thread_title,
+                        event.participant_id,
+                        event.created_at or datetime.now(UTC),
+                    )
+                    # 步骤4：更新project行设置default_thread_id（threads行已存在）
+                    await conn.execute(
+                        "UPDATE projects SET default_thread_id = $1 WHERE id = $2",
+                        UUID(default_thread_id),
+                        UUID(event.project_id),
+                    )
 
     async def _on_message_created(self, event: Event) -> None:
         pool = self._require_pool()

@@ -37,7 +37,10 @@ async def create_project(
     service: ProjectService = Depends(_get_project_service),
 ) -> ProjectResponse:
     """创建项目，创建者自动成为Owner"""
-    project = await service.create_project(request.name, request.description, user)
+    try:
+        project = await service.create_project(request.name, request.description, user)
+    except ValueError as e:
+        raise HTTPException(status_code=409, detail=str(e))
     return ProjectResponse(**project)
 
 

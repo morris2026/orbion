@@ -10,6 +10,7 @@ import OutputDiff from '@/components/OutputDiff'
 import Workspace from '@/pages/Workspace'
 import * as sseModule from '@/lib/sse'
 import * as authModule from '@/lib/auth'
+import * as apiModule from '@/lib/api'
 import type { UseWorkspaceOptions } from '@/hooks/useWorkspace'
 import { useWorkspace } from '@/hooks/useWorkspace'
 import type { ProjectListItem, ThreadListItem } from '@/types/api'
@@ -532,6 +533,53 @@ describe('MVP-UI-4.x: ProjectTree组件', () => {
     })
   })
 
+  describe('MVP-UI-4.12: tooltip打开时按钮保持可见', () => {
+    it('hover按钮→按钮容器显示opacity-100（JS state控制）', async () => {
+      const user = userEvent.setup()
+      render(<ProjectTree {...treeProps} />)
+
+      const addMemberBtn = screen.getByRole('button', { name: /添加成员.*proj-1/i })
+      await user.hover(addMemberBtn)
+
+      // hover 触发 → hoveredProjectId = proj-1 → opacity-100
+      const buttonGroup = addMemberBtn.parentElement!
+      const classes = buttonGroup.className.split(' ')
+      expect(classes).toContain('opacity-100')
+      expect(classes).not.toContain('opacity-0')
+    })
+
+    it('未hover且无tooltip时按钮容器显示opacity-0', () => {
+      render(<ProjectTree {...treeProps} />)
+
+      const addMemberBtn = screen.getByRole('button', { name: /添加成员.*proj-1/i })
+      // 初始状态 → 无hover无tooltip → opacity-0
+      const buttonGroup = addMemberBtn.parentElement!
+      const classes = buttonGroup.className.split(' ')
+      expect(classes).toContain('opacity-0')
+      expect(classes).not.toContain('opacity-100')
+    })
+
+    it('hover后离开→tooltip关闭→按钮容器恢复opacity-0', async () => {
+      const user = userEvent.setup()
+      render(<ProjectTree {...treeProps} />)
+
+      const newThreadBtn = screen.getByRole('button', { name: /新建线程.*proj-1/i })
+      await user.hover(newThreadBtn)
+
+      // hover时按钮可见
+      const buttonGroup = newThreadBtn.parentElement!
+      expect(buttonGroup.className.split(' ')).toContain('opacity-100')
+
+      // 鼠标移到另一个项目 → tooltip关闭 → 恢复opacity-0
+      await user.hover(screen.getByText('项目Beta'))
+      await waitFor(() => {
+        expect(screen.queryByText('新建线程')).not.toBeInTheDocument()
+      })
+      expect(buttonGroup.className.split(' ')).toContain('opacity-0')
+      expect(buttonGroup.className.split(' ')).not.toContain('opacity-100')
+    })
+  })
+
   describe('MVP-20.1-更新: ThreadList→ProjectTree迁移', () => {
     it('has_summary/pending_plan/message_count在新组件中仍正确显示', () => {
       render(<ProjectTree {...treeProps} />)
@@ -549,6 +597,195 @@ describe('MVP-UI-4.x: ProjectTree组件', () => {
       // message_count
       expect(screen.getByText(/5.*消息/)).toBeInTheDocument()
       expect(screen.getByText(/3.*消息/)).toBeInTheDocument()
+    })
+  })
+})
+
+describe('MVP-UI-6.x: ProjectTree与Dialog联动', () => {
+  beforeEach(() => {
+    localStorage.clear()
+    vi.restoreAllMocks()
+    vi.unstubAllGlobals()
+  })
+
+  const baseInitialState: UseWorkspaceOptions = {
+    initialState: {
+      projects: mockProjects,
+      selectedProjectId: 'proj-1',
+      threads: mockThreads,
+      selectedThreadId: 'dt-1',
+      messages: mockMessages,
+      plans: [],
+      outputs: [],
+    },
+  }
+
+  describe('MVP-UI-6.1: 图标按钮→Dialog打开', () => {
+    it('点击➕新建项目按钮 → CreateProjectDialog打开', async () => {
+      const user = userEvent.setup()
+      vi.spyOn(authModule, 'isAuthenticated').mockReturnValue(true)
+      vi.spyOn(authModule, 'isTokenExpired').mockReturnValue(false)
+      vi.spyOn(authModule, 'getIsAdmin').mockReturnValue(false)
+      vi.spyOn(sseModule, 'createSSEConnection').mockReturnValue({ close: vi.fn() } as unknown as EventSource)
+      vi.spyOn(sseModule, 'disconnectSSE').mockImplementation(() => {})
+      vi.spyOn(apiModule, 'apiGet').mockResolvedValue([])
+
+      render(
+        <MemoryRouter>
+          <Workspace workspaceOptions={baseInitialState} />
+        </MemoryRouter>
+      )
+
+      // 点击顶部新建项目按钮
+      await user.click(screen.getByRole('button', { name: /新建项目/i }))
+
+      // CreateProjectDialog 应打开
+      await waitFor(() => {
+        expect(screen.getByText('新建项目')).toBeInTheDocument()
+        expect(screen.getByLabelText(/项目名称/i)).toBeInTheDocument()
+      })
+    })
+
+    it('点击➕新建线程按钮 → CreateThreadDialog打开', async () => {
+      const user = userEvent.setup()
+      vi.spyOn(authModule, 'isAuthenticated').mockReturnValue(true)
+      vi.spyOn(authModule, 'isTokenExpired').mockReturnValue(false)
+      vi.spyOn(authModule, 'getIsAdmin').mockReturnValue(false)
+      vi.spyOn(sseModule, 'createSSEConnection').mockReturnValue({ close: vi.fn() } as unknown as EventSource)
+      vi.spyOn(sseModule, 'disconnectSSE').mockImplementation(() => {})
+      vi.spyOn(apiModule, 'apiGet').mockResolvedValue([])
+
+      render(
+        <MemoryRouter>
+          <Workspace workspaceOptions={baseInitialState} />
+        </MemoryRouter>
+      )
+
+      // hover项目节点显示图标按钮，然后点击新建线程
+      await user.hover(screen.getByText('项目Alpha'))
+      await user.click(screen.getByRole('button', { name: /新建线程.*proj-1/i }))
+
+      // CreateThreadDialog 应打开
+      await waitFor(() => {
+        expect(screen.getByText('新建线程')).toBeInTheDocument()
+        expect(screen.getByLabelText(/线程标题/i)).toBeInTheDocument()
+      })
+    })
+
+    it('点击👤添加成员按钮 → AddMemberDialog打开', async () => {
+      const user = userEvent.setup()
+      vi.spyOn(authModule, 'isAuthenticated').mockReturnValue(true)
+      vi.spyOn(authModule, 'isTokenExpired').mockReturnValue(false)
+      vi.spyOn(authModule, 'getIsAdmin').mockReturnValue(false)
+      vi.spyOn(sseModule, 'createSSEConnection').mockReturnValue({ close: vi.fn() } as unknown as EventSource)
+      vi.spyOn(sseModule, 'disconnectSSE').mockImplementation(() => {})
+      vi.spyOn(apiModule, 'apiGet').mockResolvedValue([])
+
+      render(
+        <MemoryRouter>
+          <Workspace workspaceOptions={baseInitialState} />
+        </MemoryRouter>
+      )
+
+      await user.hover(screen.getByText('项目Alpha'))
+      await user.click(screen.getByRole('button', { name: /添加成员.*proj-1/i }))
+
+      await waitFor(() => {
+        expect(screen.getByText('添加成员')).toBeInTheDocument()
+      })
+    })
+
+    it('点击🤖注册Agent按钮 → RegisterAgentDialog打开', async () => {
+      const user = userEvent.setup()
+      vi.spyOn(authModule, 'isAuthenticated').mockReturnValue(true)
+      vi.spyOn(authModule, 'isTokenExpired').mockReturnValue(false)
+      vi.spyOn(authModule, 'getIsAdmin').mockReturnValue(false)
+      vi.spyOn(sseModule, 'createSSEConnection').mockReturnValue({ close: vi.fn() } as unknown as EventSource)
+      vi.spyOn(sseModule, 'disconnectSSE').mockImplementation(() => {})
+      vi.spyOn(apiModule, 'apiGet').mockResolvedValue([])
+
+      render(
+        <MemoryRouter>
+          <Workspace workspaceOptions={baseInitialState} />
+        </MemoryRouter>
+      )
+
+      await user.hover(screen.getByText('项目Alpha'))
+      await user.click(screen.getByRole('button', { name: /注册Agent.*proj-1/i }))
+
+      await waitFor(() => {
+        expect(screen.getByText('注册Agent')).toBeInTheDocument()
+      })
+    })
+  })
+
+  describe('MVP-UI-6.2: Dialog提交→SSE更新', () => {
+    it('CreateProjectDialog提交 → apiPost创建项目（含default_thread_id）', async () => {
+      const user = userEvent.setup()
+      vi.spyOn(authModule, 'isAuthenticated').mockReturnValue(true)
+      vi.spyOn(authModule, 'isTokenExpired').mockReturnValue(false)
+      vi.spyOn(authModule, 'getIsAdmin').mockReturnValue(false)
+      vi.spyOn(sseModule, 'createSSEConnection').mockReturnValue({ close: vi.fn() } as unknown as EventSource)
+      vi.spyOn(sseModule, 'disconnectSSE').mockImplementation(() => {})
+      vi.spyOn(apiModule, 'apiGet').mockResolvedValue([])
+      vi.spyOn(apiModule, 'apiPost').mockResolvedValue({ id: 'proj-new', name: '新测试项目', description: null, role: 'owner', default_thread_id: 'dt-new', created_at: '' })
+
+      render(
+        <MemoryRouter>
+          <Workspace workspaceOptions={baseInitialState} />
+        </MemoryRouter>
+      )
+
+      // 打开CreateProjectDialog
+      await user.click(screen.getByRole('button', { name: /新建项目/i }))
+      await waitFor(() => {
+        expect(screen.getByLabelText(/项目名称/i)).toBeInTheDocument()
+      })
+
+      // 输入并提交
+      await user.type(screen.getByLabelText(/项目名称/i), '新测试项目')
+      await user.click(screen.getByRole('button', { name: /^创建$/i }))
+
+      // apiPost应被调用创建项目
+      await waitFor(() => {
+        expect(apiModule.apiPost).toHaveBeenCalledWith('/projects', expect.objectContaining({ name: '新测试项目' }))
+      })
+    })
+
+    it('CreateThreadDialog提交 → apiPost创建线程+state更新', async () => {
+      const user = userEvent.setup()
+      vi.spyOn(authModule, 'isAuthenticated').mockReturnValue(true)
+      vi.spyOn(authModule, 'isTokenExpired').mockReturnValue(false)
+      vi.spyOn(authModule, 'getIsAdmin').mockReturnValue(false)
+      vi.spyOn(sseModule, 'createSSEConnection').mockReturnValue({ close: vi.fn() } as unknown as EventSource)
+      vi.spyOn(sseModule, 'disconnectSSE').mockImplementation(() => {})
+      vi.spyOn(apiModule, 'apiGet').mockResolvedValue([])
+      vi.spyOn(apiModule, 'apiPost').mockResolvedValue({
+        id: 'thread-new', title: '新讨论线程', status: 'active', type: 'discussion',
+        has_summary: false, pending_plan_count: 0, message_count: 0, created_at: '',
+      })
+
+      render(
+        <MemoryRouter>
+          <Workspace workspaceOptions={baseInitialState} />
+        </MemoryRouter>
+      )
+
+      // hover项目节点然后点击新建线程按钮
+      await user.hover(screen.getByText('项目Alpha'))
+      await user.click(screen.getByRole('button', { name: /新建线程.*proj-1/i }))
+      await waitFor(() => {
+        expect(screen.getByLabelText(/线程标题/i)).toBeInTheDocument()
+      })
+
+      // 输入并提交
+      await user.type(screen.getByLabelText(/线程标题/i), '新讨论线程')
+      await user.click(screen.getByRole('button', { name: /^创建$/i }))
+
+      // apiPost应被调用创建线程
+      await waitFor(() => {
+        expect(apiModule.apiPost).toHaveBeenCalledWith('/projects/proj-1/threads', expect.objectContaining({ title: '新讨论线程' }))
+      })
     })
   })
 })

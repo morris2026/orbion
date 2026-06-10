@@ -13,7 +13,7 @@ type:
 	.venv/bin/mypy app/ tests/
 
 type-front:
-	cd web && npx tsc --noEmit
+	cd web && npx tsc -b
 
 test:
 	.venv/bin/python -m pytest tests/unit/ --cov=app --cov-fail-under=80

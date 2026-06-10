@@ -11,6 +11,7 @@ from app.hub.events.store import EventStoreProtocol
 from app.hub.events.types import Event, EventType, MemberAddedPayload, ProjectCreatedPayload
 
 _MSG_MEMBER_EXISTS = "成员已在项目中"
+_MSG_PROJECT_EXISTS = "项目名称已存在"
 
 
 class ProjectService:
@@ -20,11 +21,21 @@ class ProjectService:
         self._read_repo = read_repo
 
     async def create_project(self, name: str, description: str | None, creator: User) -> dict[str, Any]:
-        """创建项目，创建者自动成为Owner — 从命令输入构造响应，不读投影表"""
+        """创建项目+默认线程，创建者自动成为Owner — 从命令输入构造响应，不读投影表"""
+        # best-effort前置检查（真实去重由DB UNIQUE兜底）
+        if await self._read_repo.check_project_name_exists(name):
+            raise ValueError(_MSG_PROJECT_EXISTS)
+
         project_id = str(uuid.uuid4())
+        thread_id = str(uuid.uuid4())
         now = datetime.now(UTC)
 
-        payload = ProjectCreatedPayload(name=name, description=description)
+        payload = ProjectCreatedPayload(
+            name=name,
+            description=description,
+            default_thread_id=thread_id,
+            default_thread_title=name,
+        )
         event = Event(
             event_id=str(uuid.uuid4()),
             project_id=project_id,
@@ -47,6 +58,7 @@ class ProjectService:
             "name": name,
             "description": description,
             "tenant_id": "default",
+            "default_thread_id": thread_id,
             "created_at": now,
         }
 

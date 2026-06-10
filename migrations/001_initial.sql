@@ -39,7 +39,9 @@ CREATE TABLE projects (
     name            VARCHAR(128) NOT NULL,
     description     TEXT         NULL,
     tenant_id       VARCHAR(64) NOT NULL DEFAULT 'default',
-    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    default_thread_id UUID      NULL,
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CONSTRAINT projects_name_unique UNIQUE (name)  -- 项目名全局唯一（DB兜底，service层前置检查返回409）
 );
 
 -- 4. project_members — 项目成员投影表
@@ -71,6 +73,9 @@ CREATE TABLE threads (
 );
 
 CREATE INDEX idx_threads_project ON threads (project_id, created_at DESC);
+
+-- 线程标题同项目内唯一（不同项目可同名）
+ALTER TABLE threads ADD CONSTRAINT threads_project_title_unique UNIQUE (project_id, title);
 
 -- 6. thread_messages — 线程消息投影表
 CREATE TABLE thread_messages (

@@ -228,7 +228,7 @@ export function useWorkspace(options?: UseWorkspaceOptions) {
     []
   )
 
-  // 创建项目
+  // 创建项目（非Dialog路径使用：Dialog路径由Dialog自己做API调用+回调更新state）
   const handleCreateProject = useCallback(
     (req: CreateProjectRequest) => {
       apiPost<ProjectListItem>('/projects', req).then((newProject) => {
@@ -238,7 +238,7 @@ export function useWorkspace(options?: UseWorkspaceOptions) {
     []
   )
 
-  // 创建线程
+  // 创建线程（非Dialog路径使用：Dialog路径由Dialog自己做API调用+回调更新state）
   const handleCreateThread = useCallback(
     (req: CreateThreadRequest) => {
       if (!selectedProjectId) return
@@ -288,8 +288,8 @@ export function useWorkspace(options?: UseWorkspaceOptions) {
   )
 
   return {
-    projects, selectedProjectId, setSelectedProjectId,
-    threads, selectedThreadId, setSelectedThreadId,
+    projects, setProjects, selectedProjectId, setSelectedProjectId,
+    threads, setThreads, selectedThreadId, setSelectedThreadId,
     messages, plans, outputs,
     handleSendMessage, handleApprovePlan, handleRejectPlan,
     handleCreateProject, handleCreateThread, handleRegisterAgent,

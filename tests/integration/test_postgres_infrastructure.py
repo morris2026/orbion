@@ -17,7 +17,7 @@ async def test_postgres_connection() -> None:
 
 
 async def test_postgres_migration_creates_tables_and_indexes() -> None:
-    """执行migrations/001_initial.sql，验证8张表和所有索引创建成功"""
+    """执行migrations/001，验证8张表和所有索引+约束创建成功"""
     settings = get_settings()
     conn = await asyncpg.connect(settings.postgres.url)
     try:
@@ -62,5 +62,18 @@ async def test_postgres_migration_creates_tables_and_indexes() -> None:
             "idx_task_outputs_status",
         }
         assert expected_indexes <= index_names, f"缺少索引: {expected_indexes - index_names}"
+
+        # 验证唯一约束
+        constraints = await conn.fetch(
+            "SELECT conname FROM pg_constraint WHERE conrelid = 'projects'::regclass OR conrelid = 'threads'::regclass"
+        )
+        constraint_names = {row["conname"] for row in constraints}
+        assert "projects_name_unique" in constraint_names
+        assert "threads_project_title_unique" in constraint_names
+
+        # 验证projects有default_thread_id列
+        columns = await conn.fetch("SELECT column_name FROM information_schema.columns WHERE table_name = 'projects'")
+        column_names = {row["column_name"] for row in columns}
+        assert "default_thread_id" in column_names
     finally:
         await conn.close()

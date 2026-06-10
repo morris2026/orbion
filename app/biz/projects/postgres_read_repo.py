@@ -36,7 +36,7 @@ class PostgresProjectRead(ProjectReadProtocol):
     async def list_projects(self, user_id: str) -> list[dict[str, Any]]:
         pool = self._require_pool()
         rows = await pool.fetch(
-            """SELECT p.id, p.name, p.description, p.created_at, pm.roles
+            """SELECT p.id, p.name, p.description, p.default_thread_id, p.created_at, pm.roles
                FROM projects p
                JOIN project_members pm ON pm.project_id = p.id
                WHERE pm.participant_id = $1 AND pm.type = 'human'
@@ -51,7 +51,7 @@ class PostgresProjectRead(ProjectReadProtocol):
     async def get_project(self, project_id: str, user_id: str) -> dict[str, Any] | None:
         pool = self._require_pool()
         row = await pool.fetchrow(
-            """SELECT p.id, p.name, p.description, p.tenant_id, p.created_at, pm.roles
+            """SELECT p.id, p.name, p.description, p.tenant_id, p.default_thread_id, p.created_at, pm.roles
                FROM projects p
                JOIN project_members pm ON pm.project_id = p.id
                WHERE p.id = $1 AND pm.participant_id = $2 AND pm.type = 'human'""",
@@ -88,6 +88,14 @@ class PostgresProjectRead(ProjectReadProtocol):
                 user_id,
                 uuid.UUID(project_id),
             )
+        return row is not None
+
+    async def check_project_name_exists(self, name: str) -> bool:
+        pool = self._require_pool()
+        row = await pool.fetchrow(
+            "SELECT 1 FROM projects WHERE name = $1",
+            name,
+        )
         return row is not None
 
     async def list_agents(self, project_id: str) -> list[dict[str, Any]]:

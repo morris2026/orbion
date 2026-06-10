@@ -34,7 +34,10 @@ async def create_thread(
     # 权限检查：项目成员才能创建线程
     if not await service.check_member_exists(project_id, user.id):
         raise HTTPException(status_code=403, detail="Not a project member")
-    thread = await service.create_thread(project_id, request.title, request.type, user)
+    try:
+        thread = await service.create_thread(project_id, request.title, request.type, user)
+    except ValueError as e:
+        raise HTTPException(status_code=409, detail=str(e))
     return ThreadResponse(**thread)
 
 

@@ -11,6 +11,8 @@ from app.hub.events.bus import EventBus
 from app.hub.events.store import EventStoreProtocol
 from app.hub.events.types import DiscussionMessageCreatedPayload, Event, EventType
 
+_MSG_THREAD_TITLE_EXISTS = "同项目下线程标题已存在"
+
 
 class ThreadService:
     def __init__(
@@ -27,6 +29,9 @@ class ThreadService:
 
     async def create_thread(self, project_id: str, title: str, type: str, creator: User) -> dict[str, Any]:
         """创建线程 — 直接写入threads表 + 发布DiscussionMessageCreated事件作为首条消息"""
+        # best-effort前置检查（真实去重由DB UNIQUE兜底）
+        if await self._thread_read.check_thread_title_exists(project_id, title):
+            raise ValueError(_MSG_THREAD_TITLE_EXISTS)
         thread_id = str(uuid.uuid4())
         now = datetime.now(UTC)
 

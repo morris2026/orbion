@@ -137,6 +137,16 @@ class PostgresThreadRead(ThreadReadProtocol):
         )
         return row is not None
 
+    async def check_thread_title_exists(self, project_id: str, title: str) -> bool:
+        """检查同项目下线程标题是否已存在"""
+        pool = self._require_pool()
+        row = await pool.fetchrow(
+            "SELECT 1 FROM threads WHERE project_id = $1 AND title = $2",
+            uuid.UUID(project_id),
+            title,
+        )
+        return row is not None
+
     async def get_thread_project_id(self, thread_id: str) -> str | None:
         """通过thread_id查找project_id — 消息端点路径不含project_id"""
         pool = self._require_pool()

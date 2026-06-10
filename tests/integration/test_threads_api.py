@@ -423,3 +423,47 @@ class TestMessageErrorPaths:
             headers={"Authorization": f"Bearer {user['token']}"},
         )
         assert resp.status_code == 404
+
+
+class TestThreadTitleUniqueness:
+    """同项目下线程标题唯一校验 → 409"""
+
+    @pytest.mark.asyncio
+    async def test_duplicate_thread_title_same_project_409(
+        self, client: AsyncClient, event_bus: InProcessEventBus, user_repo_provider: UserRepositoryProvider
+    ) -> None:
+        """同一项目下创建同名线程→409"""
+        user = await _create_user(user_repo_provider, "dup_thread_user")
+        project_id = await _create_project(client, user["token"], "UniqueProjectForThread")
+        await event_bus.wait_for_pending()
+
+        await _create_thread(client, user["token"], project_id, "SameTitle")
+        await event_bus.wait_for_pending()
+
+        resp = await client.post(
+            f"/projects/{project_id}/threads",
+            json={"title": "SameTitle", "type": "discussion"},
+            headers={"Authorization": f"Bearer {user['token']}"},
+        )
+        assert resp.status_code == 409
+        assert "detail" in resp.json()
+
+    @pytest.mark.asyncio
+    async def test_same_title_different_project_ok(
+        self, client: AsyncClient, event_bus: InProcessEventBus, user_repo_provider: UserRepositoryProvider
+    ) -> None:
+        """不同项目下同名线程→200（允许）"""
+        user = await _create_user(user_repo_provider, "cross_proj_thread")
+        project1 = await _create_project(client, user["token"], "ProjectA")
+        project2 = await _create_project(client, user["token"], "ProjectB")
+        await event_bus.wait_for_pending()
+
+        await _create_thread(client, user["token"], project1, "SharedTitle")
+        await event_bus.wait_for_pending()
+
+        resp = await client.post(
+            f"/projects/{project2}/threads",
+            json={"title": "SharedTitle", "type": "discussion"},
+            headers={"Authorization": f"Bearer {user['token']}"},
+        )
+        assert resp.status_code == 200

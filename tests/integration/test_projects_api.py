@@ -468,3 +468,101 @@ class TestListMembers:
             f"/projects/{project_id}/members", headers={"Authorization": f"Bearer {outsider['token']}"}
         )
         assert resp.status_code == 404
+
+
+class TestProjectNameUniqueness:
+    """项目名称唯一校验 → 409"""
+
+    @pytest.mark.asyncio
+    async def test_duplicate_project_name_returns_409(
+        self, client: AsyncClient, event_bus: InProcessEventBus, user_repo_provider: UserRepositoryProvider
+    ) -> None:
+        """同名项目创建→409"""
+        user = await _create_user(user_repo_provider, "dup_proj_user")
+        await _create_project(client, user["token"], "SameName")
+        await event_bus.wait_for_pending()
+
+        resp = await client.post(
+            "/projects",
+            json={"name": "SameName"},
+            headers={"Authorization": f"Bearer {user['token']}"},
+        )
+        assert resp.status_code == 409
+        assert "detail" in resp.json()
+
+    @pytest.mark.asyncio
+    async def test_different_user_duplicate_name_returns_409(
+        self, client: AsyncClient, event_bus: InProcessEventBus, user_repo_provider: UserRepositoryProvider
+    ) -> None:
+        """不同用户创建同名项目→409"""
+        user1 = await _create_user(user_repo_provider, "dup_proj_user1")
+        user2 = await _create_user(user_repo_provider, "dup_proj_user2")
+        await _create_project(client, user1["token"], "UniqueName")
+        await event_bus.wait_for_pending()
+
+        resp = await client.post(
+            "/projects",
+            json={"name": "UniqueName"},
+            headers={"Authorization": f"Bearer {user2['token']}"},
+        )
+        assert resp.status_code == 409
+
+
+class TestAtomicProjectCreation:
+    """项目创建原子操作：项目+默认线程"""
+
+    @pytest.mark.asyncio
+    async def test_create_project_includes_default_thread(
+        self,
+        client: AsyncClient,
+        db_conn: asyncpg.Connection,
+        event_bus: InProcessEventBus,
+        user_repo_provider: UserRepositoryProvider,
+    ) -> None:
+        """创建项目返回default_thread_id，投影写入线程记录"""
+        user = await _create_user(user_repo_provider, "atomic_user")
+        resp = await client.post(
+            "/projects",
+            json={"name": "AtomicProject"},
+            headers={"Authorization": f"Bearer {user['token']}"},
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["default_thread_id"] is not None
+
+        project_id = data["id"]
+        thread_id = data["default_thread_id"]
+        await event_bus.wait_for_pending()
+
+        # threads表有默认线程记录
+        row = await db_conn.fetchrow(
+            "SELECT title, type, status FROM threads WHERE id = $1",
+            uuid.UUID(thread_id),
+        )
+        assert row is not None
+        assert row["title"] == "AtomicProject"
+        assert row["type"] == "discussion"
+
+        # projects表有default_thread_id列
+        proj_row = await db_conn.fetchrow(
+            "SELECT default_thread_id FROM projects WHERE id = $1",
+            uuid.UUID(project_id),
+        )
+        assert proj_row is not None
+        assert str(proj_row["default_thread_id"]) == thread_id
+
+    @pytest.mark.asyncio
+    async def test_project_list_includes_default_thread_id(
+        self, client: AsyncClient, event_bus: InProcessEventBus, user_repo_provider: UserRepositoryProvider
+    ) -> None:
+        """项目列表包含default_thread_id"""
+        user = await _create_user(user_repo_provider, "list_dt_user")
+        await _create_project(client, user["token"], "DTProject")
+        await event_bus.wait_for_pending()
+
+        resp = await client.get("/projects", headers={"Authorization": f"Bearer {user['token']}"})
+        assert resp.status_code == 200
+        projects = resp.json()
+        found = [p for p in projects if p["name"] == "DTProject"]
+        assert len(found) == 1
+        assert found[0]["default_thread_id"] is not None
