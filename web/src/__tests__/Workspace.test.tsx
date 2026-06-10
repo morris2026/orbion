@@ -348,6 +348,62 @@ describe('MVP-UI-3.10: 新回调不影响initialState', () => {
   })
 })
 
+describe('useWorkspace: 重启后加载已有数据', () => {
+  beforeEach(() => {
+    localStorage.clear()
+    vi.restoreAllMocks()
+    vi.unstubAllGlobals()
+  })
+
+  it('无initialState时通过API加载项目列表', async () => {
+    const existingProjects: ProjectListItem[] = [
+      { id: 'proj-1', name: '已有项目', description: '描述', role: 'owner', default_thread_id: 'dt-1', created_at: '2024-01-01T00:00:00Z' },
+      { id: 'proj-2', name: '另一项目', description: null, role: 'member', default_thread_id: 'dt-2', created_at: '2024-01-02T00:00:00Z' },
+    ]
+
+    vi.spyOn(authModule, 'isAuthenticated').mockReturnValue(true)
+    vi.spyOn(authModule, 'isTokenExpired').mockReturnValue(false)
+    vi.spyOn(sseModule, 'createSSEConnection').mockImplementation(() => ({ close: vi.fn() } as unknown as EventSource))
+    vi.spyOn(sseModule, 'disconnectSSE').mockImplementation(() => {})
+    vi.spyOn(apiModule, 'apiGet').mockResolvedValue(existingProjects)
+
+    const { result } = renderHook(() => useWorkspace())
+
+    expect(result.current.projects).toEqual([])
+
+    await waitFor(() => {
+      expect(result.current.projects).toEqual(existingProjects)
+    })
+
+    expect(apiModule.apiGet).toHaveBeenCalledWith('/projects')
+  })
+
+  it('有initialState时跳过API加载', async () => {
+    vi.spyOn(authModule, 'isAuthenticated').mockReturnValue(true)
+    vi.spyOn(authModule, 'isTokenExpired').mockReturnValue(false)
+    vi.spyOn(sseModule, 'createSSEConnection').mockImplementation(() => ({ close: vi.fn() } as unknown as EventSource))
+    vi.spyOn(sseModule, 'disconnectSSE').mockImplementation(() => {})
+    vi.spyOn(apiModule, 'apiGet').mockResolvedValue([])
+
+    const opts: UseWorkspaceOptions = {
+      initialState: {
+        projects: mockProjects,
+        selectedProjectId: 'proj-1',
+        threads: mockThreads,
+        selectedThreadId: 'dt-1',
+        messages: mockMessages,
+        plans: [],
+        outputs: [],
+      },
+    }
+
+    const { result } = renderHook(() => useWorkspace(opts))
+
+    expect(result.current.projects).toEqual(mockProjects)
+    expect(apiModule.apiGet).not.toHaveBeenCalledWith('/projects')
+  })
+})
+
 describe('MVP-UI-4.x: ProjectTree组件', () => {
   beforeEach(() => {
     localStorage.clear()
