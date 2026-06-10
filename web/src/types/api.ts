@@ -5,6 +5,7 @@ export interface ProjectListItem {
   name: string
   description: string | null
   role: string
+  default_thread_id?: string
   created_at: string
 }
 
@@ -16,6 +17,7 @@ export interface ThreadListItem {
   has_summary: boolean
   pending_plan_count: number
   message_count: number
+  unread_count?: number
   created_at: string
 }
 

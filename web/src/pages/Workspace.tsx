@@ -1,7 +1,7 @@
 import { clearToken, getIsAdmin } from '@/lib/auth'
 import { useNavigate } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
-import ThreadList from '@/components/ThreadList'
+import ProjectTree from '@/components/ProjectTree'
 import DiscussionPanel from '@/components/DiscussionPanel'
 import ExecutionPanel from '@/components/ExecutionPanel'
 import { useWorkspace } from '@/hooks/useWorkspace'
@@ -22,28 +22,21 @@ export default function Workspace({ workspaceOptions }: WorkspaceProps) {
 
   return (
     <div className="flex h-screen bg-background">
-      {/* 左栏：项目与线程列表 */}
-      <aside className="w-64 border-r bg-card overflow-y-auto">
-        <div className="p-4 space-y-4">
-          <div>
-            <h2 className="text-sm font-semibold text-foreground mb-2">项目</h2>
-            {ws.projects.map((p) => (
-              <button
-                key={p.id}
-                onClick={() => ws.setSelectedProjectId(p.id)}
-                className={`w-full text-left p-2 rounded text-sm ${ws.selectedProjectId === p.id ? 'bg-primary/10 font-medium' : 'hover:bg-muted'}`}
-              >
-                {p.name}
-              </button>
-            ))}
-          </div>
-          {ws.selectedProjectId && (
-            <div>
-              <h2 className="text-sm font-semibold text-foreground mb-2">线程</h2>
-              <ThreadList threads={ws.threads} onSelect={ws.setSelectedThreadId} />
-            </div>
-          )}
-        </div>
+      {/* 左栏：项目树形导航 */}
+      <aside className="w-64 border-r bg-card overflow-hidden">
+        <ProjectTree
+          projects={ws.projects}
+          threads={ws.threads}
+          selectedProjectId={ws.selectedProjectId}
+          selectedThreadId={ws.selectedThreadId}
+          onSelectThread={ws.setSelectedThreadId}
+          onSelectProject={ws.setSelectedProjectId}
+          // projectId将由Dialog收集后传入，当前用selectedProjectId作占位（步骤6修复）
+          onCreateProject={() => ws.handleCreateProject({ name: '', description: null })}
+          onCreateThread={(_projectId) => ws.handleCreateThread({ title: '' })}
+          onAddMember={(_projectId) => ws.handleAddMember({ user_id: '', role: 'member' })}
+          onRegisterAgent={(_projectId) => ws.handleRegisterAgent({ agent_type: 'summary', model_id: '', display_name: '' })}
+        />
       </aside>
 
       {/* 中栏：讨论面板 */}
