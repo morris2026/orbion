@@ -28,6 +28,7 @@ services:
       ORBION_CONFIG_PATH: /app/orbion.json
     volumes:
       - ./orbion.json:/app/orbion.json:ro
+      - ./web/dist:/app/web/dist:ro
       - orbion_staging_repo:/app/repo
       - orbion_staging_data:/app/data
     ports:

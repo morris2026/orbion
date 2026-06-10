@@ -98,7 +98,7 @@ export default function ProjectTree({
               >
                 {/* 项目节点 */}
                 <div
-                  className="flex items-center justify-between p-2 rounded cursor-pointer hover:bg-muted transition-colors"
+                  className={`flex items-center justify-between p-2 rounded cursor-pointer transition-colors ${selectedProjectId === project.id && !selectedThreadId ? 'bg-accent' : 'hover:bg-muted'}`}
                   onClick={() => {
                     onSelectProject(project.id)
                     const dtId = project.default_thread_id ?? ''
@@ -149,7 +149,7 @@ export default function ProjectTree({
                           data-testid={`thread-${thread.id}`}
                           data-selected={selectedThreadId === thread.id ? 'true' : undefined}
                           data-unread={showUnread ? 'true' : undefined}
-                          className="flex items-center justify-between p-2 rounded cursor-pointer hover:bg-muted transition-colors"
+                          className={`flex items-center justify-between p-2 rounded cursor-pointer transition-colors ${selectedThreadId === thread.id ? 'bg-accent' : 'hover:bg-muted'}`}
                           onClick={() => onSelectThread(thread.id)}
                         >
                           <div className="flex items-center gap-2">
