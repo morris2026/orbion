@@ -33,7 +33,7 @@ export default function Workspace({ workspaceOptions }: WorkspaceProps) {
           onSelectProject={ws.setSelectedProjectId}
           // projectId将由Dialog收集后传入，当前用selectedProjectId作占位（步骤6修复）
           onCreateProject={() => ws.handleCreateProject({ name: '', description: null })}
-          onCreateThread={(_projectId) => ws.handleCreateThread({ title: '' })}
+          onCreateThread={(_projectId) => ws.handleCreateThread({ title: '', type: 'discussion' })}
           onAddMember={(_projectId) => ws.handleAddMember({ user_id: '', role: 'member' })}
           onRegisterAgent={(_projectId) => ws.handleRegisterAgent({ agent_type: 'summary', model_id: '', display_name: '' })}
         />

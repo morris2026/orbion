@@ -78,6 +78,7 @@ export interface CreateProjectRequest {
 
 export interface CreateThreadRequest {
   title: string
+  type: string
 }
 
 export interface RegisterAgentRequest {
