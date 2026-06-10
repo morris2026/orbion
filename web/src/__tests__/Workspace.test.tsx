@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, waitFor, renderHook, act } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
-import ThreadList from '@/components/ThreadList'
+import ProjectTree from '@/components/ProjectTree'
 import MessageItem from '@/components/MessageItem'
 import DiscussionPanel from '@/components/DiscussionPanel'
 import PlanCard from '@/components/PlanCard'
@@ -12,11 +12,18 @@ import * as sseModule from '@/lib/sse'
 import * as authModule from '@/lib/auth'
 import type { UseWorkspaceOptions } from '@/hooks/useWorkspace'
 import { useWorkspace } from '@/hooks/useWorkspace'
+import type { ProjectListItem, ThreadListItem } from '@/types/api'
 
 /** mock线程数据 */
-const mockThreads = [
-  { id: 't1', title: '线程1', status: 'active', type: 'discussion', has_summary: true, pending_plan_count: 2, message_count: 5, created_at: '2024-01-01T00:00:00Z' },
-  { id: 't2', title: '线程2', status: 'active', type: 'discussion', has_summary: false, pending_plan_count: 0, message_count: 3, created_at: '2024-01-02T00:00:00Z' },
+const mockThreads: ThreadListItem[] = [
+  { id: 't1', title: '线程1', status: 'active', type: 'discussion', has_summary: true, pending_plan_count: 2, message_count: 5, unread_count: 3, created_at: '2024-01-01T00:00:00Z' },
+  { id: 't2', title: '线程2', status: 'active', type: 'discussion', has_summary: false, pending_plan_count: 0, message_count: 3, unread_count: 0, created_at: '2024-01-02T00:00:00Z' },
+]
+
+/** mock项目数据 */
+const mockProjects: ProjectListItem[] = [
+  { id: 'proj-1', name: '项目Alpha', description: '描述1', role: 'owner', default_thread_id: 'dt-1', created_at: '2024-01-01T00:00:00Z' },
+  { id: 'proj-2', name: '项目Beta', description: null, role: 'member', default_thread_id: 'dt-2', created_at: '2024-01-02T00:00:00Z' },
 ]
 
 /** mock消息数据 */
@@ -46,8 +53,19 @@ describe('前端三栏工作区完整交互', () => {
 
   describe('MVP-20.1: 线程列表展示聚合字段', () => {
     it('has_summary标记：有摘要时显示标记', () => {
-      const onSelect = vi.fn()
-      render(<ThreadList threads={mockThreads} onSelect={onSelect} />)
+      const onSelectThread = vi.fn()
+      render(<ProjectTree
+        projects={mockProjects}
+        threads={mockThreads}
+        selectedProjectId="proj-1"
+        selectedThreadId="dt-1"
+        onSelectThread={onSelectThread}
+        onSelectProject={vi.fn()}
+        onCreateProject={vi.fn()}
+        onCreateThread={vi.fn()}
+        onAddMember={vi.fn()}
+        onRegisterAgent={vi.fn()}
+      />)
 
       expect(screen.getByText('线程1')).toBeInTheDocument()
       expect(screen.getByTestId('t1-summary')).toBeInTheDocument()
@@ -57,8 +75,19 @@ describe('前端三栏工作区完整交互', () => {
     })
 
     it('pending_plan_count和message_count正确显示', () => {
-      const onSelect = vi.fn()
-      render(<ThreadList threads={mockThreads} onSelect={onSelect} />)
+      const onSelectThread = vi.fn()
+      render(<ProjectTree
+        projects={mockProjects}
+        threads={mockThreads}
+        selectedProjectId="proj-1"
+        selectedThreadId="dt-1"
+        onSelectThread={onSelectThread}
+        onSelectProject={vi.fn()}
+        onCreateProject={vi.fn()}
+        onCreateThread={vi.fn()}
+        onAddMember={vi.fn()}
+        onRegisterAgent={vi.fn()}
+      />)
 
       expect(screen.getByText(/2.*待审/)).toBeInTheDocument()
       expect(screen.getByText(/0.*待审/)).toBeInTheDocument()
@@ -67,13 +96,24 @@ describe('前端三栏工作区完整交互', () => {
       expect(screen.getByText(/3.*消息/)).toBeInTheDocument()
     })
 
-    it('选择线程触发onSelect回调', async () => {
+    it('选择线程触发onSelectThread回调', async () => {
       const user = userEvent.setup()
-      const onSelect = vi.fn()
-      render(<ThreadList threads={mockThreads} onSelect={onSelect} />)
+      const onSelectThread = vi.fn()
+      render(<ProjectTree
+        projects={mockProjects}
+        threads={mockThreads}
+        selectedProjectId="proj-1"
+        selectedThreadId="dt-1"
+        onSelectThread={onSelectThread}
+        onSelectProject={vi.fn()}
+        onCreateProject={vi.fn()}
+        onCreateThread={vi.fn()}
+        onAddMember={vi.fn()}
+        onRegisterAgent={vi.fn()}
+      />)
 
       await user.click(screen.getByText('线程1'))
-      expect(onSelect).toHaveBeenCalledWith('t1')
+      expect(onSelectThread).toHaveBeenCalledWith('t1')
     })
   })
 
@@ -158,7 +198,7 @@ describe('前端三栏工作区完整交互', () => {
     /** 构建注入初始状态的Workspace配置 */
     const baseInitialState: UseWorkspaceOptions = {
       initialState: {
-        projects: [{ id: 'proj-1', name: '项目1', description: null, role: 'owner', created_at: '' }],
+        projects: [{ id: 'proj-1', name: '项目1', description: null, role: 'owner', default_thread_id: 't1', created_at: '' }],
         selectedProjectId: 'proj-1',
         threads: mockThreads,
         selectedThreadId: 't1',
@@ -187,8 +227,8 @@ describe('前端三栏工作区完整交互', () => {
         </MemoryRouter>
       )
 
-      // 初始数据已注入
-      expect(screen.getByText('线程1')).toBeInTheDocument()
+      // 初始数据已注入——ProjectTree显示项目名而非默认线程名
+      expect(screen.getByText('项目1')).toBeInTheDocument()
       expect(screen.getByText('你好')).toBeInTheDocument()
 
       // 模拟message_created SSE事件——使用后端真实字段名
@@ -226,7 +266,7 @@ describe('前端三栏工作区完整交互', () => {
         </MemoryRouter>
       )
 
-      expect(screen.getByText('线程1')).toBeInTheDocument()
+      expect(screen.getByText('项目1')).toBeInTheDocument()
 
       // 模拟plan_proposed SSE事件——使用后端真实字段名
       sseOnEvent!({
@@ -270,7 +310,7 @@ describe('MVP-UI-3.10: 新回调不影响initialState', () => {
 
     const opts: UseWorkspaceOptions = {
       initialState: {
-        projects: [{ id: 'proj-1', name: '项目1', description: null, role: 'owner', created_at: '' }],
+        projects: [{ id: 'proj-1', name: '项目1', description: null, role: 'owner', default_thread_id: 't1', created_at: '' }],
         selectedProjectId: 'proj-1',
         threads: mockThreads,
         selectedThreadId: 't1',
@@ -304,5 +344,211 @@ describe('MVP-UI-3.10: 新回调不影响initialState', () => {
     expect(result.current.messages).toEqual(mockMessages)
 
     vi.unstubAllGlobals()
+  })
+})
+
+describe('MVP-UI-4.x: ProjectTree组件', () => {
+  beforeEach(() => {
+    localStorage.clear()
+    vi.restoreAllMocks()
+    vi.unstubAllGlobals()
+  })
+
+  /** ProjectTree默认props */
+  const treeProps = {
+    projects: mockProjects,
+    threads: mockThreads,
+    selectedProjectId: 'proj-1',
+    selectedThreadId: 'dt-1',
+    onSelectThread: vi.fn(),
+    onSelectProject: vi.fn(),
+    onCreateProject: vi.fn(),
+    onCreateThread: vi.fn(),
+    onAddMember: vi.fn(),
+    onRegisterAgent: vi.fn(),
+  }
+
+  describe('MVP-UI-4.1: 两层树形渲染', () => {
+    it('项目节点和子线程渲染，图标按钮存在，顶部新建项目按钮存在', async () => {
+      const user = userEvent.setup()
+      render(<ProjectTree {...treeProps} />)
+
+      // 项目节点存在
+      expect(screen.getByText('项目Alpha')).toBeInTheDocument()
+      expect(screen.getByText('项目Beta')).toBeInTheDocument()
+
+      // 子线程存在于选中项目下
+      expect(screen.getByText('线程1')).toBeInTheDocument()
+      expect(screen.getByText('线程2')).toBeInTheDocument()
+
+      // 项目节点旁图标按钮存在（➕👤🤖）
+      expect(screen.getByRole('button', { name: /新建线程.*proj-1/i })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: /添加成员.*proj-1/i })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: /注册Agent.*proj-1/i })).toBeInTheDocument()
+
+      // 顶部新建项目➕按钮存在
+      expect(screen.getByRole('button', { name: /新建项目/i })).toBeInTheDocument()
+    })
+  })
+
+  describe('MVP-UI-4.2: 选中项目高亮', () => {
+    it('选中项目 → data-selected="true"', () => {
+      render(<ProjectTree {...treeProps} />)
+
+      // proj-1是选中项目，应该有data-selected
+      const projectNode = screen.getByTestId('project-proj-1')
+      expect(projectNode).toHaveAttribute('data-selected', 'true')
+
+      // proj-2不是选中项目，不应该有data-selected
+      const otherProjectNode = screen.getByTestId('project-proj-2')
+      expect(otherProjectNode).not.toHaveAttribute('data-selected')
+    })
+  })
+
+  describe('MVP-UI-4.3: 点击项目选中默认线程', () => {
+    it('点击项目 → onSelectProject和onSelectThread分别收到项目ID和默认线程ID', async () => {
+      const user = userEvent.setup()
+      const onSelectThread = vi.fn()
+      const onSelectProject = vi.fn()
+      render(<ProjectTree {...treeProps} selectedProjectId={null} selectedThreadId={null} onSelectThread={onSelectThread} onSelectProject={onSelectProject} />)
+
+      await user.click(screen.getByText('项目Alpha'))
+      expect(onSelectProject).toHaveBeenCalledWith('proj-1')
+      expect(onSelectThread).toHaveBeenCalledWith('dt-1')
+    })
+  })
+
+  describe('MVP-UI-4.4: 点击子线程', () => {
+    it('点击线程 → onSelectThread收到线程ID', async () => {
+      const user = userEvent.setup()
+      const onSelectThread = vi.fn()
+      render(<ProjectTree {...treeProps} onSelectThread={onSelectThread} />)
+
+      await user.click(screen.getByText('线程1'))
+      expect(onSelectThread).toHaveBeenCalledWith('t1')
+    })
+  })
+
+  describe('MVP-UI-4.5: 未读Badge', () => {
+    it('unread_count > 1 → 显示数字Badge', () => {
+      render(<ProjectTree {...treeProps} />)
+
+      // 线程1的unread_count=3 → 显示数字Badge
+      expect(screen.getByText('3')).toHaveAttribute('data-unread', 'true')
+    })
+
+    it('unread_count === 1 → 显示蓝色圆点', () => {
+      const singleUnreadThreads: ThreadListItem[] = [
+        { id: 't1', title: '线程1', status: 'active', type: 'discussion', has_summary: false, pending_plan_count: 0, message_count: 0, unread_count: 1, created_at: '2024-01-01T00:00:00Z' },
+      ]
+      render(<ProjectTree {...treeProps} threads={singleUnreadThreads} />)
+
+      // 1条未读显示圆点而非数字
+      expect(screen.getByText('线程1')).toBeInTheDocument()
+      expect(screen.queryByText('1')).not.toBeInTheDocument()
+    })
+  })
+
+  describe('MVP-UI-4.6: 选中线程不显示未读', () => {
+    it('当前选中线程 → 无未读提示', () => {
+      // 选中线程t1（unread_count=3），但因为是选中线程，不应显示未读Badge
+      render(<ProjectTree {...treeProps} selectedThreadId='t1' />)
+
+      // 线程1被选中，即使有unread_count也不显示Badge
+      const t1Node = screen.getByTestId('thread-t1')
+      expect(t1Node).not.toHaveAttribute('data-unread')
+    })
+  })
+
+  describe('MVP-UI-4.7: 项目节点图标按钮回调', () => {
+    it('➕→onCreateThread，👤→onAddMember，🤖→onRegisterAgent', async () => {
+      const user = userEvent.setup()
+      const onCreateThread = vi.fn()
+      const onAddMember = vi.fn()
+      const onRegisterAgent = vi.fn()
+      render(<ProjectTree {...treeProps} onCreateThread={onCreateThread} onAddMember={onAddMember} onRegisterAgent={onRegisterAgent} />)
+
+      await user.click(screen.getByRole('button', { name: /新建线程.*proj-1/i }))
+      expect(onCreateThread).toHaveBeenCalledWith('proj-1')
+
+      await user.click(screen.getByRole('button', { name: /添加成员.*proj-1/i }))
+      expect(onAddMember).toHaveBeenCalledWith('proj-1')
+
+      await user.click(screen.getByRole('button', { name: /注册Agent.*proj-1/i }))
+      expect(onRegisterAgent).toHaveBeenCalledWith('proj-1')
+    })
+  })
+
+  describe('MVP-UI-4.8: 顶部新建项目按钮', () => {
+    it('导航栏顶部➕按钮 → onCreateProject', async () => {
+      const user = userEvent.setup()
+      const onCreateProject = vi.fn()
+      render(<ProjectTree {...treeProps} onCreateProject={onCreateProject} />)
+
+      await user.click(screen.getByRole('button', { name: /新建项目/i }))
+      expect(onCreateProject).toHaveBeenCalled()
+    })
+  })
+
+  describe('MVP-UI-4.9: 项目无子线程', () => {
+    it('只有默认线程 → 不显示子节点', () => {
+      // 提供包含默认线程的threads数组，默认线程不显示为子节点
+      const onlyDefaultThreads: ThreadListItem[] = [
+        { id: 'dt-1', title: '默认线程', status: 'active', type: 'discussion', has_summary: false, pending_plan_count: 0, message_count: 0, unread_count: 0, created_at: '2024-01-01T00:00:00Z' },
+      ]
+      render(<ProjectTree {...treeProps} threads={onlyDefaultThreads} />)
+
+      // 项目Alpha仍存在但默认线程不作为子节点显示
+      expect(screen.getByText('项目Alpha')).toBeInTheDocument()
+      expect(screen.queryByText('默认线程')).not.toBeInTheDocument()
+      expect(screen.queryByText('线程1')).not.toBeInTheDocument()
+    })
+  })
+
+  describe('MVP-UI-4.10: 空项目列表', () => {
+    it('projects=[] → 显示空状态提示', () => {
+      render(<ProjectTree {...treeProps} projects={[]} />)
+
+      expect(screen.getByText(/暂无项目/i)).toBeInTheDocument()
+    })
+  })
+
+  describe('MVP-UI-4.11: Tooltip hover', () => {
+    it('hover图标按钮 → 显示对应文字', async () => {
+      const user = userEvent.setup()
+      render(<ProjectTree {...treeProps} />)
+
+      // hover新建线程按钮
+      await user.hover(screen.getByRole('button', { name: /新建线程.*proj-1/i }))
+      expect(screen.getByText('新建线程')).toBeInTheDocument()
+
+      // hover添加成员按钮
+      await user.hover(screen.getByRole('button', { name: /添加成员.*proj-1/i }))
+      expect(screen.getByText('添加成员')).toBeInTheDocument()
+
+      // hover注册Agent按钮
+      await user.hover(screen.getByRole('button', { name: /注册Agent.*proj-1/i }))
+      expect(screen.getByText('注册Agent')).toBeInTheDocument()
+    })
+  })
+
+  describe('MVP-20.1-更新: ThreadList→ProjectTree迁移', () => {
+    it('has_summary/pending_plan/message_count在新组件中仍正确显示', () => {
+      render(<ProjectTree {...treeProps} />)
+
+      // 线程1 has_summary=true → 显示标记
+      expect(screen.getByTestId('t1-summary')).toBeInTheDocument()
+
+      // 线程2 has_summary=false → 不显示标记
+      expect(screen.queryByTestId('t2-summary')).not.toBeInTheDocument()
+
+      // pending_plan_count
+      expect(screen.getByText(/2.*待审/)).toBeInTheDocument()
+      expect(screen.getByText(/0.*待审/)).toBeInTheDocument()
+
+      // message_count
+      expect(screen.getByText(/5.*消息/)).toBeInTheDocument()
+      expect(screen.getByText(/3.*消息/)).toBeInTheDocument()
+    })
   })
 })
