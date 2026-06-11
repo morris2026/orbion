@@ -229,12 +229,13 @@ test.describe('自我构建9点验证', () => {
     await page.getByText(project.name).click()
     await page.getByText(thread.title).click()
 
-    const messageInput = page.getByPlaceholder(/输入消息/)
+    const messageInput = page.getByPlaceholder(/输入消息.*\/summarize/)
     await messageInput.fill('这是我的观点')
     await page.getByRole('button', { name: /发送/ }).click()
 
-    // 乐观更新：POST返回后立即显示，不需等SSE
+    // SSE推送后消息可见（单一来源，不会重复）
     await expect(page.getByText('这是我的观点')).toBeVisible({ timeout: 5000 })
+    await expect(page.locator('p.whitespace-pre-wrap', { hasText: '这是我的观点' })).toHaveCount(1)
   })
 
   test('TC-21.3 验证点3：总结Agent产出摘要', async ({ page }) => {
@@ -246,7 +247,8 @@ test.describe('自我构建9点验证', () => {
     await page.getByText(project.name).click()
     await page.getByText(thread.title).click()
 
-    await page.getByRole('button', { name: /请求总结/ }).click()
+    await page.getByPlaceholder(/输入消息.*\/summarize/).fill('/summarize')
+    await page.getByRole('button', { name: /发送/ }).click()
 
     // 等待Agent产出摘要（SSE推送）
     await expect(page.getByText(/共识/)).toBeVisible({ timeout: 15000 })
@@ -273,7 +275,8 @@ test.describe('自我构建9点验证', () => {
     await page.getByText(project.name).click()
     await page.getByText(thread.title).click()
 
-    await page.getByRole('button', { name: /请求总结/ }).click()
+    await page.getByPlaceholder(/输入消息.*\/summarize/).fill('/summarize')
+    await page.getByRole('button', { name: /发送/ }).click()
     await expect(page.getByText(/共识/)).toBeVisible({ timeout: 15000 })
 
     await expect(page.getByText(/计划/)).toBeVisible({ timeout: 15000 })
@@ -288,7 +291,8 @@ test.describe('自我构建9点验证', () => {
     await page.getByText(project.name).click()
     await page.getByText(thread.title).click()
 
-    await page.getByRole('button', { name: /请求总结/ }).click()
+    await page.getByPlaceholder(/输入消息.*\/summarize/).fill('/summarize')
+    await page.getByRole('button', { name: /发送/ }).click()
     await expect(page.getByText(/计划/)).toBeVisible({ timeout: 20000 })
 
     const approveBtn = page.getByRole('button', { name: /批准/ })
@@ -309,7 +313,8 @@ test.describe('自我构建9点验证', () => {
     await page.getByText(project.name).click()
     await page.getByText(thread.title).click()
 
-    await page.getByRole('button', { name: /请求总结/ }).click()
+    await page.getByPlaceholder(/输入消息.*\/summarize/).fill('/summarize')
+    await page.getByRole('button', { name: /发送/ }).click()
     await expect(page.getByText(/计划/)).toBeVisible({ timeout: 20000 })
     await page.getByRole('button', { name: /批准/ }).click()
 
@@ -325,7 +330,8 @@ test.describe('自我构建9点验证', () => {
     await page.getByText(project.name).click()
     await page.getByText(thread.title).click()
 
-    await page.getByRole('button', { name: /请求总结/ }).click()
+    await page.getByPlaceholder(/输入消息.*\/summarize/).fill('/summarize')
+    await page.getByRole('button', { name: /发送/ }).click()
     await expect(page.getByText(/计划/)).toBeVisible({ timeout: 20000 })
     await page.getByRole('button', { name: /批准/ }).click()
     await expect(page.getByText(/--- a/)).toBeVisible({ timeout: 20000 })
@@ -351,7 +357,8 @@ test.describe('自我构建9点验证', () => {
     await page.getByText(project.name).click()
     await page.getByText(thread.title).click()
 
-    await page.getByRole('button', { name: /请求总结/ }).click()
+    await page.getByPlaceholder(/输入消息.*\/summarize/).fill('/summarize')
+    await page.getByRole('button', { name: /发送/ }).click()
     await expect(page.getByText(/计划/)).toBeVisible({ timeout: 20000 })
     await page.getByRole('button', { name: /批准/ }).click()
     await expect(page.getByText(/--- a/)).toBeVisible({ timeout: 20000 })
@@ -381,13 +388,17 @@ test.describe('自我构建9点验证', () => {
     await page.getByText(project.name).click()
     await page.getByText(thread.title).click()
 
-    const messageInput = page.getByPlaceholder(/输入消息/)
+    const messageInput = page.getByPlaceholder(/输入消息.*\/summarize/)
     await messageInput.fill('实时更新测试消息')
     await page.getByRole('button', { name: /发送/ }).click()
     // 乐观更新：POST返回后立即显示
     await expect(page.getByText('实时更新测试消息')).toBeVisible({ timeout: 5000 })
 
-    await page.getByRole('button', { name: /请求总结/ }).click()
+    // 使用斜杠命令/summarize替代旧的请求总结按钮
+    await messageInput.click()
+    await messageInput.fill('/summarize')
+    await expect(messageInput).toHaveValue('/summarize')
+    await page.getByRole('button', { name: /发送/ }).click()
     await expect(page.getByText(/共识/)).toBeVisible({ timeout: 15000 })
     await expect(page.getByText(/计划/)).toBeVisible({ timeout: 15000 })
   })

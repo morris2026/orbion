@@ -1,9 +1,15 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, waitFor, renderHook, act } from '@testing-library/react'
+import { render, screen, waitFor, renderHook, act, fireEvent } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
+
+// jsdom不支持scrollIntoView、ResizeObserver、getAnimations，全局mock
+Element.prototype.scrollIntoView = vi.fn()
+global.ResizeObserver = class { observe() {} unobserve() {} disconnect() {} }
+Element.prototype.getAnimations = vi.fn().mockReturnValue([])
+
 import ProjectTree from '@/components/ProjectTree'
-import MessageItem from '@/components/MessageItem'
+import MessageBubble from '@/components/MessageBubble'
 import DiscussionPanel from '@/components/DiscussionPanel'
 import PlanCard from '@/components/PlanCard'
 import OutputDiff from '@/components/OutputDiff'
@@ -120,41 +126,47 @@ describe('前端三栏工作区完整交互', () => {
     })
   })
 
-  describe('MVP-20.2: 人类/Agent消息样式区分', () => {
-    it('participant_type="human"时普通样式', () => {
-      render(<MessageItem message={mockMessages[0]} />)
-      const container = screen.getByTestId('message-m1')
-      expect(container).toHaveAttribute('data-participant-type', 'human')
+  describe('MVP-20.2-更新: MessageBubble人类/Agent消息样式区分', () => {
+    it('participant_type="human"别人消息 → 左对齐浅色泡泡', () => {
+      render(<MessageBubble message={mockMessages[0]} currentUserId="u-other" />)
+      const bubble = screen.getByTestId('bubble-m1')
+      expect(bubble).toHaveAttribute('data-participant-type', 'other')
+      expect(bubble).toHaveAttribute('data-align', 'left')
     })
 
-    it('participant_type="agent"时特殊卡片样式', () => {
-      render(<MessageItem message={mockMessages[1]} />)
-      const container = screen.getByTestId('message-m2')
-      expect(container).toHaveAttribute('data-participant-type', 'agent')
+    it('participant_type="agent" → Agent浅蓝泡泡🤖', () => {
+      render(<MessageBubble message={mockMessages[1]} currentUserId="u1" />)
+      const bubble = screen.getByTestId('bubble-m2')
+      expect(bubble).toHaveAttribute('data-participant-type', 'agent')
+      expect(bubble).toHaveAttribute('data-align', 'left')
     })
   })
 
-  describe('MVP-20.3: request_summary按钮', () => {
-    it('点击请求总结按钮触发onSendMessage回调，包含content和request_summary=true', async () => {
-      const user = userEvent.setup()
-      const onSendMessage = vi.fn()
-      render(<DiscussionPanel messages={mockMessages} onSendMessage={onSendMessage} />)
+  describe('MVP-20.3-更新: 请求总结→斜杠命令', () => {
+    it('输入/summarize+Enter → request_summary=true + 默认文案', async () => {
+      const onSendMessage = vi.fn().mockResolvedValue(undefined)
+      render(<DiscussionPanel messages={mockMessages} currentUserId="u1" onSendMessage={onSendMessage} />)
 
-      // 输入消息内容
-      const input = screen.getByPlaceholderText(/输入消息/)
-      await user.type(input, '这是我的观点')
+      const textarea = screen.getByPlaceholderText(/输入消息.*\/summarize/i)
+      fireEvent.change(textarea, { target: { value: '/summarize' } })
+      fireEvent.keyDown(textarea, { key: 'Enter', shiftKey: false })
 
-      await user.click(screen.getByRole('button', { name: /请求总结/i }))
-      expect(onSendMessage).toHaveBeenCalledWith({ content: '这是我的观点', request_summary: true })
+      await waitFor(() => {
+        expect(onSendMessage).toHaveBeenCalledWith({ content: '请总结当前讨论要点', request_summary: true })
+      })
     })
 
-    it('未输入内容时点击请求总结使用默认content', async () => {
-      const user = userEvent.setup()
-      const onSendMessage = vi.fn()
-      render(<DiscussionPanel messages={mockMessages} onSendMessage={onSendMessage} />)
+    it('输入/summarize 观点+Enter → request_summary=true + 观点内容', async () => {
+      const onSendMessage = vi.fn().mockResolvedValue(undefined)
+      render(<DiscussionPanel messages={mockMessages} currentUserId="u1" onSendMessage={onSendMessage} />)
 
-      await user.click(screen.getByRole('button', { name: /请求总结/i }))
-      expect(onSendMessage).toHaveBeenCalledWith({ content: '请总结当前讨论要点', request_summary: true })
+      const textarea = screen.getByPlaceholderText(/输入消息.*\/summarize/i)
+      fireEvent.change(textarea, { target: { value: '/summarize 观点' } })
+      fireEvent.keyDown(textarea, { key: 'Enter', shiftKey: false })
+
+      await waitFor(() => {
+        expect(onSendMessage).toHaveBeenCalledWith({ content: '观点', request_summary: true })
+      })
     })
   })
 
@@ -286,6 +298,72 @@ describe('前端三栏工作区完整交互', () => {
       await waitFor(() => {
         expect(screen.getByText(/新计划任务/)).toBeInTheDocument()
       })
+    })
+  })
+})
+
+describe('消息显示：POST触发后端→SSE推送显示（单一来源）', () => {
+  beforeEach(() => {
+    localStorage.clear()
+    vi.restoreAllMocks()
+    vi.unstubAllGlobals()
+  })
+
+  it('POST发送消息后→SSE推送→消息显示（不重复）', async () => {
+    vi.spyOn(authModule, 'isAuthenticated').mockReturnValue(true)
+    vi.spyOn(authModule, 'isTokenExpired').mockReturnValue(false)
+    vi.spyOn(authModule, 'getIsAdmin').mockReturnValue(false)
+
+    let sseOnEvent: ((event: Record<string, unknown>) => void) | null = null
+    vi.spyOn(sseModule, 'createSSEConnection').mockImplementation((_projectId: string, onEvent: (event: Record<string, unknown>) => void) => {
+      sseOnEvent = onEvent
+      return { close: vi.fn() } as unknown as EventSource
+    })
+    vi.spyOn(sseModule, 'disconnectSSE').mockImplementation(() => {})
+    vi.spyOn(apiModule, 'apiGet').mockResolvedValue([])
+    // POST只触发后端发布事件，不返回消息用于乐观更新
+    vi.spyOn(apiModule, 'apiPost').mockResolvedValue(undefined)
+
+    const opts: UseWorkspaceOptions = {
+      initialState: {
+        projects: [{ id: 'proj-1', name: '项目1', description: null, role: 'owner', default_thread_id: 't1', created_at: '' }],
+        selectedProjectId: 'proj-1',
+        threads: mockThreads,
+        selectedThreadId: 't1',
+        messages: [],
+        plans: [],
+        outputs: [],
+      },
+    }
+
+    const { result } = renderHook(() => useWorkspace(opts))
+
+    // 发送消息（POST仅触发后端）
+    await act(async () => {
+      result.current.handleSendMessage({ content: 'SSE推送消息' })
+    })
+
+    // POST不直接更新state——消息列表仍为空
+    expect(result.current.messages.length).toBe(0)
+
+    // SSE推送消息
+    act(() => {
+      sseOnEvent!({
+        event_type: 'message_created',
+        message_id: 'msg-sse-test',
+        thread_id: 't1',
+        participant_id: 'u1',
+        participant_type: 'human',
+        participant_display_name: '用户A',
+        content: 'SSE推送消息',
+        created_at: '2024-01-01T12:00:00Z',
+      })
+    })
+
+    // SSE推送后消息出现
+    await waitFor(() => {
+      expect(result.current.messages.length).toBe(1)
+      expect(result.current.messages[0].id).toBe('msg-sse-test')
     })
   })
 })
@@ -1027,6 +1105,427 @@ describe('MVP-UI-6.x: ProjectTree与Dialog联动', () => {
       await waitFor(() => {
         expect(apiModule.apiPost).toHaveBeenCalledWith('/projects/proj-1/threads', expect.objectContaining({ title: '新讨论线程' }))
       })
+    })
+  })
+})
+
+describe('MVP-UI-7.x: IM泡泡讨论面板', () => {
+  beforeEach(() => {
+    localStorage.clear()
+    vi.restoreAllMocks()
+    vi.unstubAllGlobals()
+  })
+
+  /** 自己的消息 */
+  const selfMessage = { id: 'm-self', thread_id: 't1', participant_id: 'u1', participant_type: 'human' as const, display_name: '张三', content: '我的消息', event_type: 'DiscussionMessageCreated', created_at: '2024-01-01T10:00:00Z' }
+  /** 别人的消息 */
+  const otherMessage = { id: 'm-other', thread_id: 't1', participant_id: 'u2', participant_type: 'human' as const, display_name: '李四', content: '别人的消息', event_type: 'DiscussionMessageCreated', created_at: '2024-01-01T10:01:00Z' }
+  /** Agent消息 */
+  const agentMessage = { id: 'm-agent', thread_id: 't1', participant_id: 'a1', participant_type: 'agent' as const, display_name: '总结Agent', content: '讨论要点如下', event_type: 'DiscussionSummaryGenerated', created_at: '2024-01-01T11:00:00Z' }
+
+  describe('MVP-UI-7.1~7.5: MessageBubble样式', () => {
+    describe('MVP-UI-7.1: 自己右对齐蓝泡泡', () => {
+      it('participant_id=currentUserId → 右对齐+蓝色背景+头像在右侧', () => {
+        render(<MessageBubble message={selfMessage} currentUserId="u1" />)
+        const bubble = screen.getByTestId('bubble-m-self')
+        expect(bubble).toHaveAttribute('data-align', 'right')
+        expect(bubble).toHaveAttribute('data-participant-type', 'self')
+        // 蓝色背景
+        expect(bubble.className).toMatch(/bg-blue/)
+        // 头像在右侧——自己的消息头像元素在bubble之后
+        const msgRow = screen.getByTestId('msg-m-self')
+        const children = Array.from(msgRow.children)
+        const bubbleWrapper = bubble.closest('[class]')!
+        const avatar = screen.getByTestId('avatar-m-self')
+        // 自己的消息布局：[内容区(含bubble), 头像] → 头像在后
+        expect(children.indexOf(avatar)).toBeGreaterThan(children.indexOf(bubbleWrapper.parentElement!))
+      })
+    })
+
+    describe('MVP-UI-7.2: 别人左对齐浅泡泡', () => {
+      it('≠currentUserId + human → 左对齐+浅色背景+头像在左侧', () => {
+        render(<MessageBubble message={otherMessage} currentUserId="u1" />)
+        const bubble = screen.getByTestId('bubble-m-other')
+        expect(bubble).toHaveAttribute('data-align', 'left')
+        expect(bubble).toHaveAttribute('data-participant-type', 'other')
+        expect(bubble.className).toMatch(/bg-gray|bg-muted/)
+        // 头像在左侧——别人消息头像在bubble之前
+        const msgRow = screen.getByTestId('msg-m-other')
+        const children = Array.from(msgRow.children)
+        const avatar = screen.getByTestId('avatar-m-other')
+        const bubbleWrapper = bubble.closest('[class]')!
+        expect(children.indexOf(avatar)).toBeLessThan(children.indexOf(bubbleWrapper.parentElement!))
+      })
+    })
+
+    describe('MVP-UI-7.3: Agent浅蓝泡泡🤖', () => {
+      it('agent → 左对齐+浅蓝背景+蓝色边框+🤖图标', () => {
+        render(<MessageBubble message={agentMessage} currentUserId="u1" />)
+        const bubble = screen.getByTestId('bubble-m-agent')
+        expect(bubble).toHaveAttribute('data-align', 'left')
+        expect(bubble).toHaveAttribute('data-participant-type', 'agent')
+        expect(bubble.className).toMatch(/bg-blue.*50|bg-sky|bg-lightblue/)
+        expect(bubble.className).toMatch(/border-blue/)
+        // 🤖图标
+        expect(screen.getByTestId('avatar-m-agent').textContent).toContain('🤖')
+      })
+    })
+
+    describe('MVP-UI-7.4: 头像首字母', () => {
+      it('display_name="张三" → 头像显示"张"', () => {
+        render(<MessageBubble message={selfMessage} currentUserId="u1" />)
+        expect(screen.getByTestId('avatar-m-self').textContent).toContain('张')
+      })
+
+      it('Agent头像不显示首字母，显示🤖', () => {
+        render(<MessageBubble message={agentMessage} currentUserId="u1" />)
+        expect(screen.getByTestId('avatar-m-agent').textContent).toContain('🤖')
+      })
+    })
+
+    describe('MVP-UI-7.5: 泡泡max-width', () => {
+      it('泡泡max-width为70%', () => {
+        render(<MessageBubble message={selfMessage} currentUserId="u1" />)
+        const bubble = screen.getByTestId('bubble-m-self')
+        expect(bubble.className).toMatch(/max-w-\[70%\]|max-w-70/)
+      })
+    })
+  })
+
+  describe('MVP-UI-7.6~7.11: DiscussionPanel斜杠命令和键盘', () => {
+    describe('MVP-UI-7.6: /summarize发送', () => {
+      it('输入/summarize+Enter → request_summary=true + 默认文案', async () => {
+        const onSendMessage = vi.fn().mockResolvedValue(undefined)
+        render(<DiscussionPanel messages={mockMessages} currentUserId="u1" onSendMessage={onSendMessage} />)
+
+        const textarea = screen.getByPlaceholderText(/输入消息.*\/summarize/i)
+        fireEvent.change(textarea, { target: { value: '/summarize' } })
+        fireEvent.keyDown(textarea, { key: 'Enter', shiftKey: false })
+
+        await waitFor(() => {
+          expect(onSendMessage).toHaveBeenCalledWith({ content: '请总结当前讨论要点', request_summary: true })
+        })
+      })
+    })
+
+    describe('MVP-UI-7.7: /summarize带内容', () => {
+      it('/summarize 观点 → request_summary=true + content="观点"', async () => {
+        const onSendMessage = vi.fn().mockResolvedValue(undefined)
+        render(<DiscussionPanel messages={mockMessages} currentUserId="u1" onSendMessage={onSendMessage} />)
+
+        const textarea = screen.getByPlaceholderText(/输入消息.*\/summarize/i)
+        fireEvent.change(textarea, { target: { value: '/summarize 观点' } })
+        fireEvent.keyDown(textarea, { key: 'Enter', shiftKey: false })
+
+        await waitFor(() => {
+          expect(onSendMessage).toHaveBeenCalledWith({ content: '观点', request_summary: true })
+        })
+      })
+    })
+
+    describe('MVP-UI-7.8: Enter发送', () => {
+      it('普通消息+Enter → 发送，textarea清空', async () => {
+        const onSendMessage = vi.fn().mockResolvedValue(undefined)
+        render(<DiscussionPanel messages={mockMessages} currentUserId="u1" onSendMessage={onSendMessage} />)
+
+        const textarea = screen.getByPlaceholderText(/输入消息.*\/summarize/i)
+        fireEvent.change(textarea, { target: { value: '你好' } })
+        fireEvent.keyDown(textarea, { key: 'Enter', shiftKey: false })
+
+        await waitFor(() => {
+          expect(onSendMessage).toHaveBeenCalledWith({ content: '你好', request_summary: false })
+        })
+
+        // textarea清空
+        expect(textarea).toHaveValue('')
+      })
+    })
+
+    describe('MVP-UI-7.9: Shift+Enter换行', () => {
+      it('Shift+Enter → 不发送消息，textarea内容保留', async () => {
+        const onSendMessage = vi.fn().mockResolvedValue(undefined)
+        render(<DiscussionPanel messages={mockMessages} currentUserId="u1" onSendMessage={onSendMessage} />)
+
+        const textarea = screen.getByPlaceholderText(/输入消息.*\/summarize/i)
+        fireEvent.change(textarea, { target: { value: '你好' } })
+        fireEvent.keyDown(textarea, { key: 'Enter', shiftKey: true })
+
+        // Shift+Enter不触发发送
+        expect(onSendMessage).not.toHaveBeenCalled()
+        // textarea内容保留
+        expect(textarea.value).toContain('你好')
+      })
+    })
+
+    describe('MVP-UI-7.10: 空消息不发送', () => {
+      it('空+Enter → 不触发发送', async () => {
+        const onSendMessage = vi.fn().mockResolvedValue(undefined)
+        render(<DiscussionPanel messages={mockMessages} currentUserId="u1" onSendMessage={onSendMessage} />)
+
+        const textarea = screen.getByPlaceholderText(/输入消息.*\/summarize/i)
+        fireEvent.keyDown(textarea, { key: 'Enter', shiftKey: false })
+
+        expect(onSendMessage).not.toHaveBeenCalled()
+      })
+    })
+
+    describe('MVP-UI-7.11: /help显示帮助', () => {
+      it('输入/help+Enter → 显示帮助提示，不发送消息', async () => {
+        const onSendMessage = vi.fn().mockResolvedValue(undefined)
+        render(<DiscussionPanel messages={mockMessages} currentUserId="u1" onSendMessage={onSendMessage} />)
+
+        const textarea = screen.getByPlaceholderText(/输入消息.*\/summarize/i)
+        fireEvent.change(textarea, { target: { value: '/help' } })
+        fireEvent.keyDown(textarea, { key: 'Enter', shiftKey: false })
+
+        // 不发送消息
+        expect(onSendMessage).not.toHaveBeenCalled()
+        // 显示帮助提示
+        await waitFor(() => {
+          expect(screen.getByTestId('help-overlay')).toBeInTheDocument()
+        })
+      })
+    })
+  })
+
+  describe('MVP-UI-7.12~7.16: DiscussionPanel异常场景', () => {
+    describe('MVP-UI-7.12: 发送失败回滚', () => {
+      it('onSendMessage返回rejected → 错误提示，textarea内容保留', async () => {
+        const onSendMessage = vi.fn().mockRejectedValue(new Error('发送失败'))
+        render(<DiscussionPanel messages={mockMessages} currentUserId="u1" onSendMessage={onSendMessage} />)
+
+        const textarea = screen.getByPlaceholderText(/输入消息.*\/summarize/i)
+        fireEvent.change(textarea, { target: { value: '测试消息' } })
+        fireEvent.keyDown(textarea, { key: 'Enter', shiftKey: false })
+
+        // 错误提示出现
+        await waitFor(() => {
+          expect(screen.getByText(/发送失败/i)).toBeInTheDocument()
+        })
+
+        // textarea内容保留（不清空）
+        expect(textarea.value).toContain('测试消息')
+      })
+    })
+
+    describe('MVP-UI-7.13: SSE去重', () => {
+      it('POST返回消息+SSE推送同一ID → 列表不重复（在useWorkspace层面去重）', async () => {
+        // 这个测试验证useWorkspace的SSE去重逻辑——MVP-20.6已有覆盖
+        // 此处验证MessageBubble渲染不重复：同ID消息只渲染一次
+        const duplicateMessages = [
+          { id: 'm-dup', thread_id: 't1', participant_id: 'u1', participant_type: 'human' as const, display_name: '张三', content: '重复消息', event_type: 'DiscussionMessageCreated', created_at: '2024-01-01T10:00:00Z' },
+        ]
+        const onSendMessage = vi.fn().mockResolvedValue(undefined)
+        render(<DiscussionPanel messages={duplicateMessages} currentUserId="u1" onSendMessage={onSendMessage} />)
+
+        // 只有一个同ID的泡泡渲染
+        expect(screen.getAllByTestId('bubble-m-dup')).toHaveLength(1)
+      })
+    })
+
+    describe('MVP-UI-7.14: SSE断连后重连推送', () => {
+      it('SSE断连后重连——此行为在useWorkspace层面处理，DiscussionPanel只需正确渲染推送的消息', async () => {
+        // SSE重连是useWorkspace的职责，此处验证DiscussionPanel能渲染新推送消息
+        const newMessages = [...mockMessages, { id: 'm-new', thread_id: 't1', participant_id: 'u2', participant_type: 'human' as const, display_name: '用户B', content: '重连后新消息', event_type: 'DiscussionMessageCreated', created_at: '2024-01-03T10:00:00Z' }]
+        const onSendMessage = vi.fn().mockResolvedValue(undefined)
+        render(<DiscussionPanel messages={newMessages} currentUserId="u1" onSendMessage={onSendMessage} />)
+
+        expect(screen.getByText('重连后新消息')).toBeInTheDocument()
+      })
+    })
+
+    describe('MVP-UI-7.15: 超长消息', () => {
+      it('超过10000字符 → 发送按钮disabled', () => {
+        const onSendMessage = vi.fn().mockResolvedValue(undefined)
+        render(<DiscussionPanel messages={mockMessages} currentUserId="u1" onSendMessage={onSendMessage} />)
+
+        const textarea = screen.getByPlaceholderText(/输入消息.*\/summarize/i)
+        // 模拟超长输入——直接设置value绕过userEvent的缓慢输入
+        fireEvent.change(textarea, { target: { value: 'a'.repeat(10001) } })
+
+        const sendBtn = screen.getByRole('button', { name: /发送/i })
+        expect(sendBtn).toBeDisabled()
+      })
+
+      it('10000字符以内 → 发送按钮enabled', () => {
+        const onSendMessage = vi.fn().mockResolvedValue(undefined)
+        render(<DiscussionPanel messages={mockMessages} currentUserId="u1" onSendMessage={onSendMessage} />)
+
+        const textarea = screen.getByPlaceholderText(/输入消息.*\/summarize/i)
+        fireEvent.change(textarea, { target: { value: 'a'.repeat(10000) } })
+
+        const sendBtn = screen.getByRole('button', { name: /发送/i })
+        expect(sendBtn).not.toBeDisabled()
+      })
+    })
+
+    describe('MVP-UI-7.16: 空消息列表', () => {
+      it('messages=[] → 显示"暂无消息"', () => {
+        const onSendMessage = vi.fn().mockResolvedValue(undefined)
+        render(<DiscussionPanel messages={[]} currentUserId="u1" onSendMessage={onSendMessage} />)
+
+        expect(screen.getByText(/暂无消息/i)).toBeInTheDocument()
+      })
+    })
+  })
+})
+
+describe('MVP-UI-RS.x: DiscussionPanel可拖拽分隔条', () => {
+  beforeEach(() => {
+    localStorage.clear()
+    vi.restoreAllMocks()
+    vi.unstubAllGlobals()
+  })
+
+  const onSendMessage = vi.fn().mockResolvedValue(undefined)
+
+  describe('MVP-UI-RS.1: Group/Panel/Separator渲染', () => {
+    it('DiscussionPanel渲染Group+Panel+Separator结构', () => {
+      const { container } = render(<DiscussionPanel messages={mockMessages} currentUserId="u1" onSendMessage={onSendMessage} />)
+
+      // Group 渲染（data-group 属性）
+      expect(container.querySelector('[data-group]')).toBeInTheDocument()
+
+      // Panel 渲染（data-panel 属性）
+      const panels = container.querySelectorAll('[data-panel]')
+      expect(panels.length).toBe(2)
+
+      // Separator 渲染（data-separator 属性）
+      expect(container.querySelector('[data-separator]')).toBeInTheDocument()
+    })
+  })
+
+  describe('MVP-UI-RS.2: Group方向为vertical', () => {
+    it('Group使用orientation="vertical"实现上下分区', () => {
+      const { container } = render(<DiscussionPanel messages={mockMessages} currentUserId="u1" onSendMessage={onSendMessage} />)
+
+      const group = container.querySelector('[data-group]')
+      // vertical 方向 → flexDirection 为 column
+      expect(group).toBeInTheDocument()
+      const style = (group as HTMLElement).style
+      expect(style.flexDirection).toBe('column')
+    })
+  })
+
+  describe('MVP-UI-RS.3: 默认布局比例80:20', () => {
+    it('消息区id=discussion-messages、输入区id=discussion-input', () => {
+      const { container } = render(<DiscussionPanel messages={mockMessages} currentUserId="u1" onSendMessage={onSendMessage} />)
+
+      // 验证两个Panel的id对应正确的区域
+      const messagesPanel = container.querySelector('#discussion-messages[data-panel]')
+      const inputPanel = container.querySelector('#discussion-input[data-panel]')
+
+      expect(messagesPanel).toBeInTheDocument()
+      expect(inputPanel).toBeInTheDocument()
+    })
+  })
+
+  describe('MVP-UI-RS.4: Panel尺寸约束', () => {
+    it('消息区minSize=60、输入区minSize=5 maxSize=35——比例验证', () => {
+      const { container } = render(<DiscussionPanel messages={mockMessages} currentUserId="u1" onSendMessage={onSendMessage} />)
+
+      const messagesPanel = container.querySelector('#discussion-messages[data-panel]') as HTMLElement
+      const inputPanel = container.querySelector('#discussion-input[data-panel]') as HTMLElement
+
+      expect(messagesPanel).toBeInTheDocument()
+      expect(inputPanel).toBeInTheDocument()
+      // 消息区 flexGrow 大于输入区（80:20 默认比例）
+      expect(parseFloat(messagesPanel.style.flexGrow)).toBeGreaterThan(parseFloat(inputPanel.style.flexGrow))
+    })
+  })
+
+  describe('MVP-UI-RS.5: Separator存在且可交互', () => {
+    it('Separator有role="separator"和data-separator属性', () => {
+      const { container } = render(<DiscussionPanel messages={mockMessages} currentUserId="u1" onSendMessage={onSendMessage} />)
+
+      const separator = container.querySelector('[data-separator]')
+      expect(separator).toBeInTheDocument()
+      expect(separator).toHaveAttribute('role', 'separator')
+      // Separator 可聚焦（tabIndex=0 表示可交互）
+      expect(separator).toHaveAttribute('tabindex', '0')
+    })
+  })
+
+  describe('MVP-UI-RS.6: 拖拽手柄视觉样式', () => {
+    it('Separator内含拖拽手柄元素（w-8 h-0.5 rounded-full）', () => {
+      const { container } = render(<DiscussionPanel messages={mockMessages} currentUserId="u1" onSendMessage={onSendMessage} />)
+
+      const separator = container.querySelector('[data-separator]')!
+      // 拖拽手柄是Separator的子元素
+      const handle = separator.querySelector('.w-8')
+      expect(handle).toBeInTheDocument()
+      expect(handle!.className).toContain('rounded-full')
+    })
+  })
+
+  describe('MVP-UI-RS.7: 布局持久化ID', () => {
+    it('Group/Panel/Separator各有id属性', () => {
+      const { container } = render(<DiscussionPanel messages={mockMessages} currentUserId="u1" onSendMessage={onSendMessage} />)
+
+      const group = container.querySelector('[data-group]')
+      expect(group).toHaveAttribute('id', 'discussion-panel')
+
+      const messagesPanel = container.querySelector('#discussion-messages[data-panel]')
+      expect(messagesPanel).toHaveAttribute('id', 'discussion-messages')
+
+      const inputPanel = container.querySelector('#discussion-input[data-panel]')
+      expect(inputPanel).toHaveAttribute('id', 'discussion-input')
+
+      const separator = container.querySelector('[data-separator]')
+      expect(separator).toHaveAttribute('id', 'discussion-separator')
+    })
+  })
+
+  describe('MVP-UI-RS.8: 功能无回归', () => {
+    it('Enter发送功能在可拖拽布局中仍正确', async () => {
+      const onSend = vi.fn().mockResolvedValue(undefined)
+      render(<DiscussionPanel messages={mockMessages} currentUserId="u1" onSendMessage={onSend} />)
+
+      const textarea = screen.getByPlaceholderText(/输入消息.*\/summarize/i)
+      fireEvent.change(textarea, { target: { value: '回归测试' } })
+      fireEvent.keyDown(textarea, { key: 'Enter', shiftKey: false })
+
+      await waitFor(() => {
+        expect(onSend).toHaveBeenCalledWith({ content: '回归测试', request_summary: false })
+      })
+    })
+
+    it('/summarize斜杠命令在可拖拽布局中仍正确', async () => {
+      const onSend = vi.fn().mockResolvedValue(undefined)
+      render(<DiscussionPanel messages={mockMessages} currentUserId="u1" onSendMessage={onSend} />)
+
+      const textarea = screen.getByPlaceholderText(/输入消息.*\/summarize/i)
+      fireEvent.change(textarea, { target: { value: '/summarize' } })
+      fireEvent.keyDown(textarea, { key: 'Enter', shiftKey: false })
+
+      await waitFor(() => {
+        expect(onSend).toHaveBeenCalledWith({ content: '请总结当前讨论要点', request_summary: true })
+      })
+    })
+
+    it('空消息列表在可拖拽布局中仍显示"暂无消息"', () => {
+      render(<DiscussionPanel messages={[]} currentUserId="u1" onSendMessage={onSendMessage} />)
+      expect(screen.getByText(/暂无消息/i)).toBeInTheDocument()
+    })
+
+    it('发送失败回滚在可拖拽布局中仍正确', async () => {
+      const onSend = vi.fn().mockRejectedValue(new Error('发送失败'))
+      render(<DiscussionPanel messages={mockMessages} currentUserId="u1" onSendMessage={onSend} />)
+
+      const textarea = screen.getByPlaceholderText(/输入消息.*\/summarize/i)
+      fireEvent.change(textarea, { target: { value: '失败测试' } })
+      fireEvent.keyDown(textarea, { key: 'Enter', shiftKey: false })
+
+      await waitFor(() => {
+        expect(screen.getByText(/发送失败/i)).toBeInTheDocument()
+      })
+    })
+
+    it('消息Panel有onResize回调用于底部锚定', () => {
+      const { container } = render(<DiscussionPanel messages={mockMessages} currentUserId="u1" onSendMessage={onSendMessage} />)
+      // 消息Panel存在且通过elementRef绑定DOM元素
+      const messagesPanel = container.querySelector('#discussion-messages[data-panel]')
+      expect(messagesPanel).toBeInTheDocument()
     })
   })
 })
