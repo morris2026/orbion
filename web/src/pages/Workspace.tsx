@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { clearToken, getIsAdmin } from '@/lib/auth'
+import { clearToken, getIsAdmin, getCurrentUserId } from '@/lib/auth'
 import { useNavigate } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import ProjectTree from '@/components/ProjectTree'
@@ -59,6 +59,7 @@ export default function Workspace({ workspaceOptions }: WorkspaceProps) {
         {ws.selectedThreadId ? (
           <DiscussionPanel
             messages={ws.messages}
+            currentUserId={getCurrentUserId() ?? ''}
             onSendMessage={ws.handleSendMessage}
           />
         ) : (

@@ -28,40 +28,15 @@ class ThreadService:
         self._project_read = project_read
 
     async def create_thread(self, project_id: str, title: str, type: str, creator: User) -> dict[str, Any]:
-        """创建线程 — 直接写入threads表 + 发布DiscussionMessageCreated事件作为首条消息"""
+        """创建线程 — 直接写入threads表"""
         # best-effort前置检查（真实去重由DB UNIQUE兜底）
         if await self._thread_read.check_thread_title_exists(project_id, title):
             raise ValueError(_MSG_THREAD_TITLE_EXISTS)
         thread_id = str(uuid.uuid4())
         now = datetime.now(UTC)
 
-        # CQRS写端：直接写入threads表行（thread_messages FK依赖threads表）
+        # CQRS写端：直接写入threads表行
         await self._thread_read.insert_thread(thread_id, project_id, title, type, creator.id)
-
-        # 线程创建消息以标题作为首条内容 — 设计文档3.1要求创建线程同时发布DiscussionMessageCreated事件，
-        # 需要有content（MessageCreate min_length=1），标题是线程主题的自然表达
-        message_id = str(uuid.uuid4())
-        payload = DiscussionMessageCreatedPayload(
-            thread_id=thread_id,
-            content=title,
-            request_summary=False,
-            message_id=message_id,
-        )
-
-        event = Event(
-            event_id=str(uuid.uuid4()),
-            project_id=project_id,
-            event_type=EventType.DiscussionMessageCreated,
-            participant_id=creator.id,
-            participant_type="human",
-            participant_display_name=creator.display_name,
-            payload=payload.model_dump(mode="json"),
-            correlation_id=thread_id,
-            created_at=now,
-        )
-
-        await self._event_store.append(event)
-        await self._event_bus.publish(event)
 
         # 从命令输入构造响应
         return {
@@ -81,6 +56,7 @@ class ThreadService:
             raise ValueError(f"Thread {thread_id} not found")
 
         message_id = str(uuid.uuid4())
+        now = datetime.now(UTC)
         payload = DiscussionMessageCreatedPayload(
             thread_id=thread_id,
             content=content,
@@ -97,12 +73,13 @@ class ThreadService:
             participant_display_name=user.display_name,
             payload=payload.model_dump(mode="json"),
             correlation_id=thread_id,
+            created_at=now,
         )
 
         await self._event_store.append(event)
         await self._event_bus.publish(event)
 
-        # 从命令输入构造响应
+        # 从命令输入构造响应——使用与Event相同的时间戳
         return {
             "id": message_id,
             "thread_id": thread_id,
@@ -111,7 +88,7 @@ class ThreadService:
             "display_name": user.display_name,
             "content": content,
             "event_type": "DiscussionMessageCreated",
-            "created_at": datetime.now(UTC),
+            "created_at": now,
         }
 
     async def list_threads(self, project_id: str) -> list[dict[str, Any]]:

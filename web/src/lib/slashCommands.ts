@@ -33,6 +33,6 @@ export function parseMessage(input: string): ParsedMessage {
 
   return {
     request_summary: false,
-    content: input,
+    content: trimmed,
   }
 }

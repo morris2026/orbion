@@ -150,12 +150,7 @@ export function useWorkspace(options?: UseWorkspaceOptions) {
       if (type === 'message_created') {
         const event = raw as unknown as SSEMessageCreatedEvent
         if (event.thread_id === selectedThreadIdRef.current) {
-          setMessages((prev) => {
-            // 去重前提：POST返回的MessageResponse.id 和 SSE推送的message_id 持同一个UUID
-            // （ThreadService.send_message 用同一个 message_id 构造两者）
-            if (prev.some(m => m.id === event.message_id)) return prev
-            return [...prev, mapMessageFromSSE(event)]
-          })
+          setMessages((prev) => [...prev, mapMessageFromSSE(event)])
         }
       } else if (type === 'summary_generated') {
         const event = raw as unknown as SSESummaryGeneratedEvent
@@ -193,16 +188,14 @@ export function useWorkspace(options?: UseWorkspaceOptions) {
     return () => disconnectSSE(es)
   }, [selectedProjectId])
 
-  // 发送消息（乐观更新：POST返回后立即显示，SSE回传时去重）
+  // 发送消息（POST仅触发后端发布事件，前端通过SSE回传显示——避免重复）
   const handleSendMessage = useCallback(
-    (opts: { content: string; request_summary?: boolean }) => {
-      if (!selectedThreadId) return
-      apiPost<MessageResponse>(`/threads/${selectedThreadId}/messages`, {
+    async (opts: { content: string; request_summary?: boolean }): Promise<void> => {
+      if (!selectedThreadId) throw new Error('未选择线程')
+      await apiPost(`/threads/${selectedThreadId}/messages`, {
         content: opts.content,
         request_summary: opts.request_summary ?? false,
-      }).then((response) => {
-        setMessages((prev) => [...prev, response])
-      }).catch(() => {})
+      })
     },
     [selectedThreadId]
   )

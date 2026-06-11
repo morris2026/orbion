@@ -51,3 +51,11 @@ export function getIsAdmin(): boolean {
   if (!payload) return false
   return payload.is_admin === true
 }
+
+/** 获取当前用户ID（JWT中的sub字段） */
+export function getCurrentUserId(): string | null {
+  const payload = decodeToken()
+  if (!payload) return null
+  if (typeof payload.sub !== 'string') return null
+  return payload.sub
+}

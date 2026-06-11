@@ -201,6 +201,34 @@ class TestSendMessageEventChain:
         assert msg_rows[0]["participant_id"] == user["id"]
         assert msg_rows[0]["event_type"] == "DiscussionMessageCreated"
 
+    async def test_send_message_created_at_not_null(
+        self,
+        client: AsyncClient,
+        event_bus: InProcessEventBus,
+        user_repo_provider: UserRepositoryProvider,
+    ) -> None:
+        """send_message的POST响应和SSE推送的created_at必须不为null"""
+        user = await _create_user(user_repo_provider, "ts_not_null_user")
+        project_id = await _create_project(client, user["token"])
+        await event_bus.wait_for_pending()
+        thread_id = await _create_thread(client, user["token"], project_id)
+        await event_bus.wait_for_pending()
+
+        resp = await client.post(
+            f"/threads/{thread_id}/messages",
+            json={"content": "created_at test", "request_summary": False},
+            headers={"Authorization": f"Bearer {user['token']}"},
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        # POST响应的created_at必须是有效的ISO时间字符串（不是null）
+        assert data["created_at"] is not None
+        assert len(data["created_at"]) > 0
+        # 验证是合法的ISO格式
+        from datetime import datetime
+
+        datetime.fromisoformat(data["created_at"].replace("Z", "+00:00"))
+
 
 class TestMessageCursorPagination:
     """MVP-10.4: 消息列表游标分页"""
