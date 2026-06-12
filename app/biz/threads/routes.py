@@ -55,6 +55,25 @@ async def list_threads(
     return [ThreadListItem(**t) for t in threads]
 
 
+@thread_router.delete("/{thread_id}")
+async def delete_thread(
+    project_id: str,
+    thread_id: str,
+    user: User = Depends(get_current_user),
+    service: ThreadService = Depends(_get_thread_service),
+) -> dict[str, str]:
+    """删除线程，需要DELETE_PROJECT权限，不允许删除默认线程"""
+    try:
+        success = await service.delete_thread(project_id, thread_id, user.id)
+    except PermissionError:
+        raise HTTPException(status_code=403, detail="Insufficient permissions")
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    if not success:
+        raise HTTPException(status_code=403, detail="Not a project member")
+    return {"status": "deleted"}
+
+
 # -- 消息端点 --
 
 
