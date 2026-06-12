@@ -11,6 +11,7 @@ from app.hub.events.bus import InProcessEventBus
 from app.hub.events.projections import EventProjectionsProtocol, load_projections_impl
 from app.hub.events.store import EventStoreProtocol, load_store_impl
 from app.hub.events.types import Event
+from app.hub.permissions.roles import HUMAN_ROLE_BITS
 
 # 测试中定义的配套组合：projections实现 → 配套store实现
 TEST_PROJECTION_STORE_PAIRING = {
@@ -618,7 +619,7 @@ class TestProjectCreatedProjection:
         assert member["type"] == "human"
         assert member["display_name"] == "张三"
         # creator 自动成为 owner
-        assert member["roles"] == 4095
+        assert member["roles"] == HUMAN_ROLE_BITS["owner"]
 
         # 验证 projects 行存在
         async with postgres_pool.acquire() as conn:
@@ -668,8 +669,8 @@ class TestProjectMembersProjection:
         assert member["project_id"] == project_id
         assert member["type"] == "human"
         assert member["display_name"] == "张三"
-        # roles已从payload.roles(["owner"])转为bitmask(4095)
-        assert member["roles"] == 4095
+        # roles已从payload.roles(["owner"])转为bitmask
+        assert member["roles"] == HUMAN_ROLE_BITS["owner"]
 
 
 class TestProjectionQueryStructuredData:

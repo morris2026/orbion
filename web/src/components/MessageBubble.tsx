@@ -47,7 +47,7 @@ export default function MessageBubble({ message, currentUserId }: MessageBubbleP
         </div>
       )}
 
-      <div className={`min-w-0 max-w-[70%] flex flex-col ${isSelf ? 'order-first items-end' : 'items-start'}`}>
+      <div className={`min-w-0 flex flex-col ${isSelf ? 'order-first items-end' : 'items-start'}`}>
         <div className={`flex gap-1 text-xs text-muted-foreground mb-1`}>
           {isSelf ? (
             <>
@@ -66,7 +66,7 @@ export default function MessageBubble({ message, currentUserId }: MessageBubbleP
           data-testid={`bubble-${message.id}`}
           data-align={align}
           data-participant-type={participantType}
-          className={`px-3 py-2 rounded-lg w-fit ${
+          className={`px-3 py-2 rounded-lg w-fit max-w-[70%] ${
             isSelf
               ? 'bg-blue-500 text-white'
               : isAgent

@@ -136,6 +136,39 @@ class PostgresProjectRead(ProjectReadProtocol):
             r["role"] = derive_role_name(int(r["roles"]))
         return results
 
+    async def delete_project(self, project_id: str) -> bool:
+        """事务内按依赖顺序删除项目及其关联数据"""
+        pool = self._require_pool()
+        async with pool.acquire() as conn:
+            async with conn.transaction():
+                pid = uuid.UUID(project_id)
+                # 按外键依赖顺序：子表先删
+                await conn.execute(
+                    "DELETE FROM task_outputs WHERE plan_id IN (SELECT id FROM execution_plans WHERE project_id = $1)",
+                    pid,
+                )
+                await conn.execute(
+                    "DELETE FROM execution_plans WHERE project_id = $1",
+                    pid,
+                )
+                await conn.execute(
+                    "DELETE FROM thread_messages WHERE thread_id IN (SELECT id FROM threads WHERE project_id = $1)",
+                    pid,
+                )
+                await conn.execute(
+                    "DELETE FROM threads WHERE project_id = $1",
+                    pid,
+                )
+                await conn.execute(
+                    "DELETE FROM project_members WHERE project_id = $1",
+                    pid,
+                )
+                result = await conn.execute(
+                    "DELETE FROM projects WHERE id = $1",
+                    pid,
+                )
+                return result == "DELETE 1"
+
 
 def _row_to_dict(row: asyncpg.Record) -> dict[str, Any]:
     """asyncpg Record → dict，UUID列自动转为str"""

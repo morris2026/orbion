@@ -16,6 +16,7 @@ class HumanPermission(int, Enum):
     MANAGE_SPACE = 1 << 9
     MANAGE_PROJECT = 1 << 10
     ADMINISTRATOR = 1 << 11
+    DELETE_PROJECT = 1 << 12
 
     @classmethod
     def all_bits(cls) -> int:

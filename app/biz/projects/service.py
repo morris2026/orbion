@@ -9,6 +9,8 @@ from app.hub.auth.models import User
 from app.hub.events.bus import EventBus
 from app.hub.events.store import EventStoreProtocol
 from app.hub.events.types import Event, EventType, MemberAddedPayload, ProjectCreatedPayload
+from app.hub.permissions.bitmask import HumanPermission
+from app.hub.permissions.compute import compute_permissions
 
 _MSG_MEMBER_EXISTS = "成员已在项目中"
 _MSG_PROJECT_EXISTS = "项目名称已存在"
@@ -109,3 +111,12 @@ class ProjectService:
     async def list_members(self, project_id: str) -> list[dict[str, Any]]:
         """列出项目所有成员"""
         return await self._read_repo.list_members(project_id)
+
+    async def delete_project(self, project_id: str, user_id: str) -> bool:
+        """删除项目：检查成员身份 + DELETE_PROJECT权限，委托read_repo删除"""
+        roles = await self._read_repo.get_member_roles(project_id, user_id)
+        if roles is None:
+            return False
+        if not compute_permissions(roles, HumanPermission.DELETE_PROJECT):
+            raise PermissionError("Insufficient permissions")
+        return await self._read_repo.delete_project(project_id)
