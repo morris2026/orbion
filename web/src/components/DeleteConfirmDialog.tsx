@@ -58,7 +58,10 @@ export default function DeleteConfirmDialog({
   }
 
   return (
-    <Dialog open={open} onOpenChange={(v) => { if (!v) onClose() }}>
+    <Dialog open={open} onOpenChange={(v, details) => {
+      if (!v && details.reason === 'outside-press') return
+      if (!v) onClose()
+    }}>
       <DialogContent>
         <DialogHeader>
           <DialogTitle>确认删除</DialogTitle>

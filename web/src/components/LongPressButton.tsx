@@ -42,21 +42,34 @@ export default function LongPressButton({
     }
   }, [duration])
 
-  const handleStart = useCallback(() => {
+  const handleStart = useCallback((e: React.MouseEvent | React.TouchEvent) => {
+    e.preventDefault()
     startTimeRef.current = Date.now()
     rafRef.current = requestAnimationFrame(animateProgress)
     timerRef.current = setTimeout(() => {
       setProgress(1)
+      triggeredRef.current = true
       onLongPress()
     }, duration)
   }, [duration, onLongPress, animateProgress])
 
+  const triggeredRef = useRef(false)
+
   const handleEnd = useCallback(() => {
+    if (triggeredRef.current) {
+      triggeredRef.current = false
+      clear()
+      return
+    }
     clear()
   }, [clear])
 
+  const r = 8
+  const circumference = 2 * Math.PI * r
+  const strokeDashoffset = circumference * (1 - progress)
+
   return (
-    <div className="relative">
+    <div className="relative inline-flex">
       <Button
         variant="ghost"
         size="icon"
@@ -72,10 +85,25 @@ export default function LongPressButton({
         {children}
       </Button>
       {progress > 0 && (
-        <div
-          className="absolute inset-0 rounded-md pointer-events-none bg-red-500/20"
-          style={{ clipPath: `inset(0 ${(1 - progress) * 100}% 0 0)` }}
-        />
+        <svg
+          className="absolute inset-0 pointer-events-none text-red-500"
+          width="100%"
+          height="100%"
+          viewBox="0 0 20 20"
+        >
+          <circle
+            cx="10"
+            cy="10"
+            r={r}
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.5"
+            strokeLinecap="round"
+            strokeDasharray={circumference}
+            strokeDashoffset={strokeDashoffset}
+            transform="rotate(-90 10 10)"
+          />
+        </svg>
       )}
     </div>
   )

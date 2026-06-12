@@ -285,7 +285,7 @@ export function useWorkspace(options?: UseWorkspaceOptions) {
   return {
     projects, setProjects, selectedProjectId, setSelectedProjectId,
     threads, setThreads, selectedThreadId, setSelectedThreadId,
-    messages, plans, outputs,
+    messages, setMessages, plans, setPlans, outputs, setOutputs,
     handleSendMessage, handleApprovePlan, handleRejectPlan,
     handleCreateProject, handleCreateThread, handleRegisterAgent,
     handleAddMember, handleApproveOutput, handleRequestRevision,
