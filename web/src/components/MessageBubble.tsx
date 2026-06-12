@@ -47,9 +47,8 @@ export default function MessageBubble({ message, currentUserId }: MessageBubbleP
         </div>
       )}
 
-      <div className={`${isSelf ? 'order-first' : ''}`}>
-        {/* 名字和时间行 */}
-        <div className={`flex gap-1 text-xs text-muted-foreground mb-1 ${isSelf ? 'justify-end' : 'justify-start'}`}>
+      <div className={`min-w-0 max-w-[70%] flex flex-col ${isSelf ? 'order-first items-end' : 'items-start'}`}>
+        <div className={`flex gap-1 text-xs text-muted-foreground mb-1`}>
           {isSelf ? (
             <>
               <span>{formatTimestamp(message.created_at)}</span>
@@ -63,12 +62,11 @@ export default function MessageBubble({ message, currentUserId }: MessageBubbleP
           )}
         </div>
 
-        {/* 泡泡 */}
         <div
           data-testid={`bubble-${message.id}`}
           data-align={align}
           data-participant-type={participantType}
-          className={`px-3 py-2 rounded-lg max-w-[70%] ${
+          className={`px-3 py-2 rounded-lg w-fit ${
             isSelf
               ? 'bg-blue-500 text-white'
               : isAgent
@@ -76,7 +74,7 @@ export default function MessageBubble({ message, currentUserId }: MessageBubbleP
                 : 'bg-gray-100 text-foreground'
           }`}
         >
-          <p className="text-sm whitespace-pre-wrap">{message.content}</p>
+          <p className="text-sm whitespace-pre-wrap break-words [word-break:break-word]">{message.content}</p>
         </div>
       </div>
 
