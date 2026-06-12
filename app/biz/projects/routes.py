@@ -67,6 +67,22 @@ async def get_project(
     return ProjectResponse(**project)
 
 
+@router.delete("/{project_id}")
+async def delete_project(
+    project_id: str,
+    user: User = Depends(get_current_user),
+    service: ProjectService = Depends(_get_project_service),
+) -> dict[str, str]:
+    """删除项目，需要DELETE_PROJECT权限"""
+    try:
+        success = await service.delete_project(project_id, user.id)
+    except PermissionError:
+        raise HTTPException(status_code=403, detail="Insufficient permissions")
+    if not success:
+        raise HTTPException(status_code=404, detail="Project not found or not a member")
+    return {"status": "deleted"}
+
+
 @router.post("/{project_id}/members", response_model=MemberResponse)
 async def add_member(
     project_id: str,

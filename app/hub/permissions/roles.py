@@ -3,7 +3,7 @@
 from app.hub.permissions.bitmask import AgentPermission, HumanPermission
 
 HUMAN_ROLE_BITS: dict[str, int] = {
-    "owner": HumanPermission.all_bits(),  # 4095
+    "owner": HumanPermission.all_bits(),
     "admin": HumanPermission.all_bits() & ~HumanPermission.ADMINISTRATOR,  # 2047
     "member": (
         HumanPermission.VIEW_DISCUSSION

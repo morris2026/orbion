@@ -470,6 +470,61 @@ class TestListMembers:
         assert resp.status_code == 404
 
 
+class TestDeleteProject:
+    """项目删除API — Owner可删除(200)、Member不可删除(403)、非成员404"""
+
+    @pytest.mark.asyncio
+    async def test_owner_can_delete_project(
+        self,
+        client: AsyncClient,
+        db_conn: asyncpg.Connection,
+        event_bus: InProcessEventBus,
+        user_repo_provider: UserRepositoryProvider,
+    ) -> None:
+        owner = await _create_user(user_repo_provider, "del_owner")
+        project_id = await _create_project(client, owner["token"], "ToDelete")
+        await event_bus.wait_for_pending()
+
+        resp = await client.delete(f"/projects/{project_id}", headers={"Authorization": f"Bearer {owner['token']}"})
+        assert resp.status_code == 200
+        assert resp.json() == {"status": "deleted"}
+
+        row = await db_conn.fetchrow("SELECT 1 FROM projects WHERE id = $1", project_id)
+        assert row is None
+
+    @pytest.mark.asyncio
+    async def test_member_cannot_delete_project(
+        self, client: AsyncClient, event_bus: InProcessEventBus, user_repo_provider: UserRepositoryProvider
+    ) -> None:
+        owner = await _create_user(user_repo_provider, "del2_owner")
+        member_user = await _create_user(user_repo_provider, "del2_member")
+        project_id = await _create_project(client, owner["token"], "NoDelete")
+        await event_bus.wait_for_pending()
+        await client.post(
+            f"/projects/{project_id}/members",
+            json={"user_id": member_user["id"], "role": "member"},
+            headers={"Authorization": f"Bearer {owner['token']}"},
+        )
+        await event_bus.wait_for_pending()
+
+        resp = await client.delete(
+            f"/projects/{project_id}", headers={"Authorization": f"Bearer {member_user['token']}"}
+        )
+        assert resp.status_code == 403
+
+    @pytest.mark.asyncio
+    async def test_non_member_delete_returns_404(
+        self, client: AsyncClient, event_bus: InProcessEventBus, user_repo_provider: UserRepositoryProvider
+    ) -> None:
+        owner = await _create_user(user_repo_provider, "del3_owner")
+        outsider = await _create_user(user_repo_provider, "del3_out")
+        project_id = await _create_project(client, owner["token"], "NoSee")
+        await event_bus.wait_for_pending()
+
+        resp = await client.delete(f"/projects/{project_id}", headers={"Authorization": f"Bearer {outsider['token']}"})
+        assert resp.status_code == 404
+
+
 class TestProjectNameUniqueness:
     """项目名称唯一校验 → 409"""
 

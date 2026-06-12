@@ -23,10 +23,10 @@ class TestHumanPermissionBitValues:
         assert HumanPermission.ADMINISTRATOR == 1 << 11
 
     def test_member_count(self) -> None:
-        assert len(HumanPermission) == 12
+        assert len(HumanPermission) == 13
 
     def test_all_bits_sum(self) -> None:
-        assert HumanPermission.all_bits() == 4095
+        assert HumanPermission.all_bits() == 8191
 
 
 class TestAgentPermissionBitValues:
@@ -56,10 +56,10 @@ class TestHumanRoleMapping:
     """MVP-8.3: 人类角色→权限位映射"""
 
     def test_owner_role(self) -> None:
-        assert HUMAN_ROLE_BITS["owner"] == 4095
+        assert HUMAN_ROLE_BITS["owner"] == 8191
 
     def test_admin_role(self) -> None:
-        assert HUMAN_ROLE_BITS["admin"] == 2047
+        assert HUMAN_ROLE_BITS["admin"] == 6143
 
     def test_member_role(self) -> None:
         assert HUMAN_ROLE_BITS["member"] == 31
