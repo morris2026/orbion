@@ -8,7 +8,7 @@ from app.biz.projects.read_repo import ProjectReadProtocol
 from app.hub.auth.models import User
 from app.hub.events.bus import EventBus
 from app.hub.events.store import EventStoreProtocol
-from app.hub.events.types import Event, EventType, MemberAddedPayload, ProjectCreatedPayload
+from app.hub.events.types import Event, EventType, MemberAddedPayload, ProjectCreatedPayload, ProjectDeletedPayload
 from app.hub.permissions.bitmask import HumanPermission
 from app.hub.permissions.compute import compute_permissions
 
@@ -113,10 +113,31 @@ class ProjectService:
         return await self._read_repo.list_members(project_id)
 
     async def delete_project(self, project_id: str, user_id: str) -> bool:
-        """删除项目：检查成员身份 + DELETE_PROJECT权限，委托read_repo删除"""
+        """删除项目：权限校验 → 审计事件 → 级联删除投影表"""
         roles = await self._read_repo.get_member_roles(project_id, user_id)
         if roles is None:
             return False
         if not compute_permissions(roles, HumanPermission.DELETE_PROJECT):
             raise PermissionError("Insufficient permissions")
+
+        project = await self._read_repo.get_project(project_id, user_id)
+        if project is None:
+            return False
+
+        now = datetime.now(UTC)
+        payload = ProjectDeletedPayload(name=project["name"])
+        event = Event(
+            event_id=str(uuid.uuid4()),
+            project_id=project_id,
+            event_type=EventType.ProjectDeleted,
+            participant_id=user_id,
+            participant_type="human",
+            participant_display_name="",
+            payload=payload.model_dump(mode="json"),
+            correlation_id=project_id,
+            created_at=now,
+        )
+        await self._event_store.append(event)
+        await self._event_bus.publish(event)
+
         return await self._read_repo.delete_project(project_id)
