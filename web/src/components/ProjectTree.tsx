@@ -1,10 +1,12 @@
 import { useState, useEffect } from 'react'
 import type { ProjectListItem, ThreadListItem } from '@/types/api'
-import { PlusIcon, UserPlusIcon, BotIcon, ChevronRightIcon, ChevronDownIcon } from 'lucide-react'
+import { PlusIcon, UserPlusIcon, BotIcon, ChevronRightIcon, ChevronDownIcon, XIcon } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
+import LongPressButton from '@/components/LongPressButton'
+import DeleteConfirmDialog from '@/components/DeleteConfirmDialog'
 
 interface ProjectTreeProps {
   projects: ProjectListItem[]
@@ -17,6 +19,8 @@ interface ProjectTreeProps {
   onCreateThread: (projectId: string) => void
   onAddMember: (projectId: string) => void
   onRegisterAgent: (projectId: string) => void
+  onDeleteProject: (projectId: string) => void
+  onDeleteThread: (threadId: string, projectId: string) => void
 }
 
 /** 计算项目的总未读数，排除当前选中线程的未读 */
@@ -41,6 +45,8 @@ export default function ProjectTree({
   onCreateThread,
   onAddMember,
   onRegisterAgent,
+  onDeleteProject,
+  onDeleteThread,
 }: ProjectTreeProps) {
   // tooltip hover 协调：CSS group-hover 无法感知 portaled tooltip 的打开状态，
   // 用 JS state 统一控制按钮可见性
@@ -49,6 +55,13 @@ export default function ProjectTree({
   const [expandedProjects, setExpandedProjects] = useState<Set<string>>(
     new Set(selectedProjectId ? [selectedProjectId] : [])
   )
+  const [deleteTarget, setDeleteTarget] = useState<{
+    type: 'project' | 'thread'
+    id: string
+    projectId: string
+    name: string
+    deletePath: string
+  } | null>(null)
   // 外部选中项目时自动展开
   useEffect(() => {
     if (selectedProjectId && !expandedProjects.has(selectedProjectId)) {
@@ -152,11 +165,29 @@ export default function ProjectTree({
                       <TooltipContent>添加成员</TooltipContent>
                     </Tooltip>
                     <Tooltip onOpenChange={(open) => { setOpenTooltipProjectId(open ? project.id : null) }}>
-                      <TooltipTrigger render={<Button variant="ghost" size="icon" className="h-5 w-5" onClick={(e) => { e.stopPropagation(); onRegisterAgent(project.id) }} aria-label={`注册Agent-${project.id}`} />}>
-                          <BotIcon className="h-3 w-3" />
-                        </TooltipTrigger>
-                      <TooltipContent>注册Agent</TooltipContent>
-                    </Tooltip>
+                       <TooltipTrigger render={<Button variant="ghost" size="icon" className="h-5 w-5" onClick={(e) => { e.stopPropagation(); onRegisterAgent(project.id) }} aria-label={`注册Agent-${project.id}`} />}>
+                           <BotIcon className="h-3 w-3" />
+                         </TooltipTrigger>
+                       <TooltipContent>注册Agent</TooltipContent>
+                     </Tooltip>
+                     <Tooltip onOpenChange={(open) => { setOpenTooltipProjectId(open ? project.id : null) }}>
+                       <TooltipTrigger render={
+                          <LongPressButton
+                            className="size-5 p-0 text-red-500 hover:text-red-600"
+                            onLongPress={() => setDeleteTarget({
+                              type: 'project',
+                              id: project.id,
+                              projectId: project.id,
+                              name: project.name,
+                              deletePath: `/projects/${project.id}`,
+                            })}
+                            aria-label={`删除项目-${project.id}`}
+                          >
+                            <XIcon className="size-3" />
+                          </LongPressButton>
+                       } />
+                       <TooltipContent>长按3秒删除项目</TooltipContent>
+                     </Tooltip>
                   </div>
                 </div>
 
@@ -172,7 +203,7 @@ export default function ProjectTree({
                           data-testid={`thread-${thread.id}`}
                           data-selected={selectedThreadId === thread.id ? 'true' : undefined}
                           data-unread={showUnread ? 'true' : undefined}
-                          className={`flex items-center justify-between p-2 rounded cursor-pointer transition-colors ${selectedThreadId === thread.id ? 'bg-accent' : 'hover:bg-muted'}`}
+                          className={`group flex items-center justify-between p-2 rounded cursor-pointer transition-colors ${selectedThreadId === thread.id ? 'bg-accent' : 'hover:bg-muted'}`}
                           onClick={() => { onSelectProject(thread.project_id); onSelectThread(thread.id) }}
                         >
                           <div className="flex items-center gap-2">
@@ -190,9 +221,22 @@ export default function ProjectTree({
                             <span data-testid={`${thread.id}-summary`} className="text-xs text-green-600">已总结</span>
                           )}
                           <div className="flex gap-2 text-xs text-muted-foreground">
-                            <span>{thread.pending_plan_count}个待审</span>
-                            <span>{thread.message_count}条消息</span>
-                          </div>
+                             <span>{thread.pending_plan_count}个待审</span>
+                             <span>{thread.message_count}条消息</span>
+                           </div>
+                            <LongPressButton
+                              className="size-4 p-0 text-red-500 hover:text-red-600 opacity-0 group-hover:opacity-100"
+                              onLongPress={() => setDeleteTarget({
+                                type: 'thread',
+                                id: thread.id,
+                                projectId: thread.project_id,
+                                name: `${project.name}/${thread.title}`,
+                                deletePath: `/projects/${thread.project_id}/threads/${thread.id}`,
+                              })}
+                              aria-label={`删除线程-${thread.id}`}
+                            >
+                              <XIcon className="size-2.5" />
+                            </LongPressButton>
                         </div>
                       )
                     })}
@@ -203,6 +247,22 @@ export default function ProjectTree({
           })}
         </div>
       </ScrollArea>
+      {deleteTarget && (
+        <DeleteConfirmDialog
+          open={!!deleteTarget}
+          onClose={() => setDeleteTarget(null)}
+          targetName={deleteTarget.name}
+          targetType={deleteTarget.type}
+          deletePath={deleteTarget.deletePath}
+          onDeleted={() => {
+            if (deleteTarget.type === 'project') {
+              onDeleteProject(deleteTarget.id)
+            } else {
+              onDeleteThread(deleteTarget.id, deleteTarget.projectId)
+            }
+          }}
+        />
+      )}
     </TooltipProvider>
   )
 }

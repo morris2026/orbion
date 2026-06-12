@@ -61,6 +61,24 @@ export default function Workspace({ workspaceOptions }: WorkspaceProps) {
             onCreateThread={(projectId) => openProjectDialog(setShowCreateThread, projectId)}
             onAddMember={(projectId) => openProjectDialog(setShowAddMember, projectId)}
             onRegisterAgent={(projectId) => openProjectDialog(setShowRegisterAgent, projectId)}
+            onDeleteProject={(projectId) => {
+              ws.setProjects((prev) => prev.filter((p) => p.id !== projectId))
+              ws.setThreads((prev) => prev.filter((t) => t.project_id !== projectId))
+              if (ws.selectedProjectId === projectId) {
+                ws.setSelectedProjectId(null)
+                ws.setSelectedThreadId(null)
+                ws.setMessages([])
+                ws.setPlans([])
+                ws.setOutputs([])
+              }
+            }}
+            onDeleteThread={(threadId, _projectId) => {
+              ws.setThreads((prev) => prev.filter((t) => t.id !== threadId))
+              if (ws.selectedThreadId === threadId) {
+                ws.setSelectedThreadId(null)
+                ws.setMessages([])
+              }
+            }}
           />
         </Panel>
 
