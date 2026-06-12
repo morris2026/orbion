@@ -29,6 +29,7 @@ class EventType(StrEnum):
     MemberAdded = "MemberAdded"
     AgentRegistered = "AgentRegistered"
     UserRegistered = "UserRegistered"
+    ProjectDeleted = "ProjectDeleted"
 
 
 class Event(BaseModel):
@@ -162,3 +163,9 @@ class UserRegisteredPayload(BaseModel):
     display_name: str
     status: Literal["pending", "active", "rejected"]
     is_admin: bool = False
+
+
+class ProjectDeletedPayload(BaseModel):
+    """ProjectDeleted payload — 删除审计用"""
+
+    name: str
