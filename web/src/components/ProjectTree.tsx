@@ -217,13 +217,7 @@ export default function ProjectTree({
                               </Badge>
                             )}
                           </div>
-                          {thread.has_summary && (
-                            <span data-testid={`${thread.id}-summary`} className="text-xs text-green-600">已总结</span>
-                          )}
-                          <div className="flex gap-2 text-xs text-muted-foreground">
-                             <span>{thread.pending_plan_count}个待审</span>
-                             <span>{thread.message_count}条消息</span>
-                           </div>
+                          <div className="flex items-center gap-1 ml-auto">
                             <LongPressButton
                               className="size-4 p-0 text-red-500 hover:text-red-600 opacity-0 group-hover:opacity-100"
                               onLongPress={() => setDeleteTarget({
@@ -237,6 +231,7 @@ export default function ProjectTree({
                             >
                               <XIcon className="size-2.5" />
                             </LongPressButton>
+                          </div>
                         </div>
                       )
                     })}
