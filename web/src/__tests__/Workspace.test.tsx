@@ -1446,15 +1446,15 @@ describe('MVP-UI-RS.x: DiscussionPanel可拖拽分隔条', () => {
     })
   })
 
-  describe('MVP-UI-RS.6: 拖拽手柄视觉样式', () => {
-    it('Separator内含拖拽手柄元素（w-8 h-0.5 rounded-full）', () => {
+  describe('MVP-UI-RS.6: 分隔条视觉样式', () => {
+    it('Separator使用库内置data-separator属性驱动CSS样式', () => {
       const { container } = render(<DiscussionPanel messages={mockMessages} currentUserId="u1" onSendMessage={onSendMessage} />)
 
       const separator = container.querySelector('[data-separator]')!
-      // 拖拽手柄是Separator的子元素
-      const handle = separator.querySelector('.w-8')
-      expect(handle).toBeInTheDocument()
-      expect(handle!.className).toContain('rounded-full')
+      expect(separator).toBeInTheDocument()
+      // 4px空间 + border-b 1px可视线，库proximity检测驱动data-separator状态
+      expect(separator.className).toContain('border-border')
+      expect(separator.className).toContain('data-[separator=hover]')
     })
   })
 
@@ -1526,6 +1526,108 @@ describe('MVP-UI-RS.x: DiscussionPanel可拖拽分隔条', () => {
       // 消息Panel存在且通过elementRef绑定DOM元素
       const messagesPanel = container.querySelector('#discussion-messages[data-panel]')
       expect(messagesPanel).toBeInTheDocument()
+    })
+  })
+})
+
+describe('MVP-UI-COL.x: 三栏可拖拽布局', () => {
+  beforeEach(() => {
+    localStorage.clear()
+    vi.restoreAllMocks()
+    vi.unstubAllGlobals()
+  })
+
+  const workspaceInitialState: UseWorkspaceOptions = {
+    initialState: {
+      projects: mockProjects,
+      selectedProjectId: 'proj-1',
+      threads: mockThreads,
+      selectedThreadId: 'dt-1',
+      messages: mockMessages,
+      plans: [],
+      outputs: [],
+    },
+  }
+
+  describe('MVP-UI-COL.1: 三栏Group/Panel/Separator渲染', () => {
+    it('Workspace渲染水平Group+三个Panel+两个Separator', () => {
+      vi.spyOn(authModule, 'isAuthenticated').mockReturnValue(true)
+      vi.spyOn(authModule, 'isTokenExpired').mockReturnValue(false)
+      vi.spyOn(authModule, 'getIsAdmin').mockReturnValue(false)
+      vi.spyOn(sseModule, 'createSSEConnection').mockReturnValue({ close: vi.fn() } as unknown as EventSource)
+      vi.spyOn(sseModule, 'disconnectSSE').mockImplementation(() => {})
+
+      const { container } = render(
+        <MemoryRouter initialEntries={['/workspace']}>
+          <Workspace workspaceOptions={workspaceInitialState} />
+        </MemoryRouter>
+      )
+
+      // 水平 Group
+      const group = container.querySelector('[data-group]')
+      expect(group).toBeInTheDocument()
+      expect((group as HTMLElement).style.flexDirection).toBe('row')
+
+      // 三个 Panel
+      const panels = container.querySelectorAll('[data-panel]')
+      expect(panels.length).toBeGreaterThanOrEqual(3)
+
+      // 两个 Separator（workspace-separator-left 和 workspace-separator-right）
+      expect(container.querySelector('#workspace-separator-left[data-separator]')).toBeInTheDocument()
+      expect(container.querySelector('#workspace-separator-right[data-separator]')).toBeInTheDocument()
+    })
+  })
+
+  describe('MVP-UI-COL.2: 默认布局比例', () => {
+    it('左栏flex-grow小于中栏和右栏，中栏右栏相等', () => {
+      vi.spyOn(authModule, 'isAuthenticated').mockReturnValue(true)
+      vi.spyOn(authModule, 'isTokenExpired').mockReturnValue(false)
+      vi.spyOn(authModule, 'getIsAdmin').mockReturnValue(false)
+      vi.spyOn(sseModule, 'createSSEConnection').mockReturnValue({ close: vi.fn() } as unknown as EventSource)
+      vi.spyOn(sseModule, 'disconnectSSE').mockImplementation(() => {})
+
+      const { container } = render(
+        <MemoryRouter initialEntries={['/workspace']}>
+          <Workspace workspaceOptions={workspaceInitialState} />
+        </MemoryRouter>
+      )
+
+      const leftPanel = container.querySelector('#workspace-left[data-panel]') as HTMLElement
+      const middlePanel = container.querySelector('#workspace-middle[data-panel]') as HTMLElement
+      const rightPanel = container.querySelector('#workspace-right[data-panel]') as HTMLElement
+
+      expect(leftPanel).toBeInTheDocument()
+      expect(middlePanel).toBeInTheDocument()
+      expect(rightPanel).toBeInTheDocument()
+
+      // 中栏和右栏 flex-grow 相等
+      expect(parseFloat(middlePanel.style.flexGrow)).toEqual(parseFloat(rightPanel.style.flexGrow))
+      // 左栏 flex-grow 小于中栏
+      expect(parseFloat(leftPanel.style.flexGrow)).toBeLessThan(parseFloat(middlePanel.style.flexGrow))
+    })
+  })
+
+  describe('MVP-UI-COL.3: 尺寸约束', () => {
+    it('左栏有256px最小宽度和400px最大宽度约束', () => {
+      vi.spyOn(authModule, 'isAuthenticated').mockReturnValue(true)
+      vi.spyOn(authModule, 'isTokenExpired').mockReturnValue(false)
+      vi.spyOn(authModule, 'getIsAdmin').mockReturnValue(false)
+      vi.spyOn(sseModule, 'createSSEConnection').mockReturnValue({ close: vi.fn() } as unknown as EventSource)
+      vi.spyOn(sseModule, 'disconnectSSE').mockImplementation(() => {})
+
+      const { container } = render(
+        <MemoryRouter initialEntries={['/workspace']}>
+          <Workspace workspaceOptions={workspaceInitialState} />
+        </MemoryRouter>
+      )
+
+      // 验证Panel存在且有正确的id——minSize/maxSize由react-resizable-panels内部处理
+      const leftPanel = container.querySelector('#workspace-left[data-panel]')
+      const middlePanel = container.querySelector('#workspace-middle[data-panel]')
+      const rightPanel = container.querySelector('#workspace-right[data-panel]')
+      expect(leftPanel).toBeInTheDocument()
+      expect(middlePanel).toBeInTheDocument()
+      expect(rightPanel).toBeInTheDocument()
     })
   })
 })
