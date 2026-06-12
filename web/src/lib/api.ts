@@ -59,3 +59,14 @@ export async function apiGet<T = unknown>(path: string, params?: Record<string, 
   }
   return resp.json() as Promise<T>
 }
+
+export async function apiDelete<T = unknown>(path: string): Promise<T> {
+  const resp = await fetch(path, {
+    method: 'DELETE',
+    headers: buildHeaders(),
+  })
+  if (!resp.ok) {
+    throw new ApiError(resp.status, await parseErrorDetail(resp))
+  }
+  return resp.json() as Promise<T>
+}
