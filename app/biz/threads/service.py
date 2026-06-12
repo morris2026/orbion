@@ -10,8 +10,11 @@ from app.hub.auth.models import User
 from app.hub.events.bus import EventBus
 from app.hub.events.store import EventStoreProtocol
 from app.hub.events.types import DiscussionMessageCreatedPayload, Event, EventType
+from app.hub.permissions.bitmask import HumanPermission
+from app.hub.permissions.compute import compute_permissions
 
 _MSG_THREAD_TITLE_EXISTS = "同项目下线程标题已存在"
+_MSG_CANNOT_DELETE_DEFAULT = "不允许删除默认线程"
 
 
 class ThreadService:
@@ -114,3 +117,17 @@ class ThreadService:
     async def get_thread_project_id(self, thread_id: str) -> str | None:
         """通过thread_id查找project_id — 消息端点路径不含project_id"""
         return await self._thread_read.get_thread_project_id(thread_id)
+
+    async def delete_thread(self, project_id: str, thread_id: str, user_id: str) -> bool:
+        """删除线程：权限校验 → 默认线程保护 → 级联删除投影表"""
+        roles = await self._project_read.get_member_roles(project_id, user_id)
+        if roles is None:
+            return False
+        if not compute_permissions(roles, HumanPermission.DELETE_PROJECT):
+            raise PermissionError("Insufficient permissions")
+
+        default_thread_id = await self._thread_read.get_default_thread_id(project_id)
+        if default_thread_id is not None and default_thread_id == thread_id:
+            raise ValueError(_MSG_CANNOT_DELETE_DEFAULT)
+
+        return await self._thread_read.delete_thread(thread_id)

@@ -495,3 +495,82 @@ class TestThreadTitleUniqueness:
             headers={"Authorization": f"Bearer {user['token']}"},
         )
         assert resp.status_code == 200
+
+
+class TestDeleteThread:
+    """线程删除API：权限检查 + 默认线程保护"""
+
+    @pytest.mark.asyncio
+    async def test_owner_delete_non_default_thread_200(
+        self,
+        client: AsyncClient,
+        db_conn: asyncpg.Connection,
+        event_bus: InProcessEventBus,
+        user_repo_provider: UserRepositoryProvider,
+    ) -> None:
+        """Owner可删除非默认线程→200"""
+        user = await _create_user(user_repo_provider, "thread_deleter")
+        project_id = await _create_project(client, user["token"])
+        await event_bus.wait_for_pending()
+
+        # 创建非默认线程
+        thread_id = await _create_thread(client, user["token"], project_id, "To Be Deleted")
+        await event_bus.wait_for_pending()
+
+        resp = await client.delete(
+            f"/projects/{project_id}/threads/{thread_id}",
+            headers={"Authorization": f"Bearer {user['token']}"},
+        )
+        assert resp.status_code == 200
+        assert resp.json()["status"] == "deleted"
+
+        # threads表中记录已删除
+        row = await db_conn.fetchrow("SELECT 1 FROM threads WHERE id = $1", uuid.UUID(thread_id))
+        assert row is None
+
+    @pytest.mark.asyncio
+    async def test_cannot_delete_default_thread_400(
+        self,
+        client: AsyncClient,
+        db_conn: asyncpg.Connection,
+        event_bus: InProcessEventBus,
+        user_repo_provider: UserRepositoryProvider,
+    ) -> None:
+        """不允许删除默认线程→400"""
+        user = await _create_user(user_repo_provider, "default_thread_protect")
+        project_id = await _create_project(client, user["token"])
+        await event_bus.wait_for_pending()
+
+        # 查询默认线程ID
+        row = await db_conn.fetchrow("SELECT default_thread_id FROM projects WHERE id = $1", uuid.UUID(project_id))
+        assert row is not None
+        default_thread_id = str(row["default_thread_id"])
+
+        resp = await client.delete(
+            f"/projects/{project_id}/threads/{default_thread_id}",
+            headers={"Authorization": f"Bearer {user['token']}"},
+        )
+        assert resp.status_code == 400
+        assert "默认线程" in resp.json()["detail"]
+
+    @pytest.mark.asyncio
+    async def test_non_member_delete_thread_403(
+        self,
+        client: AsyncClient,
+        event_bus: InProcessEventBus,
+        user_repo_provider: UserRepositoryProvider,
+    ) -> None:
+        """非项目成员删除线程→403"""
+        owner = await _create_user(user_repo_provider, "thread_del_owner")
+        outsider = await _create_user(user_repo_provider, "thread_del_outsider")
+        project_id = await _create_project(client, owner["token"])
+        await event_bus.wait_for_pending()
+
+        thread_id = await _create_thread(client, owner["token"], project_id, "Protected Thread")
+        await event_bus.wait_for_pending()
+
+        resp = await client.delete(
+            f"/projects/{project_id}/threads/{thread_id}",
+            headers={"Authorization": f"Bearer {outsider['token']}"},
+        )
+        assert resp.status_code == 403

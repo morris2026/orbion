@@ -156,6 +156,39 @@ class PostgresThreadRead(ThreadReadProtocol):
         )
         return str(row["project_id"]) if row else None
 
+    async def delete_thread(self, thread_id: str) -> bool:
+        """事务内按依赖顺序删除线程及其关联数据"""
+        pool = self._require_pool()
+        async with pool.acquire() as conn:
+            async with conn.transaction():
+                tid = uuid.UUID(thread_id)
+                await conn.execute(
+                    "DELETE FROM task_outputs WHERE plan_id IN (SELECT id FROM execution_plans WHERE thread_id = $1)",
+                    tid,
+                )
+                await conn.execute(
+                    "DELETE FROM execution_plans WHERE thread_id = $1",
+                    tid,
+                )
+                await conn.execute(
+                    "DELETE FROM thread_messages WHERE thread_id = $1",
+                    tid,
+                )
+                result = await conn.execute(
+                    "DELETE FROM threads WHERE id = $1",
+                    tid,
+                )
+                return result == "DELETE 1"
+
+    async def get_default_thread_id(self, project_id: str) -> str | None:
+        """查询项目的默认线程ID"""
+        pool = self._require_pool()
+        row = await pool.fetchrow(
+            "SELECT default_thread_id FROM projects WHERE id = $1",
+            uuid.UUID(project_id),
+        )
+        return str(row["default_thread_id"]) if row and row["default_thread_id"] else None
+
 
 def _row_to_dict(row: asyncpg.Record) -> dict[str, Any]:
     """asyncpg Record → dict，UUID列自动转为str"""
