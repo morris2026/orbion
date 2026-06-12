@@ -5,6 +5,10 @@ import { parseMessage } from '@/lib/slashCommands'
 import { Button } from '@/components/ui/button'
 import { Group, Panel, Separator } from 'react-resizable-panels'
 
+// 垂直分隔条：4px空间 + border-b画1px可视线 + 库内置proximity hover/drag检测
+// data-separator属性驱动CSS样式，无需JS状态管理
+const VSEP_CLASS = 'h-1 border-b border-border bg-transparent transition-[border-width,border-color] duration-150 cursor-row-resize data-[separator=hover]:border-b-[4px] data-[separator=hover]:border-primary/40 data-[separator=hover]:duration-75 data-[separator=active]:border-b-[4px] data-[separator=active]:border-primary data-[separator=focus]:border-b-[4px] data-[separator=focus]:border-primary/40'
+
 interface DiscussionPanelProps {
   messages: MessageResponse[]
   currentUserId: string
@@ -99,9 +103,7 @@ export default function DiscussionPanel({ messages, currentUserId, onSendMessage
 
       {/* 可拖拽分隔条 */}
       <Separator id="discussion-separator"
-        className="h-1 bg-border hover:bg-primary/30 active:bg-primary/50 transition-colors cursor-row-resize flex items-center justify-center">
-        <div className="w-8 h-0.5 rounded-full bg-muted-foreground/30" />
-      </Separator>
+        className={VSEP_CLASS} />
 
       {/* 输入区域 */}
       <Panel id="discussion-input" minSize="4.5rem" maxSize="35"

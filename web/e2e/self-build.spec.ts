@@ -435,4 +435,128 @@ test.describe('自我构建9点验证', () => {
     await page.waitForURL(/\/workspace/)
     expect(page.url()).toContain('/workspace')
   })
+
+  test('TC-21.14 三栏可拖拽布局：Group+Panel+Separator渲染', async ({ page }) => {
+    const project = await createProject(page, '21_14')
+    await page.goto('/workspace')
+    await page.getByText(project.name).click()
+
+    // 三个Panel存在
+    const leftPanel = page.locator('#workspace-left[data-panel]')
+    const middlePanel = page.locator('#workspace-middle[data-panel]')
+    const rightPanel = page.locator('#workspace-right[data-panel]')
+    await expect(leftPanel).toBeVisible()
+    await expect(middlePanel).toBeVisible()
+    await expect(rightPanel).toBeVisible()
+
+    // 两个Separator存在且可交互
+    const leftSep = page.locator('#workspace-separator-left[data-separator]')
+    const rightSep = page.locator('#workspace-separator-right[data-separator]')
+    await expect(leftSep).toBeVisible()
+    await expect(rightSep).toBeVisible()
+    await expect(leftSep).toHaveAttribute('role', 'separator')
+    await expect(rightSep).toHaveAttribute('role', 'separator')
+  })
+
+  test('TC-21.15 分隔条hover→变粗高亮，离开→恢复', async ({ page }) => {
+    const project = await createProject(page, '21_15')
+    await page.goto('/workspace')
+    await page.getByText(project.name).click()
+
+    const leftSep = page.locator('#workspace-separator-left[data-separator]')
+    await expect(leftSep).toBeVisible()
+
+    // 默认态：data-separator="inactive" + 1px细线border-r
+    await expect(leftSep).toHaveAttribute('data-separator', 'inactive')
+    await expect(leftSep).toHaveClass(/border-border/)
+    await expect(leftSep).toHaveClass(/border-r\b/)
+
+    // hover→库proximity检测→data-separator="hover"→CSS data variant激活
+    // 使用page.mouse.move()绕过Playwright的hover()pointer event interception检查
+    const sepBox = await leftSep.boundingBox()
+    expect(sepBox).toBeTruthy()
+    await page.mouse.move(sepBox!.x + sepBox!.width / 2, sepBox!.y + sepBox!.height / 2)
+    await expect(leftSep).toHaveAttribute('data-separator', 'hover')
+    await expect(leftSep).toHaveClass(/border-r-\[4px\]/)
+    await expect(leftSep).toHaveClass(/border-primary/)
+
+    // 移远→data-separator恢复inactive→CSS恢复默认态
+    await page.mouse.move(0, 0)
+    await expect(leftSep).toHaveAttribute('data-separator', 'inactive')
+    await expect(leftSep).toHaveClass(/border-border/)
+  })
+
+  test('TC-21.16 分隔条拖拽中→保持高亮粗线，释放→恢复', async ({ page }) => {
+    const project = await createProject(page, '21_16')
+    await page.goto('/workspace')
+    await page.getByText(project.name).click()
+
+    const leftSep = page.locator('#workspace-separator-left[data-separator]')
+    const leftPanel = page.locator('#workspace-left[data-panel]')
+    await expect(leftSep).toBeVisible()
+
+    const initialWidth = await leftPanel.evaluate(el => el.getBoundingClientRect().width)
+
+    // 拖拽：移入→按下→右移→data-separator切换为"active"
+    const sepBox = await leftSep.boundingBox()
+    expect(sepBox).toBeTruthy()
+    await page.mouse.move(sepBox.x + sepBox.width / 2, sepBox.y + sepBox.height / 2)
+    await page.mouse.down()
+    await page.mouse.move(sepBox.x + sepBox.width / 2 + 20, sepBox.y + sepBox.height / 2, { steps: 5 })
+
+    // 激活态：data-separator="active" + 2px粗线+border-primary
+    await expect(leftSep).toHaveAttribute('data-separator', 'active')
+    await expect(leftSep).toHaveClass(/border-r-\[4px\]/)
+    await expect(leftSep).toHaveClass(/border-primary/)
+
+    // 继续拖拽→效果持续保持
+    await page.mouse.move(sepBox.x + sepBox.width / 2 + 80, sepBox.y + sepBox.height / 2, { steps: 10 })
+    await expect(leftSep).toHaveAttribute('data-separator', 'active')
+
+    // 左栏宽度确实变化了
+    const draggedWidth = await leftPanel.evaluate(el => el.getBoundingClientRect().width)
+    expect(Math.abs(draggedWidth - initialWidth)).toBeGreaterThan(5)
+
+    // 释放鼠标+移远→data-separator恢复inactive或focus（拖拽后可能获焦点）
+    await page.mouse.up()
+    await page.mouse.move(0, 0)
+    await expect(leftSep).toHaveAttribute('data-separator', /^(inactive|focus)$/)
+    await expect(leftSep).toHaveClass(/border-border/)
+  })
+
+  test('TC-21.17 DiscussionPanel分隔条：hover+拖拽激活+释放恢复', async ({ page }) => {
+    const project = await createProject(page, '21_17')
+    const thread = await createThread(page, project.id, '21_17')
+    await page.goto('/workspace')
+    await page.getByText(project.name).click()
+    await page.getByText(thread.title).click()
+
+    const vSep = page.locator('#discussion-separator[data-separator]')
+    await expect(vSep).toBeVisible()
+
+    // 默认态：data-separator="inactive" + 1px细线border-b
+    await expect(vSep).toHaveAttribute('data-separator', 'inactive')
+    await expect(vSep).toHaveClass(/border-border/)
+    await expect(vSep).toHaveClass(/border-b\b/)
+
+    // hover→库proximity检测→data-separator="hover"→2px粗线+border-primary
+    // 使用page.mouse.move()避免Playwright的hover()pointer event interception问题
+    const vSepBox = await vSep.boundingBox()
+    expect(vSepBox).toBeTruthy()
+    await page.mouse.move(vSepBox.x + vSepBox.width / 2, vSepBox.y + vSepBox.height / 2)
+    await expect(vSep).toHaveAttribute('data-separator', 'hover')
+    await expect(vSep).toHaveClass(/border-b-\[4px\]/)
+    await expect(vSep).toHaveClass(/border-primary/)
+
+    // 拖拽：按下→下移→保持激活
+    await page.mouse.down()
+    await page.mouse.move(vSepBox.x + vSepBox.width / 2, vSepBox.y + vSepBox.height / 2 + 30, { steps: 5 })
+    await expect(vSep).toHaveAttribute('data-separator', 'active')
+
+    // 释放+移远→恢复默认态（可能获焦点）
+    await page.mouse.up()
+    await page.mouse.move(0, 0)
+    await expect(vSep).toHaveAttribute('data-separator', /^(inactive|focus)$/)
+    await expect(vSep).toHaveClass(/border-border/)
+  })
 })

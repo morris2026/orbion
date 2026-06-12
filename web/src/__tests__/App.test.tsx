@@ -5,6 +5,10 @@ import { MemoryRouter } from 'react-router-dom'
 import { AppRoutes } from '@/App'
 import * as authModule from '@/lib/auth'
 
+// jsdom不支持ResizeObserver，全局mock
+global.ResizeObserver = class { observe() {} unobserve() {} disconnect() {} }
+Element.prototype.scrollIntoView = vi.fn()
+
 /** 辅助：创建简单JWT */
 function createJWT(payload: Record<string, unknown>): string {
   const header = btoa(JSON.stringify({ alg: 'HS256', typ: 'JWT' }))
