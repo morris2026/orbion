@@ -135,7 +135,7 @@ class AgentRuntime:
         # Phase 2迁移到数据库后改为async，或用aiofiles包装
         memory = ""
         if self._memory:
-            memory = self._memory.load_memory_chain(event.project_id, declaration.agent_type, event.correlation_id)
+            memory = self._memory.load_memory_chain(event.project_id, declaration.agent_type)
         # Step5: task
         task = self._payload_to_task(declaration.agent_type, event.payload)
         # Step5.5: metadata — 从事件payload提取*_id字段，供Agent产出引用真实实体ID

@@ -79,7 +79,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         adapter: ModelAdapter = ClaudeAdapter(api_key=settings.anthropic_api_key)
     else:
         adapter = StubModelAdapter()
-    agent_memory = AgentMemory(f"{settings.root_dir}/memory")
+    agent_memory = AgentMemory(settings)
     app.state.agent_runtime = AgentRuntime(app.state.event_bus, app.state.event_store, adapter, agent_memory)
     app.state.agent_scheduler = AgentScheduler(app.state.event_bus, app.state.agent_runtime)
     app.state.agent_service = AgentService(app.state.event_store, app.state.event_bus, app.state.agent_runtime)
