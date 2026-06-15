@@ -58,9 +58,9 @@ async def event_stream(
         yield {"event": "connected", "data": json.dumps({"project_id": project_id})}
         try:
             while True:
-                sse_event = await asyncio.wait_for(queue.get(), timeout=30)
+                sse_event = await queue.get()
                 yield sse_event
         finally:
             sse_channel.remove_connection(project_id, queue)
 
-    return EventSourceResponse(generate())
+    return EventSourceResponse(generate(), ping=15)

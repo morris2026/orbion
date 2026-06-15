@@ -52,6 +52,8 @@ class SSEChannel:
         conns = self._connections.get(project_id, [])
         if queue in conns:
             conns.remove(queue)
+        if not conns:
+            del self._connections[project_id]
 
     async def send_event(self, project_id: str, event_type: str, payload: dict[str, Any]) -> None:
         """ChannelAdapter实现：推送SSE事件到project_id下所有连接"""
