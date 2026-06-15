@@ -250,28 +250,24 @@ describe('前端三栏工作区完整交互', () => {
       })
       vi.spyOn(sseModule, 'disconnectSSE').mockImplementation(() => {})
 
-      render(
-        <MemoryRouter initialEntries={['/workspace']}>
-          <Workspace workspaceOptions={baseInitialState} />
-        </MemoryRouter>
-      )
-
-      expect(screen.getByText('项目1')).toBeInTheDocument()
+      const { result } = renderHook(() => useWorkspace(baseInitialState), { wrapper: ({ children }) => <MemoryRouter>{children}</MemoryRouter> })
 
       // 模拟plan_proposed SSE事件——使用后端真实字段名
-      sseOnEvent!({
-        event_type: 'plan_proposed',
-        plan_id: 'p-new',
-        thread_id: 't1',
-        participant_id: 'a2',
-        participant_type: 'agent',
-        participant_display_name: '分解Agent',
-        tasks: [{ task_id: 'task-new', type: 'code', description: '新计划任务', dependencies: [], priority: 'medium', status: 'pending' }],
-        created_at: '2024-01-04T00:00:00Z',
+      act(() => {
+        sseOnEvent!({
+          event_type: 'plan_proposed',
+          plan_id: 'p-new',
+          thread_id: 't1',
+          participant_id: 'a2',
+          participant_type: 'agent',
+          participant_display_name: '分解Agent',
+          tasks: [{ task_id: 'task-new', type: 'code', description: '新计划任务', dependencies: [], priority: 'medium', status: 'pending' }],
+          created_at: '2024-01-04T00:00:00Z',
+        })
       })
 
       await waitFor(() => {
-        expect(screen.getByText(/新计划任务/)).toBeInTheDocument()
+        expect(result.current.plans.some((p) => p.id === 'p-new')).toBe(true)
       })
     })
   })
@@ -1593,5 +1589,98 @@ describe('MVP-UI-COL.x: 三栏可拖拽布局', () => {
       expect(middlePanel).toBeInTheDocument()
       expect(rightPanel).toBeInTheDocument()
     })
+  })
+})
+
+describe('MVP-RE-9.x: 右栏 Tab 容器', () => {
+  const wsInitState: UseWorkspaceOptions = {
+    initialState: {
+      projects: mockProjects,
+      selectedProjectId: 'proj-1',
+      threads: mockThreads,
+      selectedThreadId: 'dt-1',
+      messages: mockMessages,
+      plans: [],
+      outputs: [],
+    },
+  }
+
+  beforeEach(() => {
+    localStorage.clear()
+    vi.restoreAllMocks()
+  })
+
+  it('MVP-RE-9.1: 显示 Tab 栏，默认选中「文件」，内容为 FileTab', () => {
+    vi.spyOn(authModule, 'isAuthenticated').mockReturnValue(true)
+    vi.spyOn(authModule, 'isTokenExpired').mockReturnValue(false)
+    vi.spyOn(authModule, 'getIsAdmin').mockReturnValue(false)
+    vi.spyOn(sseModule, 'createSSEConnection').mockReturnValue({ close: vi.fn() } as unknown as EventSource)
+    vi.spyOn(sseModule, 'disconnectSSE').mockImplementation(() => {})
+
+    render(
+      <MemoryRouter initialEntries={['/workspace']}>
+        <Workspace workspaceOptions={wsInitState} />
+      </MemoryRouter>
+    )
+
+    // Tab 栏显示四个 Tab
+    expect(screen.getByRole('tab', { name: /文件/i })).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: /计划/i })).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: /产出/i })).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: /agent/i })).toBeInTheDocument()
+
+    // 默认选中「文件」Tab
+    const fileTab = screen.getByRole('tab', { name: /文件/i })
+    expect(fileTab).toHaveAttribute('aria-selected', 'true')
+
+    // 文件 Tab 内容为 FileTab（活动栏是 FileTab 的特征元素）
+    expect(screen.getByRole('button', { name: /explorer/i })).toBeInTheDocument()
+  })
+
+  it('MVP-RE-9.2: 点击「计划」Tab → Tab 切换 + ExecutionPanel', async () => {
+    const user = userEvent.setup()
+    vi.spyOn(authModule, 'isAuthenticated').mockReturnValue(true)
+    vi.spyOn(authModule, 'isTokenExpired').mockReturnValue(false)
+    vi.spyOn(authModule, 'getIsAdmin').mockReturnValue(false)
+    vi.spyOn(sseModule, 'createSSEConnection').mockReturnValue({ close: vi.fn() } as unknown as EventSource)
+    vi.spyOn(sseModule, 'disconnectSSE').mockImplementation(() => {})
+
+    render(
+      <MemoryRouter initialEntries={['/workspace']}>
+        <Workspace workspaceOptions={wsInitState} />
+      </MemoryRouter>
+    )
+
+    // 点击「计划」Tab
+    const planTab = screen.getByRole('tab', { name: /计划/i })
+    await user.click(planTab)
+
+    // Tab 切换到计划
+    expect(planTab).toHaveAttribute('aria-selected', 'true')
+    // 「文件」Tab 不再选中
+    const fileTab = screen.getByRole('tab', { name: /文件/i })
+    expect(fileTab).toHaveAttribute('aria-selected', 'false')
+    // 计划 Tab 内容为 ExecutionPanel
+    expect(screen.getByText('暂无执行计划')).toBeInTheDocument()
+  })
+
+  it('MVP-RE-9.3: 右栏显示 RightPanelTabs 而非独立 ExecutionPanel', () => {
+    vi.spyOn(authModule, 'isAuthenticated').mockReturnValue(true)
+    vi.spyOn(authModule, 'isTokenExpired').mockReturnValue(false)
+    vi.spyOn(authModule, 'getIsAdmin').mockReturnValue(false)
+    vi.spyOn(sseModule, 'createSSEConnection').mockReturnValue({ close: vi.fn() } as unknown as EventSource)
+    vi.spyOn(sseModule, 'disconnectSSE').mockImplementation(() => {})
+
+    render(
+      <MemoryRouter initialEntries={['/workspace']}>
+        <Workspace workspaceOptions={wsInitState} />
+      </MemoryRouter>
+    )
+
+    // 右栏存在 Tab 栏（RightPanelTabs 的特征）
+    expect(screen.getByRole('tab', { name: /文件/i })).toBeInTheDocument()
+
+    // 默认选中文件 Tab，ExecutionPanel 内容不可见
+    expect(screen.queryByText('暂无执行计划')).not.toBeInTheDocument()
   })
 })

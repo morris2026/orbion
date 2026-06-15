@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { apiGet, apiPost } from '@/lib/api'
 import { createSSEConnection, disconnectSSE } from '@/lib/sse'
 import type { SSERawEvent } from '@/lib/sse'
+import type { RightTab } from '@/components/RightPanelTabs'
 import type { ProjectListItem, ThreadListItem, MessageResponse, PlanResponse, PlanTask, OutputResponse, CreateProjectRequest, CreateThreadRequest, RegisterAgentRequest, AddMemberRequest } from '@/types/api'
 import type {
   SSEMessageCreatedEvent,
@@ -22,6 +23,7 @@ export interface WorkspaceState {
   messages: MessageResponse[]
   plans: PlanResponse[]
   outputs: OutputResponse[]
+  selectedRightTab: RightTab
 }
 
 export interface UseWorkspaceOptions {
@@ -100,6 +102,7 @@ export function useWorkspace(options?: UseWorkspaceOptions) {
   const [messages, setMessages] = useState<MessageResponse[]>(init?.messages ?? [])
   const [plans, setPlans] = useState<PlanResponse[]>(init?.plans ?? [])
   const [outputs, setOutputs] = useState<OutputResponse[]>(init?.outputs ?? [])
+  const [selectedRightTab, setSelectedRightTab] = useState<RightTab>(init?.selectedRightTab ?? 'file')
 
   // SSE回调需实时读取当前threadId，但不应触发连接重建
   const selectedThreadIdRef = useRef(selectedThreadId)
@@ -160,6 +163,7 @@ export function useWorkspace(options?: UseWorkspaceOptions) {
       } else if (type === 'plan_proposed') {
         const event = raw as unknown as SSEPlanProposedEvent
         setPlans((prev) => [...prev, mapPlanFromSSE(event)])
+        setSelectedRightTab('plan')
       } else if (type === 'plan_approved') {
         const event = raw as unknown as SSEPlanApprovedEvent
         setPlans((prev) =>
@@ -173,6 +177,7 @@ export function useWorkspace(options?: UseWorkspaceOptions) {
       } else if (type === 'output_generated') {
         const event = raw as unknown as SSEOutputGeneratedEvent
         setOutputs((prev) => [...prev, mapOutputFromSSE(event)])
+        setSelectedRightTab('plan')
       } else if (type === 'output_approved') {
         const event = raw as unknown as SSEOutputApprovedEvent
         setOutputs((prev) =>
@@ -286,6 +291,7 @@ export function useWorkspace(options?: UseWorkspaceOptions) {
     projects, setProjects, selectedProjectId, setSelectedProjectId,
     threads, setThreads, selectedThreadId, setSelectedThreadId,
     messages, setMessages, plans, setPlans, outputs, setOutputs,
+    selectedRightTab, setSelectedRightTab,
     handleSendMessage, handleApprovePlan, handleRejectPlan,
     handleCreateProject, handleCreateThread, handleRegisterAgent,
     handleAddMember, handleApproveOutput, handleRequestRevision,

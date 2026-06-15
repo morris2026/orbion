@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Group, Panel, Separator } from 'react-resizable-panels'
 import ProjectTree from '@/components/ProjectTree'
 import DiscussionPanel from '@/components/DiscussionPanel'
-import ExecutionPanel from '@/components/ExecutionPanel'
+import { RightPanelTabs } from '@/components/RightPanelTabs'
 import CreateProjectDialog from '@/components/CreateProjectDialog'
 import CreateThreadDialog from '@/components/CreateThreadDialog'
 import AddMemberDialog from '@/components/AddMemberDialog'
@@ -104,18 +104,21 @@ export default function Workspace({ workspaceOptions }: WorkspaceProps) {
         <Separator id="workspace-separator-right"
           className={SEP_CLASS} />
 
-        {/* 右栏：执行面板 */}
+        {/* 右栏：Tab 容器 */}
         <Panel id="workspace-right" minSize="20"
           className="bg-card overflow-hidden">
           <div className="flex flex-col h-full">
-            <div className="p-4 flex flex-col gap-2 border-b">
-              <h2 className="text-sm font-semibold text-foreground">审批</h2>
+            <div className="flex items-center gap-1 px-2 py-1 border-b">
               {getIsAdmin() && (
                 <Button variant="outline" size="sm" onClick={() => navigate('/approval')}>用户审批管理</Button>
               )}
+              <div className="flex-1" />
               <Button variant="ghost" size="sm" onClick={handleLogout}>登出</Button>
             </div>
-            <ExecutionPanel
+            <RightPanelTabs
+              projectId={ws.selectedProjectId}
+              selectedTab={ws.selectedRightTab}
+              onTabChange={ws.setSelectedRightTab}
               plans={ws.plans}
               outputs={ws.outputs}
               onApprovePlan={ws.handleApprovePlan}

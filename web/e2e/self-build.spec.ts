@@ -279,7 +279,7 @@ test.describe('自我构建9点验证', () => {
     await page.getByRole('button', { name: /发送/ }).click()
     await expect(page.getByText(/共识/)).toBeVisible({ timeout: 15000 })
 
-    await expect(page.getByText(/计划/)).toBeVisible({ timeout: 15000 })
+    await expect(page.locator('#workspace-right').getByText(/计划/).first()).toBeVisible({ timeout: 15000 })
   })
 
   test('TC-21.5 验证点5：人类审批执行计划', async ({ page }) => {
@@ -293,7 +293,7 @@ test.describe('自我构建9点验证', () => {
 
     await page.getByPlaceholder(/输入消息.*\/summarize/).fill('/summarize')
     await page.getByRole('button', { name: /发送/ }).click()
-    await expect(page.getByText(/计划/)).toBeVisible({ timeout: 20000 })
+    await expect(page.locator('#workspace-right').getByText(/计划/).first()).toBeVisible({ timeout: 20000 })
 
     const approveBtn = page.getByRole('button', { name: /批准/ })
     await expect(approveBtn).toBeVisible()
@@ -315,7 +315,7 @@ test.describe('自我构建9点验证', () => {
 
     await page.getByPlaceholder(/输入消息.*\/summarize/).fill('/summarize')
     await page.getByRole('button', { name: /发送/ }).click()
-    await expect(page.getByText(/计划/)).toBeVisible({ timeout: 20000 })
+    await expect(page.locator('#workspace-right').getByText(/计划/).first()).toBeVisible({ timeout: 20000 })
     await page.getByRole('button', { name: /批准/ }).click()
 
     await expect(page.getByText(/--- a/)).toBeVisible({ timeout: 20000 })
@@ -332,7 +332,7 @@ test.describe('自我构建9点验证', () => {
 
     await page.getByPlaceholder(/输入消息.*\/summarize/).fill('/summarize')
     await page.getByRole('button', { name: /发送/ }).click()
-    await expect(page.getByText(/计划/)).toBeVisible({ timeout: 20000 })
+    await expect(page.locator('#workspace-right').getByText(/计划/).first()).toBeVisible({ timeout: 20000 })
     await page.getByRole('button', { name: /批准/ }).click()
     await expect(page.getByText(/--- a/)).toBeVisible({ timeout: 20000 })
 
@@ -359,7 +359,7 @@ test.describe('自我构建9点验证', () => {
 
     await page.getByPlaceholder(/输入消息.*\/summarize/).fill('/summarize')
     await page.getByRole('button', { name: /发送/ }).click()
-    await expect(page.getByText(/计划/)).toBeVisible({ timeout: 20000 })
+    await expect(page.locator('#workspace-right').getByText(/计划/).first()).toBeVisible({ timeout: 20000 })
     await page.getByRole('button', { name: /批准/ }).click()
     await expect(page.getByText(/--- a/)).toBeVisible({ timeout: 20000 })
 
@@ -406,7 +406,7 @@ test.describe('自我构建9点验证', () => {
     await expect(messageInput).toHaveValue('/summarize')
     await page.getByRole('button', { name: /发送/ }).click()
     await expect(page.getByText(/共识/)).toBeVisible({ timeout: 15000 })
-    await expect(page.getByText(/计划/)).toBeVisible({ timeout: 15000 })
+    await expect(page.locator('#workspace-right').getByText(/计划/).first()).toBeVisible({ timeout: 15000 })
   })
 
   test('TC-21.10 负面路径：无JWT→受保护端点返回401', async ({ page }) => {
@@ -564,5 +564,159 @@ test.describe('自我构建9点验证', () => {
     await page.mouse.move(0, 0)
     await expect(vSep).toHaveAttribute('data-separator', /^(inactive|focus)$/)
     await expect(vSep).toHaveClass(/border-border/)
+  })
+})
+
+test.describe('MVP-RE-9.x: 右栏文件编辑器 E2E', () => {
+  test.beforeAll(async ({ request }) => {
+    const adminResp = await request.post('/auth/register', {
+      data: { username: ADMIN.username, password: ADMIN.password, display_name: ADMIN.displayName },
+    })
+    if (adminResp.status() === 409) {
+      const loginResp = await request.post('/auth/login', {
+        data: { username: ADMIN.username, password: ADMIN.password },
+      })
+      expect(loginResp.ok()).toBeTruthy()
+      adminToken = (await loginResp.json()).access_token
+    } else {
+      expect(adminResp.ok()).toBeTruthy()
+      const adminData = await adminResp.json()
+      if (adminData.status === 'pending') {
+        throw new Error('admin注册返回pending，DB有残留数据未清理')
+      }
+      adminToken = adminData.access_token
+    }
+  })
+
+  test.beforeEach(async ({ page }) => {
+    await loginAs(page, ADMIN.username, ADMIN.password)
+  })
+
+  test('MVP-RE-9.4: 浏览文件并编辑保存', async ({ page }) => {
+    const project = await createProject(page, '9_4')
+    const headers = await authHeaders(page)
+
+    // 添加仓库（git init）
+    const repoResp = await page.request.post(`/projects/${project.id}/repos`, {
+      data: { name: 'test-repo' },
+      headers,
+    })
+    expect(repoResp.ok(), `repos API returned ${repoResp.status()}: ${await repoResp.text()}`).toBeTruthy()
+
+    // 创建测试文件
+    const saveResp = await page.request.put(
+      `/projects/${project.id}/repos/test-repo/files?path=hello.md`,
+      { data: { content: '# Hello World' }, headers },
+    )
+    expect(saveResp.ok()).toBeTruthy()
+
+    // 导航到 workspace 并选中项目
+    await page.goto('/workspace')
+    await page.getByText(project.name).click()
+
+    // 验证右栏 Tab 栏存在
+    const fileTab = page.getByRole('tab', { name: /文件/ })
+    await expect(fileTab).toBeVisible()
+    await expect(fileTab).toHaveAttribute('aria-selected', 'true')
+
+    // 验证文件树中出现 hello.md
+    const fileNode = page.getByText('hello.md')
+    await expect(fileNode).toBeVisible({ timeout: 10000 })
+
+    // 点击文件
+    await fileNode.dblclick()
+
+    // 验证 Monaco 编辑器加载（Monaco 渲染后编辑区域有 textarea）
+    const editorArea = page.locator('.monaco-editor')
+    await expect(editorArea).toBeVisible({ timeout: 10000 })
+
+    // 保存后验证 git status 有变更
+    // 直接通过 API 修改文件内容模拟编辑保存
+    const editResp = await page.request.put(
+      `/projects/${project.id}/repos/test-repo/files?path=hello.md`,
+      { data: { content: '# Hello World\n\nEdited content' }, headers },
+    )
+    expect(editResp.ok()).toBeTruthy()
+
+    // 验证 git status
+    const statusResp = await page.request.get(
+      `/projects/${project.id}/repos/test-repo/status`,
+      { headers },
+    )
+    expect(statusResp.ok()).toBeTruthy()
+    const status = await statusResp.json()
+    expect(status.changes.length + status.staged.length).toBeGreaterThanOrEqual(1)
+  })
+
+  test('MVP-RE-9.5: Source Control 操作（diff+stage+commit）', async ({ page }) => {
+    const project = await createProject(page, '9_5')
+    const headers = await authHeaders(page)
+
+    // 添加仓库并创建初始 commit
+    const repoResp = await page.request.post(`/projects/${project.id}/repos`, {
+      data: { name: 'sc-repo' },
+      headers,
+    })
+    expect(repoResp.ok()).toBeTruthy()
+
+    // 创建文件、stage、commit 初始版本
+    await page.request.put(
+      `/projects/${project.id}/repos/sc-repo/files?path=app.py`,
+      { data: { content: 'print("v1")' }, headers },
+    )
+    await page.request.post(
+      `/projects/${project.id}/repos/sc-repo/stage`,
+      { data: { paths: ['app.py'] }, headers },
+    )
+    await page.request.post(
+      `/projects/${project.id}/repos/sc-repo/commit`,
+      { data: { message: 'initial' }, headers },
+    )
+
+    // 修改文件（制造变更）
+    await page.request.put(
+      `/projects/${project.id}/repos/sc-repo/files?path=app.py`,
+      { data: { content: 'print("v2")' }, headers },
+    )
+
+    // 导航到 workspace 并选中项目
+    await page.goto('/workspace')
+    await page.getByText(project.name).click()
+
+    // 切换到 Source Control 活动栏
+    const scBtn = page.getByRole('button', { name: /source.?control/i })
+    await expect(scBtn).toBeVisible({ timeout: 10000 })
+    await scBtn.click()
+
+    // 验证 Changes 分组中显示 app.py
+    const changeFile = page.getByText('app.py')
+    await expect(changeFile).toBeVisible({ timeout: 10000 })
+
+    // 点击变更文件 → 主区域切换为 DiffEditor
+    await changeFile.click()
+    const diffEditor = page.locator('.monaco-diff-editor')
+    await expect(diffEditor).toBeVisible({ timeout: 10000 })
+
+    // 通过 API stage 文件
+    const stageResp = await page.request.post(
+      `/projects/${project.id}/repos/sc-repo/stage`,
+      { data: { paths: ['app.py'] }, headers },
+    )
+    expect(stageResp.ok()).toBeTruthy()
+
+    // 通过 API commit
+    const commitResp = await page.request.post(
+      `/projects/${project.id}/repos/sc-repo/commit`,
+      { data: { message: 'update to v2' }, headers },
+    )
+    expect(commitResp.ok()).toBeTruthy()
+
+    // 验证 commit 后 staged 清空
+    const statusResp = await page.request.get(
+      `/projects/${project.id}/repos/sc-repo/status`,
+      { headers },
+    )
+    const status = await statusResp.json()
+    expect(status.staged.length).toBe(0)
   })
 })
