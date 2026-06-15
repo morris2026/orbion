@@ -64,8 +64,8 @@ async def get_status(
     except FileNotFoundError:
         raise HTTPException(status_code=404, detail=f"仓库不存在: {repo_name}")
     return GitStatusResult(
-        staged=[GitFileStatus(**f) for f in result["staged"]],
-        changes=[GitFileStatus(**f) for f in result["changes"]],
+        staged=[GitFileStatus.model_validate(f) for f in result["staged"]],
+        changes=[GitFileStatus.model_validate(f) for f in result["changes"]],
     )
 
 

@@ -1,5 +1,7 @@
 """文件操作 Pydantic 模型"""
 
+from typing import Literal
+
 from pydantic import BaseModel
 
 
@@ -7,7 +9,7 @@ class FileNode(BaseModel):
     """文件树节点"""
 
     path: str
-    type: str
+    type: Literal["file", "dir"]
     name: str
 
 

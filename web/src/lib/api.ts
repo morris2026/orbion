@@ -70,3 +70,16 @@ export async function apiDelete<T = unknown>(path: string): Promise<T> {
   }
   return resp.json() as Promise<T>
 }
+
+export async function apiPut<T = unknown>(path: string, body: unknown): Promise<T> {
+  const headers: Record<string, string> = { 'Content-Type': 'application/json', ...buildHeaders() }
+  const resp = await fetch(path, {
+    method: 'PUT',
+    headers,
+    body: JSON.stringify(body),
+  })
+  if (!resp.ok) {
+    throw new ApiError(resp.status, await parseErrorDetail(resp))
+  }
+  return resp.json() as Promise<T>
+}

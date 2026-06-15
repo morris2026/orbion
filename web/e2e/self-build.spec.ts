@@ -374,7 +374,7 @@ test.describe('自我构建9点验证', () => {
     // Git commit 是异步事件处理，轮询等待 commit 完成
     let gitLog: any[] = []
     for (let attempt = 0; attempt < 10; attempt++) {
-      const gitLogResp = await page.request.get(`/git/${project.id}/git-log`, { headers })
+      const gitLogResp = await page.request.get(`/git/${project.id}/git-log?repo_name=orbion`, { headers })
       expect(gitLogResp.ok()).toBeTruthy()
       gitLog = await gitLogResp.json()
       if (gitLog.length >= 2) break

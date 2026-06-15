@@ -92,3 +92,40 @@ export interface AddMemberRequest {
   user_id: string
   role: 'owner' | 'admin' | 'member' | 'viewer'
 }
+
+export interface FileNode {
+  path: string
+  type: 'file' | 'dir'
+  name: string
+}
+
+export interface FileContent {
+  path: string
+  content: string
+}
+
+export interface WriteFileRequest {
+  content: string
+}
+
+export interface RepoInfo {
+  name: string
+}
+
+export interface GitFileStatus {
+  path: string
+  status: 'A' | 'M' | 'D' | 'R' | 'U'
+}
+
+export interface GitStatusResult {
+  staged: GitFileStatus[]
+  changes: GitFileStatus[]
+}
+
+export interface StageRequest {
+  paths: string[]
+}
+
+export interface CommitRequest {
+  message: string
+}

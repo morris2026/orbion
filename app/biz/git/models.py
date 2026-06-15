@@ -1,5 +1,7 @@
 """Git模块Pydantic模型"""
 
+from typing import Literal
+
 from pydantic import BaseModel, Field
 
 
@@ -14,7 +16,7 @@ class GitFileStatus(BaseModel):
     """git status 文件条目"""
 
     path: str
-    status: str
+    status: Literal["A", "M", "D", "R", "U"]
 
 
 class GitStatusResult(BaseModel):
