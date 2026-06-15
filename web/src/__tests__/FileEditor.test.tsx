@@ -10,7 +10,6 @@ Element.prototype.getAnimations = vi.fn().mockReturnValue([])
 // Mock Monaco Editor — jsdom 无法加载真实 Monaco
 vi.mock('@monaco-editor/react', () => ({
   Editor: vi.fn(({ value, onChange, onMount }) => {
-    // 模拟编辑器挂载，暴露 getValue/setValue
     const handleEditorMount = (el: HTMLTextAreaElement) => {
       onMount?.({ getValue: () => el.value, focus: vi.fn() })
     }
@@ -45,9 +44,6 @@ describe('MVP-RE-6.1: Monaco 编辑器渲染', () => {
         originalContent={null}
         onSave={vi.fn()}
         onContentChange={vi.fn()}
-        onOpenPreview={vi.fn()}
-        onClosePreview={vi.fn()}
-        showPreview={false}
       />
     )
 
@@ -74,9 +70,6 @@ describe('MVP-RE-6.2: 保存按钮', () => {
         originalContent={null}
         onSave={onSave}
         onContentChange={vi.fn()}
-        onOpenPreview={vi.fn()}
-        onClosePreview={vi.fn()}
-        showPreview={false}
       />
     )
 
@@ -101,13 +94,9 @@ describe('MVP-RE-6.3: Ctrl+S 快捷键', () => {
         originalContent={null}
         onSave={onSave}
         onContentChange={vi.fn()}
-        onOpenPreview={vi.fn()}
-        onClosePreview={vi.fn()}
-        showPreview={false}
       />
     )
 
-    // 在编辑器区域触发 Ctrl+S
     const editorArea = screen.getByTestId('file-editor-area')
     fireEvent.keyDown(editorArea, { key: 's', ctrlKey: true })
 
@@ -130,9 +119,6 @@ describe('MVP-RE-6.4: 修改圆点标记', () => {
         originalContent={null}
         onSave={vi.fn()}
         onContentChange={vi.fn()}
-        onOpenPreview={vi.fn()}
-        onClosePreview={vi.fn()}
-        showPreview={false}
       />
     )
 
@@ -149,9 +135,6 @@ describe('MVP-RE-6.4: 修改圆点标记', () => {
         originalContent={null}
         onSave={vi.fn()}
         onContentChange={vi.fn()}
-        onOpenPreview={vi.fn()}
-        onClosePreview={vi.fn()}
-        showPreview={false}
       />
     )
 
@@ -166,7 +149,6 @@ describe('MVP-RE-6.5: 预览开关 — Markdown 文件', () => {
 
   it('.md 文件显示预览按钮，点击后显示 FilePreview', async () => {
     const user = userEvent.setup()
-    const onOpenPreview = vi.fn()
     render(
       <FileEditor
         filePath="docs/guide.md"
@@ -176,9 +158,6 @@ describe('MVP-RE-6.5: 预览开关 — Markdown 文件', () => {
         originalContent={null}
         onSave={vi.fn()}
         onContentChange={vi.fn()}
-        onOpenPreview={onOpenPreview}
-        onClosePreview={vi.fn()}
-        showPreview={false}
       />
     )
 
@@ -186,12 +165,13 @@ describe('MVP-RE-6.5: 预览开关 — Markdown 文件', () => {
     const previewBtn = screen.getByRole('button', { name: /预览/i })
     expect(previewBtn).toBeInTheDocument()
 
-    // 点击预览
+    // 点击预览 → FilePreview 面板出现
     await user.click(previewBtn)
-    expect(onOpenPreview).toHaveBeenCalled()
+    expect(screen.getByTestId('file-preview')).toBeInTheDocument()
   })
 
-  it('showPreview=true 时显示 FilePreview 面板', () => {
+  it('showPreview 内部状态为 true 时显示 FilePreview 面板', async () => {
+    const user = userEvent.setup()
     render(
       <FileEditor
         filePath="docs/guide.md"
@@ -201,12 +181,11 @@ describe('MVP-RE-6.5: 预览开关 — Markdown 文件', () => {
         originalContent={null}
         onSave={vi.fn()}
         onContentChange={vi.fn()}
-        onOpenPreview={vi.fn()}
-        onClosePreview={vi.fn()}
-        showPreview={true}
       />
     )
 
+    // 点击预览按钮打开
+    await user.click(screen.getByRole('button', { name: /预览/i }))
     expect(screen.getByTestId('file-preview')).toBeInTheDocument()
   })
 })
@@ -216,9 +195,8 @@ describe('MVP-RE-6.6: 预览关闭', () => {
     vi.restoreAllMocks()
   })
 
-  it('预览打开时点击关闭 → onClosePreview 回调被调用', async () => {
+  it('预览打开时点击关闭 → FilePreview 消失', async () => {
     const user = userEvent.setup()
-    const onClosePreview = vi.fn()
     render(
       <FileEditor
         filePath="docs/guide.md"
@@ -228,14 +206,16 @@ describe('MVP-RE-6.6: 预览关闭', () => {
         originalContent={null}
         onSave={vi.fn()}
         onContentChange={vi.fn()}
-        onOpenPreview={vi.fn()}
-        onClosePreview={onClosePreview}
-        showPreview={true}
       />
     )
 
+    // 先打开预览
+    await user.click(screen.getByRole('button', { name: /预览/i }))
+    expect(screen.getByTestId('file-preview')).toBeInTheDocument()
+
+    // 点击关闭预览
     await user.click(screen.getByRole('button', { name: /^关闭预览$/i }))
-    expect(onClosePreview).toHaveBeenCalled()
+    expect(screen.queryByTestId('file-preview')).not.toBeInTheDocument()
   })
 })
 
@@ -254,9 +234,6 @@ describe('MVP-RE-6.7: 非 Markdown 文件无预览开关', () => {
         originalContent={null}
         onSave={vi.fn()}
         onContentChange={vi.fn()}
-        onOpenPreview={vi.fn()}
-        onClosePreview={vi.fn()}
-        showPreview={false}
       />
     )
 
@@ -279,15 +256,10 @@ describe('MVP-RE-6.8: DiffEditor 模式', () => {
         originalContent="original content"
         onSave={vi.fn()}
         onContentChange={vi.fn()}
-        onOpenPreview={vi.fn()}
-        onClosePreview={vi.fn()}
-        showPreview={false}
       />
     )
 
-    // DiffEditor 被渲染
     expect(screen.getByTestId('monaco-diff-editor')).toBeInTheDocument()
-    // 普通 Editor 不被渲染
     expect(screen.queryByTestId('monaco-editor')).not.toBeInTheDocument()
   })
 })
@@ -307,15 +279,11 @@ describe('MVP-RE-6.8a: DiffEditor 切换回普通 Editor', () => {
         originalContent="original"
         onSave={vi.fn()}
         onContentChange={vi.fn()}
-        onOpenPreview={vi.fn()}
-        onClosePreview={vi.fn()}
-        showPreview={false}
       />
     )
 
     expect(screen.getByTestId('monaco-diff-editor')).toBeInTheDocument()
 
-    // 切换回 edit 模式
     rerender(
       <FileEditor
         filePath="src/main.ts"
@@ -325,9 +293,6 @@ describe('MVP-RE-6.8a: DiffEditor 切换回普通 Editor', () => {
         originalContent={null}
         onSave={vi.fn()}
         onContentChange={vi.fn()}
-        onOpenPreview={vi.fn()}
-        onClosePreview={vi.fn()}
-        showPreview={false}
       />
     )
 
@@ -356,13 +321,11 @@ describe('MVP-RE-6.9: 预览实时更新', () => {
         originalContent={null}
         onSave={vi.fn()}
         onContentChange={vi.fn()}
-        onOpenPreview={vi.fn()}
-        onClosePreview={vi.fn()}
-        showPreview={true}
       />
     )
 
-    // 预览面板存在
+    // 打开预览
+    await userEvent.setup().click(screen.getByRole('button', { name: /预览/i }))
     expect(screen.getByTestId('file-preview')).toBeInTheDocument()
 
     // 内容变更
@@ -375,9 +338,6 @@ describe('MVP-RE-6.9: 预览实时更新', () => {
         originalContent="# Hello"
         onSave={vi.fn()}
         onContentChange={vi.fn()}
-        onOpenPreview={vi.fn()}
-        onClosePreview={vi.fn()}
-        showPreview={true}
       />
     )
 
@@ -408,15 +368,11 @@ describe('MVP-RE-6.10: 切换文件', () => {
         originalContent={null}
         onSave={vi.fn()}
         onContentChange={vi.fn()}
-        onOpenPreview={vi.fn()}
-        onClosePreview={vi.fn()}
-        showPreview={false}
       />
     )
 
     expect(screen.getByTestId('monaco-editor')).toHaveValue('content A')
 
-    // 切换到 B 文件
     rerender(
       <FileEditor
         filePath="docs/guide.md"
@@ -426,9 +382,6 @@ describe('MVP-RE-6.10: 切换文件', () => {
         originalContent={null}
         onSave={vi.fn()}
         onContentChange={vi.fn()}
-        onOpenPreview={vi.fn()}
-        onClosePreview={vi.fn()}
-        showPreview={false}
       />
     )
 
@@ -454,24 +407,18 @@ describe('MVP-RE-6.11: Monaco 加载失败降级', () => {
         originalContent={null}
         onSave={onSave}
         onContentChange={onContentChange}
-        onOpenPreview={vi.fn()}
-        onClosePreview={vi.fn()}
-        showPreview={false}
         monacoError={true}
       />
     )
 
-    // 降级 textarea 出现，Monaco Editor 不渲染
     const fallbackTextarea = screen.getByTestId('fallback-editor')
     expect(fallbackTextarea).toBeInTheDocument()
     expect(fallbackTextarea).toHaveValue('fallback content')
     expect(screen.queryByTestId('monaco-editor')).not.toBeInTheDocument()
 
-    // 可编辑
     fireEvent.change(fallbackTextarea, { target: { value: 'edited' } })
     expect(onContentChange).toHaveBeenCalledWith('edited')
 
-    // 可保存
     await userEvent.setup().click(screen.getByRole('button', { name: /保存/i }))
     expect(onSave).toHaveBeenCalled()
   })
@@ -486,14 +433,10 @@ describe('MVP-RE-6.11: Monaco 加载失败降级', () => {
         originalContent={null}
         onSave={vi.fn()}
         onContentChange={vi.fn()}
-        onOpenPreview={vi.fn()}
-        onClosePreview={vi.fn()}
-        showPreview={false}
         monacoError={true}
       />
     )
 
-    // 降级模式下即使是 .md 文件也不显示预览开关
     expect(screen.queryByRole('button', { name: /预览/i })).not.toBeInTheDocument()
   })
 })

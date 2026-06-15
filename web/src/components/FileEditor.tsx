@@ -1,10 +1,10 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { Editor, DiffEditor } from '@monaco-editor/react'
+import { Group, Panel, Separator } from 'react-resizable-panels'
 import { FilePreview } from '@/components/FilePreview'
 import { Button } from '@/components/ui/button'
 import type { editor } from 'monaco-editor'
-
-type ViewMode = 'edit' | 'diff'
+import type { ViewMode } from '@/hooks/useFileTab'
 
 interface FileEditorProps {
   filePath: string | null
@@ -14,9 +14,6 @@ interface FileEditorProps {
   originalContent: string | null
   onSave: () => void
   onContentChange: (value: string) => void
-  onOpenPreview: () => void
-  onClosePreview: () => void
-  showPreview: boolean
   /** Monaco 加载失败时为 true，渲染降级 textarea；由 FileTab 层通过 loader.init().catch() + 超时检测 */
   monacoError?: boolean
 }
@@ -29,14 +26,17 @@ export function FileEditor({
   originalContent,
   onSave,
   onContentChange,
-  onOpenPreview,
-  onClosePreview,
-  showPreview,
   monacoError = false,
 }: FileEditorProps) {
+  const [showPreview, setShowPreview] = useState(false)
   const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null)
   const [previewContent, setPreviewContent] = useState(fileContent ?? '')
   const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // 切换文件时关闭预览
+  useEffect(() => {
+    setShowPreview(false)
+  }, [filePath, viewMode])
 
   // 预览内容 debounce 300ms 跟随编辑内容
   useEffect(() => {
@@ -76,14 +76,46 @@ export function FileEditor({
     )
   }
 
-  const fallbackEditor = (
-    <textarea
-      data-testid="fallback-editor"
-      className="w-full h-full p-2 bg-background text-foreground font-mono text-sm resize-none border-0 outline-none"
-      value={fileContent}
-      onChange={(e) => onContentChange(e.target.value)}
-    />
-  )
+  const renderEditor = () => {
+    if (monacoError) {
+      return (
+        <textarea
+          data-testid="fallback-editor"
+          className="w-full h-full p-2 bg-background text-foreground font-mono text-sm resize-none border-0 outline-none"
+          value={fileContent}
+          onChange={(e) => onContentChange(e.target.value)}
+        />
+      )
+    }
+    if (viewMode === 'diff') {
+      return (
+        <DiffEditor
+          original={originalContent ?? ''}
+          modified={fileContent}
+          height="100%"
+          theme="vs-dark"
+          options={{ readOnly: true, renderSideBySide: true }}
+        />
+      )
+    }
+    return (
+      <Editor
+        height="100%"
+        language={getLanguage(filePath)}
+        value={fileContent}
+        theme="vs-dark"
+        onChange={(value) => onContentChange(value ?? '')}
+        onMount={handleEditorMount}
+        options={{
+          minimap: { enabled: false },
+          fontSize: 13,
+          lineNumbers: 'on',
+          scrollBeyondLastLine: false,
+          wordWrap: 'on',
+        }}
+      />
+    )
+  }
 
   return (
     <div className="h-full flex flex-col" data-testid="file-editor-area" onKeyDown={handleKeyDown} tabIndex={0}>
@@ -103,7 +135,7 @@ export function FileEditor({
               variant="ghost"
               size="sm"
               className="h-7 text-xs"
-              onClick={showPreview ? onClosePreview : onOpenPreview}
+              onClick={() => setShowPreview(!showPreview)}
               aria-label={showPreview ? '关闭预览' : '预览'}
             >
               {showPreview ? '关闭预览' : '预览'}
@@ -123,42 +155,21 @@ export function FileEditor({
       </div>
 
       {/* 编辑区 + 预览区 */}
-      <div className="flex-1 flex min-h-0">
-        <div className={`flex-1 min-w-0 ${showPreview ? 'w-1/2' : 'w-full'}`}>
-          {monacoError ? (
-            fallbackEditor
-          ) : viewMode === 'diff' ? (
-            <DiffEditor
-              original={originalContent ?? ''}
-              modified={fileContent}
-              height="100%"
-              theme="vs-dark"
-              options={{ readOnly: true, renderSideBySide: true }}
-            />
-          ) : (
-            <Editor
-              height="100%"
-              language={getLanguage(filePath)}
-              value={fileContent}
-              theme="vs-dark"
-              onChange={(value) => onContentChange(value ?? '')}
-              onMount={handleEditorMount}
-              options={{
-                minimap: { enabled: false },
-                fontSize: 13,
-                lineNumbers: 'on',
-                scrollBeyondLastLine: false,
-                wordWrap: 'on',
-              }}
-            />
-          )}
+      {showPreview && isMarkdown && !monacoError ? (
+        <Group orientation="horizontal" className="flex-1 min-h-0" data-testid="editor-preview-group">
+          <Panel id="editor-panel" minSize="20%" defaultSize="50%" className="overflow-hidden">
+            {renderEditor()}
+          </Panel>
+          <Separator className="w-px bg-border" />
+          <Panel id="preview-panel" minSize="20%" defaultSize="50%" className="overflow-hidden">
+            <FilePreview content={previewContent} onClose={() => setShowPreview(false)} />
+          </Panel>
+        </Group>
+      ) : (
+        <div className="flex-1 min-h-0">
+          {renderEditor()}
         </div>
-        {showPreview && isMarkdown && !monacoError && (
-          <div className="w-1/2 min-w-0">
-            <FilePreview content={previewContent} onClose={onClosePreview} />
-          </div>
-        )}
-      </div>
+      )}
     </div>
   )
 }
