@@ -59,7 +59,9 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     app.state.project_read = read_cls()
     await app.state.project_read.connect()
     # ProjectService 初始化（纯依赖注入，无pool）
-    app.state.project_service = ProjectService(app.state.event_store, app.state.event_bus, app.state.project_read)
+    app.state.project_service = ProjectService(
+        app.state.event_store, app.state.event_bus, app.state.project_read, settings
+    )
     # ThreadRead 初始化（self-managed pool，读端）
     thread_read_cls = load_thread_read_impl(settings.thread_read)
     app.state.thread_read = thread_read_cls()

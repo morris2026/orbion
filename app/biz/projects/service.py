@@ -1,10 +1,13 @@
 """项目与成员管理业务逻辑 — 纯CQRS写端"""
 
+import shutil
 import uuid
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any
 
 from app.biz.projects.read_repo import ProjectReadProtocol
+from app.config import Settings
 from app.hub.auth.models import User
 from app.hub.events.bus import EventBus
 from app.hub.events.store import EventStoreProtocol
@@ -17,10 +20,17 @@ _MSG_PROJECT_EXISTS = "项目名称已存在"
 
 
 class ProjectService:
-    def __init__(self, event_store: EventStoreProtocol, event_bus: EventBus, read_repo: ProjectReadProtocol) -> None:
+    def __init__(
+        self,
+        event_store: EventStoreProtocol,
+        event_bus: EventBus,
+        read_repo: ProjectReadProtocol,
+        settings: Settings | None = None,
+    ) -> None:
         self._event_store = event_store
         self._event_bus = event_bus
         self._read_repo = read_repo
+        self._settings = settings
 
     async def create_project(self, name: str, description: str | None, creator: User) -> dict[str, Any]:
         """创建项目+默认线程，创建者自动成为Owner — 从命令输入构造响应，不读投影表"""
@@ -49,6 +59,9 @@ class ProjectService:
             correlation_id=project_id,
             created_at=now,
         )
+
+        if self._settings:
+            self._init_project_dirs(self._settings, project_id)
 
         # 写入event_log + 发布到EventBus（fire-and-forget，投影最终一致）
         await self._event_store.append(event)
@@ -140,4 +153,25 @@ class ProjectService:
         await self._event_store.append(event)
         await self._event_bus.publish(event)
 
+        if self._settings:
+            self._cleanup_project_dirs(self._settings, project_id)
+
         return await self._read_repo.delete_project(project_id)
+
+    @staticmethod
+    def _init_project_dirs(settings: Settings, project_id: str) -> None:
+        """创建项目文件系统目录：project_dir + memory.md + repo/"""
+        project_dir = settings.project_dir(project_id)
+        project_dir.mkdir(parents=True, exist_ok=True)
+        mem_path = settings.project_memory_path(project_id)
+        if not mem_path.exists():
+            mem_path.write_text("", encoding="utf-8")
+        repo_dir = project_dir / "repo"
+        repo_dir.mkdir(exist_ok=True)
+
+    @staticmethod
+    def _cleanup_project_dirs(settings: Settings, project_id: str) -> None:
+        """删除项目文件系统目录（含 git 仓库和 Agent 记忆）"""
+        project_dir = settings.project_dir(project_id)
+        if project_dir.exists():
+            shutil.rmtree(project_dir, ignore_errors=True)

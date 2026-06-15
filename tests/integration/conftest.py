@@ -88,7 +88,7 @@ async def client(
     thread_read = thread_read_cls()
     await thread_read.connect()
 
-    project_service = ProjectService(event_store, event_bus, project_read)
+    project_service = ProjectService(event_store, event_bus, project_read, settings)
     thread_service = ThreadService(event_store, event_bus, thread_read, project_read)
 
     stub_adapter = StubAdapter()
