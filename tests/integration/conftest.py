@@ -12,9 +12,11 @@ import pytest
 from httpx import ASGITransport, AsyncClient
 
 from app.biz.agents.adapters.base import ModelOutput, PromptInput
+from app.biz.agents.declarations import BUILTIN_AGENT_DECLARATIONS
 from app.biz.agents.runtime import AgentRuntime
 from app.biz.agents.scheduler import AgentScheduler
 from app.biz.agents.service import AgentService
+from app.biz.agents.templates import AgentTemplateManager
 from app.biz.projects.read_repo import load_project_read_impl
 from app.biz.projects.service import ProjectService
 from app.biz.threads.read_repo import load_thread_read_impl
@@ -96,6 +98,10 @@ async def client(
     agent_scheduler = AgentScheduler(event_bus, agent_runtime)
     agent_service = AgentService(event_store, event_bus, agent_runtime)
 
+    agent_template_manager = AgentTemplateManager(settings)
+    for agent_type, declaration in BUILTIN_AGENT_DECLARATIONS.items():
+        agent_template_manager.ensure_template(agent_type, declaration.model_dump(), "")
+
     app.state.event_store = event_store
     app.state.event_bus = event_bus
     app.state.event_projections = projections
@@ -108,6 +114,7 @@ async def client(
     app.state.agent_runtime = agent_runtime
     app.state.agent_scheduler = agent_scheduler
     app.state.agent_service = agent_service
+    app.state.agent_template_manager = agent_template_manager
 
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as c:

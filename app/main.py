@@ -7,11 +7,13 @@ from fastapi import FastAPI
 
 from app.biz.agents.adapters.base import ModelAdapter, ModelOutput, PromptInput
 from app.biz.agents.adapters.claude import ClaudeAdapter
+from app.biz.agents.declarations import BUILTIN_AGENT_DECLARATIONS
 from app.biz.agents.memory import AgentMemory
 from app.biz.agents.routes import router as agent_router
 from app.biz.agents.runtime import AgentRuntime
 from app.biz.agents.scheduler import AgentScheduler
 from app.biz.agents.service import AgentService
+from app.biz.agents.templates import AgentTemplateManager
 from app.biz.git.routes import router as git_router
 from app.biz.git.service import GitService
 from app.biz.outputs.routes import output_action_router, output_list_router
@@ -85,6 +87,10 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     app.state.agent_runtime = AgentRuntime(app.state.event_bus, app.state.event_store, adapter, agent_memory)
     app.state.agent_scheduler = AgentScheduler(app.state.event_bus, app.state.agent_runtime)
     app.state.agent_service = AgentService(app.state.event_store, app.state.event_bus, app.state.agent_runtime)
+    # AgentTemplateManager 初始化（确保3个内置Agent模板文件存在）
+    app.state.agent_template_manager = AgentTemplateManager(settings)
+    for agent_type, declaration in BUILTIN_AGENT_DECLARATIONS.items():
+        app.state.agent_template_manager.ensure_template(agent_type, declaration.model_dump(), "")
     # PlanService 初始化（纯依赖注入，依赖projections做读端查询）
     app.state.plan_service = PlanService(app.state.event_store, app.state.event_bus, app.state.event_projections)
     # OutputService 初始化（纯依赖注入，依赖projections做读端查询）

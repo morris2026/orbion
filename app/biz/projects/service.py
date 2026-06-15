@@ -3,7 +3,6 @@
 import shutil
 import uuid
 from datetime import UTC, datetime
-from pathlib import Path
 from typing import Any
 
 from app.biz.projects.read_repo import ProjectReadProtocol
