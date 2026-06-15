@@ -17,6 +17,7 @@ from app.biz.agents.templates import AgentTemplateManager
 from app.biz.files.routes import router as file_router
 from app.biz.files.service import FileService
 from app.biz.git.routes import router as git_router
+from app.biz.git.routes import sc_router as git_sc_router
 from app.biz.git.service import GitService
 from app.biz.outputs.routes import output_action_router, output_list_router
 from app.biz.outputs.service import OutputService
@@ -141,6 +142,9 @@ app.include_router(file_router, prefix="/projects", tags=["files"])
 
 # Git模块 — git log查询端点
 app.include_router(git_router, prefix="/git", tags=["git"])
+
+# Source Control模块 — status/stage/unstage/commit端点嵌套在项目路径下
+app.include_router(git_sc_router, prefix="/projects", tags=["source-control"])
 
 # 线程模块 — 线程端点嵌套在项目路径下
 app.include_router(thread_router, prefix="/projects/{project_id}/threads", tags=["threads"])

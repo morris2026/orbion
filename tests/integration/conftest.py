@@ -18,6 +18,7 @@ from app.biz.agents.scheduler import AgentScheduler
 from app.biz.agents.service import AgentService
 from app.biz.agents.templates import AgentTemplateManager
 from app.biz.files.service import FileService
+from app.biz.git.service import GitService
 from app.biz.projects.read_repo import load_project_read_impl
 from app.biz.projects.service import ProjectService
 from app.biz.repos.service import RepoService
@@ -119,6 +120,7 @@ async def client(
     app.state.agent_template_manager = agent_template_manager
     app.state.repo_service = RepoService(settings)
     app.state.file_service = FileService(settings)
+    app.state.git_service = GitService(settings, event_bus, projections)
 
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as c:

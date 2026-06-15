@@ -115,3 +115,93 @@ class GitService:
         repo = git.Repo(repo_path)
         commits = list(repo.iter_commits(max_count=limit))
         return [{"message": str(c.message), "hexsha": str(c.hexsha)} for c in commits]
+
+    def _staged_status_code(self, item: object) -> str:
+        """从 index.diff('HEAD') 的 item 推断 staged 状态码
+
+        Why: index.diff('HEAD') 方向是 HEAD→index，语义与直觉相反：
+        deleted_file=True 实际是新增（HEAD 中不存在），new_file=True 实际是删除
+        """
+        if getattr(item, "deleted_file", False):
+            return "A"
+        if getattr(item, "new_file", False):
+            return "D"
+        if getattr(item, "renamed_file", False):
+            return "R"
+        return "M"
+
+    def _changes_status_code(self, item: object) -> str:
+        """从 index.diff(None) 的 item 推断 changes 状态码"""
+        if getattr(item, "new_file", False):
+            return "A"
+        if getattr(item, "deleted_file", False):
+            return "D"
+        if getattr(item, "renamed_file", False):
+            return "R"
+        return "M"
+
+    def _validate_paths(self, paths: list[str]) -> None:
+        """校验文件路径列表：拒绝路径穿越和绝对路径"""
+        for p in paths:
+            if _sanitize_file_path(p) is None:
+                raise ValueError(f"无效的文件路径: {p}")
+
+    def status(self, project_id: str, repo_name: str) -> dict[str, list[dict[str, str]]]:
+        """git status 返回 staged/changes 分组文件列表"""
+        repo_path = self._resolve_repo_path(project_id, repo_name)
+        if not Path(repo_path).exists():
+            raise FileNotFoundError(f"仓库不存在: {repo_name}")
+        repo = git.Repo(repo_path)
+        staged: list[dict[str, str]] = []
+        changes: list[dict[str, str]] = []
+        try:
+            for item in repo.index.diff("HEAD", create_patch=False):
+                path = item.a_path or ""
+                staged.append({"path": path, "status": self._staged_status_code(item)})
+        except git.exc.BadName:
+            for entry in repo.index.entries:
+                if isinstance(entry, tuple):
+                    staged.append({"path": str(entry[0]), "status": "A"})
+        for item in repo.index.diff(None, create_patch=False):
+            path = item.a_path or ""
+            changes.append({"path": path, "status": self._changes_status_code(item)})
+        for uf in repo.untracked_files:
+            changes.append({"path": str(uf), "status": "U"})
+        return {"staged": staged, "changes": changes}
+
+    def stage(self, project_id: str, repo_name: str, paths: list[str]) -> None:
+        """git add 指定文件"""
+        repo_path = self._resolve_repo_path(project_id, repo_name)
+        if not Path(repo_path).exists():
+            raise FileNotFoundError(f"仓库不存在: {repo_name}")
+        self._validate_paths(paths)
+        repo = git.Repo(repo_path)
+        repo.index.add(paths)
+
+    def unstage(self, project_id: str, repo_name: str, paths: list[str]) -> None:
+        """git reset HEAD 指定文件（无 commit 时从 index 移除，文件变为 untracked）"""
+        repo_path = self._resolve_repo_path(project_id, repo_name)
+        if not Path(repo_path).exists():
+            raise FileNotFoundError(f"仓库不存在: {repo_name}")
+        self._validate_paths(paths)
+        repo = git.Repo(repo_path)
+        if repo.head.is_valid():
+            for p in paths:
+                repo.index.reset(p, head=True)
+        else:
+            repo.index.remove(paths, working_tree=False)
+
+    def commit(self, project_id: str, repo_name: str, message: str) -> str:
+        """git commit 已 staged 的文件，返回 commit hexsha"""
+        repo_path = self._resolve_repo_path(project_id, repo_name)
+        if not Path(repo_path).exists():
+            raise FileNotFoundError(f"仓库不存在: {repo_name}")
+        repo = git.Repo(repo_path)
+        try:
+            has_staged = bool(repo.index.diff("HEAD", create_patch=False))
+        except git.exc.BadName:
+            has_staged = bool(repo.index.entries)
+        if not has_staged:
+            raise ValueError("无可提交的变更")
+        commit_obj = repo.index.commit(message)
+        return str(commit_obj.hexsha)
