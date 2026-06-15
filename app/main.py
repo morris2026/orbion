@@ -14,6 +14,8 @@ from app.biz.agents.runtime import AgentRuntime
 from app.biz.agents.scheduler import AgentScheduler
 from app.biz.agents.service import AgentService
 from app.biz.agents.templates import AgentTemplateManager
+from app.biz.files.routes import router as file_router
+from app.biz.files.service import FileService
 from app.biz.git.routes import router as git_router
 from app.biz.git.service import GitService
 from app.biz.outputs.routes import output_action_router, output_list_router
@@ -101,6 +103,8 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     app.state.git_service = GitService(settings, app.state.event_bus, app.state.event_projections)
     # RepoService 初始化（仓库扫描/添加/删除）
     app.state.repo_service = RepoService(settings)
+    # FileService 初始化（文件树/读取/保存）
+    app.state.file_service = FileService(settings)
     yield
     app.state.agent_scheduler.close()
     await app.state.thread_read.close()
@@ -131,6 +135,9 @@ app.include_router(output_action_router, prefix="/outputs", tags=["outputs"])
 
 # 仓库模块 — 仓库管理端点嵌套在项目路径下
 app.include_router(repo_router, prefix="/projects", tags=["repos"])
+
+# 文件模块 — 文件操作端点嵌套在项目路径下
+app.include_router(file_router, prefix="/projects", tags=["files"])
 
 # Git模块 — git log查询端点
 app.include_router(git_router, prefix="/git", tags=["git"])
