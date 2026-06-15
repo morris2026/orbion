@@ -1,5 +1,6 @@
 """仓库管理 API 端点"""
 
+import asyncio
 from typing import cast
 
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -31,7 +32,7 @@ async def list_repos(
     is_member = await project_read.check_member_exists(project_id, user.id)
     if not is_member:
         raise HTTPException(status_code=403, detail="Not a project member")
-    repos = repo_service.scan_repos(project_id)
+    repos = await asyncio.to_thread(repo_service.scan_repos, project_id)
     return [RepoInfo(name=r["name"]) for r in repos]
 
 
@@ -46,9 +47,9 @@ async def add_repo(
     is_member = await project_read.check_member_exists(project_id, user.id)
     if not is_member:
         raise HTTPException(status_code=403, detail="Not a project member")
-    result = repo_service.add_repo(project_id, url=body.url, name=body.name)
-    if result is None or "error" in result:
-        detail = result.get("error", "添加仓库失败") if result else "添加仓库失败"
+    result = await asyncio.to_thread(repo_service.add_repo, project_id, url=body.url, name=body.name)
+    if "error" in result:
+        detail = result.get("error", "添加仓库失败")
         raise HTTPException(status_code=400, detail=detail)
     return RepoInfo(name=result["name"])
 
@@ -66,7 +67,10 @@ async def delete_repo(
         raise HTTPException(status_code=403, detail="Not a project member")
     if "/" in repo_name or "\\" in repo_name or ".." in repo_name:
         raise HTTPException(status_code=400, detail=f"无效的仓库名: {repo_name}")
-    deleted = repo_service.delete_repo(project_id, repo_name)
+    try:
+        deleted = await asyncio.to_thread(repo_service.delete_repo, project_id, repo_name)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     if not deleted:
         raise HTTPException(status_code=404, detail=f"仓库不存在: {repo_name}")
     return {"name": repo_name}

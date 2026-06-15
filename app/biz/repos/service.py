@@ -30,8 +30,8 @@ class RepoService:
                 repos.append({"name": entry.name})
         return repos
 
-    def add_repo(self, project_id: str, *, url: str | None = None, name: str | None = None) -> dict[str, str] | None:
-        """添加仓库：URL 则 git clone，目录名则 git init。同名目录已存在返回 None 或错误字典"""
+    def add_repo(self, project_id: str, *, url: str | None = None, name: str | None = None) -> dict[str, str]:
+        """添加仓库：URL 则 git clone，目录名则 git init。失败时返回包含 error 键的字典"""
         repo_name = name
         if url and not name:
             repo_name = url.rstrip("/").split("/")[-1]
@@ -74,6 +74,8 @@ class RepoService:
 
     def delete_repo(self, project_id: str, repo_name: str) -> bool:
         """删除仓库（删除物理目录），目录不存在返回 False"""
+        if os.sep in repo_name or "/" in repo_name or "\\" in repo_name or ".." in repo_name:
+            raise ValueError(f"无效的仓库名: {repo_name}")
         repo_root = self._repo_root(project_id)
         target = repo_root / repo_name
         if not target.exists():

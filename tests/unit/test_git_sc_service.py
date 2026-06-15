@@ -1,6 +1,7 @@
 """Source Control 服务测试 — MVP-RE-3.1, 3.2"""
 
 from pathlib import Path
+from unittest.mock import MagicMock
 
 from app.biz.git.service import GitService
 from app.config import Settings
@@ -10,6 +11,13 @@ JWT_SECRET_TEST = "test-secret-for-git-sc"
 
 def _make_settings(tmp_path: Path) -> Settings:
     return Settings(jwt_secret=JWT_SECRET_TEST, root_dir=str(tmp_path))
+
+
+def _make_git_service(settings: Settings) -> GitService:
+    """创建测试用 GitService，用 mock 替代 EventBus 和 Projections"""
+    mock_bus = MagicMock()
+    mock_projections = MagicMock()
+    return GitService(settings, mock_bus, mock_projections)
 
 
 def _init_repo_with_changes(repo_path: Path) -> None:
@@ -35,8 +43,7 @@ class TestMvpRe3GitScService:
         repo_path = settings.project_repo_path("p1", "myrepo")
         _init_repo_with_changes(repo_path)
 
-        service = GitService.__new__(GitService)
-        service._settings = settings
+        service = _make_git_service(settings)
         result = service.status("p1", "myrepo")
 
         assert "staged" in result
@@ -62,8 +69,7 @@ class TestMvpRe3GitScService:
         repo.index.add(["README.md"])
         repo.index.commit("init")
 
-        service = GitService.__new__(GitService)
-        service._settings = settings
+        service = _make_git_service(settings)
         result = service.status("p1", "myrepo")
 
         assert result["staged"] == []

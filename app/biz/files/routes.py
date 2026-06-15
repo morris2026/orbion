@@ -39,7 +39,7 @@ async def get_file_tree(
     if not is_member:
         raise HTTPException(status_code=403, detail="Not a project member")
     _validate_repo_name(repo_name)
-    return file_service.get_file_tree(project_id, repo_name)
+    return await asyncio.to_thread(file_service.get_file_tree, project_id, repo_name)
 
 
 @router.get("/{project_id}/repos/{repo_name}/files", response_model=FileContent)
