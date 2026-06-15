@@ -23,6 +23,8 @@ from app.biz.plans.service import PlanService
 from app.biz.projects.read_repo import load_project_read_impl
 from app.biz.projects.routes import router as project_router
 from app.biz.projects.service import ProjectService
+from app.biz.repos.routes import router as repo_router
+from app.biz.repos.service import RepoService
 from app.biz.threads.read_repo import load_thread_read_impl
 from app.biz.threads.routes import message_router, thread_router
 from app.biz.threads.service import ThreadService
@@ -97,6 +99,8 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     app.state.output_service = OutputService(app.state.event_store, app.state.event_bus, app.state.event_projections)
     # GitService 初始化（订阅TaskOutputApproved事件，审批通过后自动commit）
     app.state.git_service = GitService(settings, app.state.event_bus, app.state.event_projections)
+    # RepoService 初始化（仓库扫描/添加/删除）
+    app.state.repo_service = RepoService(settings)
     yield
     app.state.agent_scheduler.close()
     await app.state.thread_read.close()
@@ -124,6 +128,9 @@ app.include_router(plan_action_router, prefix="/plans", tags=["plans"])
 # 产出模块 — 列表端点嵌套在项目路径下，操作端点在outputs路径下
 app.include_router(output_list_router, prefix="/projects", tags=["outputs"])
 app.include_router(output_action_router, prefix="/outputs", tags=["outputs"])
+
+# 仓库模块 — 仓库管理端点嵌套在项目路径下
+app.include_router(repo_router, prefix="/projects", tags=["repos"])
 
 # Git模块 — git log查询端点
 app.include_router(git_router, prefix="/git", tags=["git"])
