@@ -371,9 +371,15 @@ test.describe('自我构建9点验证', () => {
       headers,
     })
 
-    const gitLogResp = await page.request.get(`/git/${project.id}/git-log`, { headers })
-    expect(gitLogResp.ok()).toBeTruthy()
-    const gitLog = await gitLogResp.json()
+    // Git commit 是异步事件处理，轮询等待 commit 完成
+    let gitLog: any[] = []
+    for (let attempt = 0; attempt < 10; attempt++) {
+      const gitLogResp = await page.request.get(`/git/${project.id}/git-log`, { headers })
+      expect(gitLogResp.ok()).toBeTruthy()
+      gitLog = await gitLogResp.json()
+      if (gitLog.length >= 2) break
+      await page.waitForTimeout(500)
+    }
     expect(gitLog.length).toBeGreaterThanOrEqual(2)
     const latestCommit = gitLog[0]
     expect(latestCommit.message).toContain('approve')

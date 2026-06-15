@@ -7,6 +7,7 @@ from pathlib import Path
 
 import git
 
+from app.config import Settings
 from app.hub.events.bus import EventBus
 from app.hub.events.projections import EventProjectionsProtocol
 from app.hub.events.types import Event, EventType
@@ -16,7 +17,6 @@ logger = logging.getLogger(__name__)
 
 def _sanitize_file_path(fp: str) -> str | None:
     """清洗文件路径：拒绝路径遍历（..）和绝对路径，返回安全的相对路径或None"""
-    # Why: 检查分隔符和斜杠后，再用Path.resolve()验证结果路径不越界（纵深防御）
     if ".." in fp.split(os.sep) or ".." in fp.split("/") or fp.startswith("/") or fp.startswith("\\"):
         return None
     cleaned = fp.lstrip("/").lstrip("\\")
@@ -28,58 +28,62 @@ class GitService:
 
     EventBus订阅者：订阅TaskOutputApproved事件，
     收到事件后从projections查询产出详情，写入文件并commit。
+    仓库按项目隔离：projects/<id>/repo/<name>/
     """
 
     def __init__(
         self,
-        repo_path: str,
+        settings: Settings,
         event_bus: EventBus,
         projections: EventProjectionsProtocol,
     ) -> None:
-        # Why: 相对路径依赖CWD，asyncio.to_thread可能在不同CWD下执行git操作
-        self._repo_path = str(Path(repo_path).resolve())
+        self._settings = settings
         self._event_bus = event_bus
         self._projections = projections
-        # 只订阅审批通过事件——要求修改和拒绝不触发commit
         self._event_bus.subscribe(EventType.TaskOutputApproved, self._on_output_approved)
 
-    async def ensure_repo(self) -> None:
-        """确保本地repo存在且已初始化（git init + 初始commit）"""
-        if not os.path.exists(self._repo_path):
-            os.makedirs(self._repo_path, exist_ok=True)
+    def _resolve_repo_path(self, project_id: str, repo_name: str) -> str:
+        return str(self._settings.project_repo_path(project_id, repo_name).resolve())
 
-        # 目录存在但不是git repo → 初始化并创建空初始commit
+    async def ensure_repo(self, project_id: str, repo_name: str = "orbion") -> None:
+        """确保项目仓库存在且已初始化（git init + 初始commit）"""
+        repo_path = self._resolve_repo_path(project_id, repo_name)
+        if not os.path.exists(repo_path):
+            os.makedirs(repo_path, exist_ok=True)
+
         try:
-            git.Repo(self._repo_path)
+            git.Repo(repo_path)
         except git.InvalidGitRepositoryError:
-            repo = git.Repo.init(self._repo_path)
-            # Why: 空repo无commit历史会导致iter_commits报错，初始commit提供可查询的起点
-            readme = Path(self._repo_path) / "README.md"
+            repo = git.Repo.init(repo_path)
+            readme = Path(repo_path) / "README.md"
             readme.write_text("# Orbion Project\n")
             repo.index.add(["README.md"])
             repo.index.commit("init: Orbion project repo")
 
     async def _on_output_approved(self, event: Event) -> None:
         """TaskOutputApproved事件处理器：写入产出文件并commit"""
+        project_id = event.project_id
+        if not project_id:
+            logger.warning("TaskOutputApproved事件缺少project_id，跳过git commit")
+            return
+
         output_id = event.payload.get("output_id", "")
         if not output_id:
             logger.warning("TaskOutputApproved事件缺少output_id，跳过git commit")
             return
 
-        # 从projections查询产出详情
         output = await self._projections.get_output_by_id(output_id)
         if output is None:
-            # Why: CQRS最终一致性——审批事件先于投影更新到达，投影可能暂无此产出记录
             logger.warning("产出%s在投影中不存在，跳过git commit", output_id)
             return
 
-        # 确保repo存在
-        await self.ensure_repo()
+        repo_name = "orbion"
+        await self.ensure_repo(project_id, repo_name)
+        repo_path = self._resolve_repo_path(project_id, repo_name)
 
         file_paths: list[str] = output.get("file_paths", [])
         content: str = output.get("content", "")
 
-        # Why: MVP简化——同一content写入所有file_paths；后续按产出物类型拆分per-file内容时改用diff字段
         safe_paths: list[str] = []
         for fp in file_paths:
             safe = _sanitize_file_path(fp)
@@ -87,7 +91,7 @@ class GitService:
                 logger.warning("产出%s的file_path '%s'包含路径遍历或绝对路径，跳过此文件", output_id, fp)
                 continue
             safe_paths.append(safe)
-            full_path = Path(self._repo_path) / safe
+            full_path = Path(repo_path) / safe
             full_path.parent.mkdir(parents=True, exist_ok=True)
             full_path.write_text(content)
 
@@ -95,17 +99,19 @@ class GitService:
             logger.warning("产出%s无有效file_paths，跳过git commit", output_id)
             return
 
-        # Why: git操作是同步阻塞I/O，通过to_thread避免阻塞asyncio事件循环
-        await asyncio.to_thread(self._commit_files, safe_paths, output_id)
+        await asyncio.to_thread(self._commit_files, repo_path, safe_paths, output_id)
 
-    def _commit_files(self, safe_paths: list[str], output_id: str) -> None:
+    def _commit_files(self, repo_path: str, safe_paths: list[str], output_id: str) -> None:
         """同步执行git add + commit（由asyncio.to_thread调度）"""
-        repo = git.Repo(self._repo_path)
+        repo = git.Repo(repo_path)
         repo.index.add(safe_paths)
         repo.index.commit(f"[approve] output {output_id}")
 
-    def get_recent_commits(self, limit: int = 10) -> list[dict[str, str]]:
-        """查询git log返回最近N条commit摘要"""
-        repo = git.Repo(self._repo_path)
+    def get_recent_commits(self, project_id: str, repo_name: str = "orbion", limit: int = 10) -> list[dict[str, str]]:
+        """查询项目仓库的git log返回最近N条commit摘要"""
+        repo_path = self._resolve_repo_path(project_id, repo_name)
+        if not Path(repo_path).exists():
+            return []
+        repo = git.Repo(repo_path)
         commits = list(repo.iter_commits(max_count=limit))
         return [{"message": str(c.message), "hexsha": str(c.hexsha)} for c in commits]

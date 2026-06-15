@@ -7,9 +7,16 @@ from typing import Any
 from uuid import uuid4
 
 from app.biz.git.service import GitService
+from app.config import Settings
 from app.hub.events.bus import InProcessEventBus
 from app.hub.events.projections import EventProjectionsProtocol
 from app.hub.events.types import Event, EventType
+
+JWT_SECRET_TEST = "test-secret-for-git-integration-tests"
+
+
+def _make_settings(tmp_path: Path) -> Settings:
+    return Settings(jwt_secret=JWT_SECRET_TEST, root_dir=str(tmp_path))
 
 
 class MockProjections(EventProjectionsProtocol):
@@ -123,9 +130,7 @@ def _make_revision_requested_event(
 
 
 async def test_tc17_1_approve_triggers_commit(tmp_path: Path) -> None:
-    """MVP-17.1: 产出审批通过→GitService执行commit→查询git log→有新commit
-    commit消息含产出信息；commit内容与file_paths和content一致
-    """
+    """MVP-17.1: 产出审批通过→GitService执行commit→查询git log→有新commit"""
     bus = InProcessEventBus()
     projections = MockProjections(bus)
     output_id = "out-1"
@@ -136,26 +141,22 @@ async def test_tc17_1_approve_triggers_commit(tmp_path: Path) -> None:
     )
     projections._outputs = [output]
 
-    repo_path = str(tmp_path / "repo")
-    _git_service = GitService(repo_path, bus, projections)
-    await _git_service.ensure_repo()
+    settings = _make_settings(tmp_path)
+    _git_service = GitService(settings, bus, projections)
+    await _git_service.ensure_repo("proj-1", "orbion")
 
-    # 发布审批通过事件
-    event = _make_approved_event(output_id=output_id)
+    event = _make_approved_event(output_id=output_id, project_id="proj-1")
     await bus.publish(event)
     await bus.wait_for_pending()
 
-    # 验证：git log有新commit
     import git
 
-    repo = git.Repo(repo_path)
+    repo_path = settings.project_repo_path("proj-1", "orbion")
+    repo = git.Repo(str(repo_path))
     commits = list(repo.iter_commits())
-    # 1初始commit + 1审批commit = 2
     assert len(commits) == 2
-    # commit消息含产出信息
     assert output_id in commits[0].message
-    # commit内容：file_paths中的文件存在且内容与content一致
-    committed_content = (Path(repo_path) / "src" / "foo.py").read_text()
+    committed_content = (repo_path / "src" / "foo.py").read_text()
     assert committed_content == "def foo(): pass"
 
 
@@ -170,21 +171,20 @@ async def test_tc17_2_revision_no_commit(tmp_path: Path) -> None:
     output = _make_output_dict(output_id=output_id)
     projections._outputs = [output]
 
-    repo_path = str(tmp_path / "repo")
-    _git_service = GitService(repo_path, bus, projections)
-    await _git_service.ensure_repo()
+    settings = _make_settings(tmp_path)
+    _git_service = GitService(settings, bus, projections)
+    await _git_service.ensure_repo("proj-1", "orbion")
 
     import git
 
-    repo = git.Repo(repo_path)
+    repo_path = settings.project_repo_path("proj-1", "orbion")
+    repo = git.Repo(str(repo_path))
     initial_count = len(list(repo.iter_commits()))
 
-    # 发布request-revision事件
     event = _make_revision_requested_event(output_id=output_id)
     await bus.publish(event)
     await bus.wait_for_pending()
 
-    # 验证：无新commit产生
     final_count = len(list(repo.iter_commits()))
     assert final_count == initial_count
 
@@ -193,25 +193,23 @@ async def test_tc17_2_revision_no_commit(tmp_path: Path) -> None:
 
 
 async def test_tc17_3_rejection_no_commit(tmp_path: Path) -> None:
-    """MVP-17.3: TaskOutputRevisionRequested事件不触发commit
-    （当前产出无reject端点，MVP-17.3的意图与MVP-17.2等价但独立验证）
-    """
+    """MVP-17.3: TaskOutputRevisionRequested事件不触发commit"""
     bus = InProcessEventBus()
     projections = MockProjections(bus)
     output_id = "out-2"
     output = _make_output_dict(output_id=output_id)
     projections._outputs = [output]
 
-    repo_path = str(tmp_path / "repo")
-    _git_service = GitService(repo_path, bus, projections)
-    await _git_service.ensure_repo()
+    settings = _make_settings(tmp_path)
+    _git_service = GitService(settings, bus, projections)
+    await _git_service.ensure_repo("proj-1", "orbion")
 
     import git
 
-    repo = git.Repo(repo_path)
+    repo_path = settings.project_repo_path("proj-1", "orbion")
+    repo = git.Repo(str(repo_path))
     initial_count = len(list(repo.iter_commits()))
 
-    # 与MVP-17.2相同事件类型，但独立output_id验证
     event = _make_revision_requested_event(output_id=output_id, task_id="t-2")
     await bus.publish(event)
     await bus.wait_for_pending()
@@ -224,7 +222,7 @@ async def test_tc17_3_rejection_no_commit(tmp_path: Path) -> None:
 
 
 async def test_tc17_4_auto_init_repo(tmp_path: Path) -> None:
-    """MVP-17.4: 删除本地repo→产出审批通过→repo自动初始化（git init）→commit成功执行"""
+    """MVP-17.4: repo不存在→产出审批通过→repo自动初始化→commit成功"""
     bus = InProcessEventBus()
     projections = MockProjections(bus)
     output_id = "out-1"
@@ -232,30 +230,27 @@ async def test_tc17_4_auto_init_repo(tmp_path: Path) -> None:
         output_id=output_id,
         content="print('hello')",
         file_paths=["hello.py"],
+        project_id="proj-1",
     )
     projections._outputs = [output]
 
-    # repo_path指向一个不存在的新目录
-    repo_path = str(tmp_path / "new_repo")
-    assert not os.path.exists(repo_path)
+    settings = _make_settings(tmp_path)
+    repo_path = settings.project_repo_path("proj-1", "orbion")
+    assert not os.path.exists(str(repo_path))
 
-    _git_service = GitService(repo_path, bus, projections)
+    _git_service = GitService(settings, bus, projections)
 
-    # 发布审批通过事件（repo还不存在）
-    event = _make_approved_event(output_id=output_id)
+    event = _make_approved_event(output_id=output_id, project_id="proj-1")
     await bus.publish(event)
     await bus.wait_for_pending()
 
-    # 验证：repo自动初始化
     import git
 
-    repo = git.Repo(repo_path)
+    repo = git.Repo(str(repo_path))
     commits = list(repo.iter_commits())
-    # 1初始commit + 1审批commit = 2
     assert len(commits) == 2
     assert output_id in commits[0].message
-    # 内容一致
-    committed_content = (Path(repo_path) / "hello.py").read_text()
+    committed_content = (repo_path / "hello.py").read_text()
     assert committed_content == "print('hello')"
 
 
@@ -263,29 +258,24 @@ async def test_tc17_4_auto_init_repo(tmp_path: Path) -> None:
 
 
 async def test_get_recent_commits(tmp_path: Path) -> None:
-    """GitService.get_recent_commits返回最近N条commit摘要
-    包含message和hexsha字段
-    """
+    """GitService.get_recent_commits按项目返回最近N条commit摘要"""
     bus = InProcessEventBus()
     projections = MockProjections(bus)
     output_id = "out-log-1"
-    output = _make_output_dict(output_id=output_id, file_paths=["log_test.py"])
+    output = _make_output_dict(output_id=output_id, file_paths=["log_test.py"], project_id="proj-1")
     projections._outputs = [output]
 
-    repo_path = str(tmp_path / "repo")
-    git_service = GitService(repo_path, bus, projections)
-    await git_service.ensure_repo()
+    settings = _make_settings(tmp_path)
+    git_service = GitService(settings, bus, projections)
+    await git_service.ensure_repo("proj-1", "orbion")
 
-    # 触发审批commit
-    event = _make_approved_event(output_id=output_id)
+    event = _make_approved_event(output_id=output_id, project_id="proj-1")
     await bus.publish(event)
     await bus.wait_for_pending()
 
-    commits = git_service.get_recent_commits(limit=5)
+    commits = git_service.get_recent_commits("proj-1", "orbion", limit=5)
     assert len(commits) >= 2
-    # 最新commit消息含output_id
     assert output_id in commits[0]["message"]
-    # hexsha非空
     assert commits[0]["hexsha"] != ""
 
 
@@ -294,10 +284,152 @@ async def test_get_recent_commits_empty_repo(tmp_path: Path) -> None:
     bus = InProcessEventBus()
     projections = MockProjections(bus)
 
-    repo_path = str(tmp_path / "empty_repo")
-    git_service = GitService(repo_path, bus, projections)
-    await git_service.ensure_repo()
+    settings = _make_settings(tmp_path)
+    git_service = GitService(settings, bus, projections)
+    await git_service.ensure_repo("proj-1", "orbion")
 
-    commits = git_service.get_recent_commits(limit=10)
+    commits = git_service.get_recent_commits("proj-1", "orbion", limit=10)
     assert len(commits) == 1
     assert "init" in commits[0]["message"]
+
+
+# -- MVP-FL-3.1~3.5: GitService 按项目隔离 --
+
+
+class TestMvpFl3GitProjectIsolation:
+    async def test_mvp_fl_3_1_project_isolation(self, tmp_path: Path) -> None:
+        """MVP-FL-3.1：两个项目各有独立.git/目录，仓库互相隔离"""
+        bus = InProcessEventBus()
+        projections = MockProjections(bus)
+        settings = _make_settings(tmp_path)
+        git_service = GitService(settings, bus, projections)
+
+        await git_service.ensure_repo("p1", "orbion")
+        await git_service.ensure_repo("p2", "orbion")
+
+        p1_repo_path = settings.project_repo_path("p1", "orbion")
+        p2_repo_path = settings.project_repo_path("p2", "orbion")
+        assert (p1_repo_path / ".git").is_dir()
+        assert (p2_repo_path / ".git").is_dir()
+
+        import git as gitmod
+
+        p1_repo = gitmod.Repo(str(p1_repo_path))
+        p2_repo = gitmod.Repo(str(p2_repo_path))
+        assert p1_repo.working_dir != p2_repo.working_dir
+
+    async def test_mvp_fl_3_2_idempotent_ensure_repo(self, tmp_path: Path) -> None:
+        """MVP-FL-3.2：项目仓库已存在，再次ensure_repo不报错"""
+        bus = InProcessEventBus()
+        projections = MockProjections(bus)
+        settings = _make_settings(tmp_path)
+        git_service = GitService(settings, bus, projections)
+
+        await git_service.ensure_repo("p1", "orbion")
+        await git_service.ensure_repo("p1", "orbion")
+
+        import git as gitmod
+
+        p1_repo_path = settings.project_repo_path("p1", "orbion")
+        repo = gitmod.Repo(str(p1_repo_path))
+        commits = list(repo.iter_commits())
+        assert len(commits) == 1
+
+    async def test_mvp_fl_3_3_output_writes_to_correct_project(self, tmp_path: Path) -> None:
+        """MVP-FL-3.3：产出写入正确项目仓库"""
+        bus = InProcessEventBus()
+        projections = MockProjections(bus)
+        settings = _make_settings(tmp_path)
+        git_service = GitService(settings, bus, projections)
+
+        await git_service.ensure_repo("p1", "orbion")
+        await git_service.ensure_repo("p2", "orbion")
+
+        output_id = "out-p1"
+        output = _make_output_dict(
+            output_id=output_id,
+            content="p1 code",
+            file_paths=["src/main.py"],
+            project_id="p1",
+        )
+        projections._outputs = [output]
+
+        event = _make_approved_event(output_id=output_id, project_id="p1")
+        await bus.publish(event)
+        await bus.wait_for_pending()
+
+        p1_repo_path = settings.project_repo_path("p1", "orbion")
+        p2_repo_path = settings.project_repo_path("p2", "orbion")
+        assert (p1_repo_path / "src" / "main.py").exists()
+        assert not (p2_repo_path / "src" / "main.py").exists()
+
+    async def test_mvp_fl_3_4_missing_project_id_skips(self, tmp_path: Path) -> None:
+        """MVP-FL-3.4：事件project_id为空字符串时跳过，不抛异常"""
+        bus = InProcessEventBus()
+        projections = MockProjections(bus)
+        settings = _make_settings(tmp_path)
+        GitService(settings, bus, projections)
+
+        output_id = "out-noproj"
+        output = _make_output_dict(output_id=output_id, file_paths=["src/x.py"])
+        projections._outputs = [output]
+
+        event = Event(
+            event_id=str(uuid4()),
+            project_id="",
+            event_type=EventType.TaskOutputApproved,
+            participant_id="user-1",
+            participant_type="human",
+            participant_display_name="Test",
+            payload={"output_id": output_id},
+            correlation_id="corr-1",
+            created_at=datetime.now(UTC),
+        )
+        await bus.publish(event)
+        await bus.wait_for_pending()
+
+        assert not settings.projects_dir.exists()
+
+    async def test_mvp_fl_3_5_commits_per_project(self, tmp_path: Path) -> None:
+        """MVP-FL-3.5：get_recent_commits按项目查询，各项目commit独立"""
+        bus = InProcessEventBus()
+        projections = MockProjections(bus)
+        settings = _make_settings(tmp_path)
+        git_service = GitService(settings, bus, projections)
+
+        await git_service.ensure_repo("p1", "orbion")
+        await git_service.ensure_repo("p2", "orbion")
+
+        # p1: 1个审批commit
+        output1 = _make_output_dict(output_id="out-p1-1", content="p1v1", file_paths=["a.py"], project_id="p1")
+        projections._outputs = [output1]
+        await bus.publish(_make_approved_event(output_id="out-p1-1", project_id="p1"))
+        await bus.wait_for_pending()
+
+        # p2: 2个审批commit
+        output2a = _make_output_dict(output_id="out-p2-1", content="p2v1", file_paths=["b.py"], project_id="p2")
+        output2b = _make_output_dict(output_id="out-p2-2", content="p2v2", file_paths=["c.py"], project_id="p2")
+        projections._outputs = [output2a]
+        await bus.publish(_make_approved_event(output_id="out-p2-1", project_id="p2"))
+        await bus.wait_for_pending()
+        projections._outputs = [output2b]
+        await bus.publish(_make_approved_event(output_id="out-p2-2", project_id="p2"))
+        await bus.wait_for_pending()
+
+        p1_commits = git_service.get_recent_commits("p1", "orbion", limit=10)
+        p2_commits = git_service.get_recent_commits("p2", "orbion", limit=10)
+
+        # p1: 1初始 + 1审批 = 2
+        assert len(p1_commits) == 2
+        # p2: 1初始 + 2审批 = 3
+        assert len(p2_commits) == 3
+
+    async def test_mvp_fl_3_6_nonexistent_repo_returns_empty(self, tmp_path: Path) -> None:
+        """MVP-FL-3.6：get_recent_commits查询不存在的仓库→返回空列表不抛异常"""
+        bus = InProcessEventBus()
+        projections = MockProjections(bus)
+        settings = _make_settings(tmp_path)
+        git_service = GitService(settings, bus, projections)
+
+        commits = git_service.get_recent_commits("nonexistent-project", "orbion")
+        assert commits == []

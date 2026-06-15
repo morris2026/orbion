@@ -88,7 +88,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     # OutputService 初始化（纯依赖注入，依赖projections做读端查询）
     app.state.output_service = OutputService(app.state.event_store, app.state.event_bus, app.state.event_projections)
     # GitService 初始化（订阅TaskOutputApproved事件，审批通过后自动commit）
-    app.state.git_service = GitService(f"{settings.root_dir}/repo", app.state.event_bus, app.state.event_projections)
+    app.state.git_service = GitService(settings, app.state.event_bus, app.state.event_projections)
     yield
     app.state.agent_scheduler.close()
     await app.state.thread_read.close()

@@ -34,5 +34,5 @@ async def get_git_log(
     if not is_member:
         raise HTTPException(status_code=404, detail="Not a project member")
     # Why: git.Repo.iter_commits是同步阻塞I/O，通过to_thread避免阻塞asyncio事件循环
-    commits = await asyncio.to_thread(git_service.get_recent_commits, 10)
+    commits = await asyncio.to_thread(git_service.get_recent_commits, project_id, "orbion", 10)
     return [GitLogEntry(**c) for c in commits]
