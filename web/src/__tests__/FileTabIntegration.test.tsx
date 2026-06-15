@@ -135,26 +135,120 @@ describe('MVP-RE-8.3: 侧边栏折叠/展开', () => {
     vi.restoreAllMocks()
   })
 
-  it('点击折叠按钮 → 侧边栏隐藏；再点击展开', async () => {
+  it('点击已激活图标 → 侧边栏折叠；再点击同一图标 → 展开', async () => {
     const user = userEvent.setup()
     setupApiMocks()
 
     render(<FileTab projectId="proj-1" />)
 
-    // 侧边栏可见
     await waitFor(() => {
       expect(screen.getByTestId('sidebar-panel')).toBeInTheDocument()
     })
 
-    // 点击折叠 — collapsible Panel 折叠后 DOM 保留但 size=0，jsdom 无法检测视觉宽度，
-    // 通过展开按钮出现来验证折叠生效
-    await user.click(screen.getByRole('button', { name: /折叠侧边栏/i }))
-    expect(screen.getByRole('button', { name: /展开侧边栏/i })).toBeInTheDocument()
+    // 点击当前激活的 explorer 图标 → 折叠
+    await user.click(screen.getByTestId('activity-explorer'))
     expect(screen.getByText('选择文件开始编辑')).toBeInTheDocument()
 
-    // 点击展开
-    await user.click(screen.getByRole('button', { name: /展开侧边栏/i }))
+    // 再次点击 → 展开
+    await user.click(screen.getByTestId('activity-explorer'))
     expect(screen.getByTestId('sidebar-panel')).toBeInTheDocument()
+  })
+
+  it('侧边栏展开时，当前面板图标有激活态', async () => {
+    setupApiMocks()
+
+    render(<FileTab projectId="proj-1" />)
+
+    await waitFor(() => {
+      expect(screen.getByTestId('sidebar-panel')).toBeInTheDocument()
+    })
+
+    // 默认 explorer 激活
+    expect(screen.getByTestId('activity-explorer')).toHaveAttribute('data-active', 'true')
+    expect(screen.getByTestId('activity-git')).not.toHaveAttribute('data-active')
+  })
+
+  it('侧边栏折叠时，所有图标都去激活', async () => {
+    const user = userEvent.setup()
+    setupApiMocks()
+
+    render(<FileTab projectId="proj-1" />)
+
+    await waitFor(() => {
+      expect(screen.getByTestId('sidebar-panel')).toBeInTheDocument()
+    })
+
+    // 点击已激活图标折叠侧边栏
+    await user.click(screen.getByTestId('activity-explorer'))
+
+    // 所有图标都无激活态
+    expect(screen.getByTestId('activity-explorer')).not.toHaveAttribute('data-active')
+    expect(screen.getByTestId('activity-git')).not.toHaveAttribute('data-active')
+  })
+
+  it('折叠后点击不同图标 → 切换面板并展开，新图标激活', async () => {
+    const user = userEvent.setup()
+    setupApiMocks()
+
+    render(<FileTab projectId="proj-1" />)
+
+    await waitFor(() => {
+      expect(screen.getByTestId('sidebar-panel')).toBeInTheDocument()
+    })
+
+    // 先折叠
+    await user.click(screen.getByTestId('activity-explorer'))
+    expect(screen.getByTestId('activity-explorer')).not.toHaveAttribute('data-active')
+
+    // 点击 git 图标 → 展开并切换到 Source Control
+    await user.click(screen.getByTestId('activity-git'))
+    expect(screen.getByTestId('activity-git')).toHaveAttribute('data-active', 'true')
+    expect(screen.getByTestId('activity-explorer')).not.toHaveAttribute('data-active')
+    expect(screen.getByTestId('source-control-panel')).toBeInTheDocument()
+  })
+
+  it('折叠后点击同一图标 → 展开同一面板，该图标激活', async () => {
+    const user = userEvent.setup()
+    setupApiMocks()
+
+    render(<FileTab projectId="proj-1" />)
+
+    await waitFor(() => {
+      expect(screen.getByTestId('sidebar-panel')).toBeInTheDocument()
+    })
+
+    // 折叠
+    await user.click(screen.getByTestId('activity-explorer'))
+    expect(screen.getByTestId('activity-explorer')).not.toHaveAttribute('data-active')
+
+    // 再次点击同一图标 → 展开 explorer
+    await user.click(screen.getByTestId('activity-explorer'))
+    expect(screen.getByTestId('activity-explorer')).toHaveAttribute('data-active', 'true')
+    expect(screen.getByTestId('explorer-panel')).toBeInTheDocument()
+  })
+
+  it('切换到 git 后折叠，再展开 git → git 图标仍激活', async () => {
+    const user = userEvent.setup()
+    setupApiMocks()
+
+    render(<FileTab projectId="proj-1" />)
+
+    await waitFor(() => {
+      expect(screen.getByTestId('sidebar-panel')).toBeInTheDocument()
+    })
+
+    // 切换到 git
+    await user.click(screen.getByTestId('activity-git'))
+    expect(screen.getByTestId('activity-git')).toHaveAttribute('data-active', 'true')
+
+    // 折叠
+    await user.click(screen.getByTestId('activity-git'))
+    expect(screen.getByTestId('activity-git')).not.toHaveAttribute('data-active')
+
+    // 再次点击 git → 展开
+    await user.click(screen.getByTestId('activity-git'))
+    expect(screen.getByTestId('activity-git')).toHaveAttribute('data-active', 'true')
+    expect(screen.getByTestId('source-control-panel')).toBeInTheDocument()
   })
 })
 

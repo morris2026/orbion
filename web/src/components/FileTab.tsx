@@ -76,17 +76,21 @@ export function FileTab({ projectId }: FileTabProps) {
     setSidebarCollapsed(false)
   }
 
-  // 切换活动栏时展开侧边栏
+  // 活动栏图标作为侧边栏开关：同面板→折叠，不同面板→切换
   const handleActivityChange = (panel: ActivityPanel) => {
-    setActivePanel(panel)
-    if (sidebarCollapsed) {
-      expandSidebar()
+    if (panel === activePanel && !sidebarCollapsed) {
+      collapseSidebar()
+    } else {
+      setActivePanel(panel)
+      if (sidebarCollapsed) {
+        expandSidebar()
+      }
     }
   }
 
   return (
     <div className="h-full flex">
-      <ActivityBar activePanel={activePanel} onActivityChange={handleActivityChange} />
+      <ActivityBar activePanel={activePanel} sidebarCollapsed={sidebarCollapsed} onActivityChange={handleActivityChange} />
 
       <Group orientation="horizontal" className="flex-1">
         {/* 侧边栏 */}
@@ -106,17 +110,10 @@ export function FileTab({ projectId }: FileTabProps) {
         >
           <div className="h-full flex flex-col" data-testid="sidebar-panel">
             {/* 侧边栏头部 */}
-            <div className="flex items-center justify-between px-2 py-1 border-b bg-muted/30">
+            <div className="flex items-center px-2 py-1 border-b bg-muted/30">
               <span className="text-xs font-medium text-muted-foreground">
                 {activePanel === 'explorer' ? '资源管理器' : 'Source Control'}
               </span>
-              <button
-                className="text-xs text-muted-foreground hover:text-foreground"
-                onClick={collapseSidebar}
-                aria-label="折叠侧边栏"
-              >
-                ◀
-              </button>
             </div>
 
             {/* 侧边栏内容 */}
@@ -149,15 +146,6 @@ export function FileTab({ projectId }: FileTabProps) {
         {/* 主区域 */}
         <Panel id="filetab-main" minSize={200} className="overflow-hidden">
           <div className="h-full flex items-center">
-            {sidebarCollapsed && (
-              <button
-                className="flex-shrink-0 px-1 py-2 text-xs text-muted-foreground hover:text-foreground border-r"
-                onClick={expandSidebar}
-                aria-label="展开侧边栏"
-              >
-                ▶
-              </button>
-            )}
             <div className="flex-1 h-full min-w-0">
               <FileEditor
                 filePath={selectedFile}
