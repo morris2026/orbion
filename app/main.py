@@ -79,7 +79,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         adapter: ModelAdapter = ClaudeAdapter(api_key=settings.anthropic_api_key)
     else:
         adapter = StubModelAdapter()
-    agent_memory = AgentMemory(settings.memory_base_path)
+    agent_memory = AgentMemory(f"{settings.root_dir}/memory")
     app.state.agent_runtime = AgentRuntime(app.state.event_bus, app.state.event_store, adapter, agent_memory)
     app.state.agent_scheduler = AgentScheduler(app.state.event_bus, app.state.agent_runtime)
     app.state.agent_service = AgentService(app.state.event_store, app.state.event_bus, app.state.agent_runtime)
@@ -88,7 +88,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     # OutputService 初始化（纯依赖注入，依赖projections做读端查询）
     app.state.output_service = OutputService(app.state.event_store, app.state.event_bus, app.state.event_projections)
     # GitService 初始化（订阅TaskOutputApproved事件，审批通过后自动commit）
-    app.state.git_service = GitService(settings.repo_path, app.state.event_bus, app.state.event_projections)
+    app.state.git_service = GitService(f"{settings.root_dir}/repo", app.state.event_bus, app.state.event_projections)
     yield
     app.state.agent_scheduler.close()
     await app.state.thread_read.close()

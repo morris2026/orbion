@@ -44,8 +44,7 @@ class OrbionConfigSchema(BaseModel):
     postgres: PostgresConfigSchema = Field(
         default_factory=PostgresConfigSchema, description="PostgreSQL 外部配置校验 schema"
     )
-    repo_path: str = Field(default="./repo", description="Git 产出存放路径")
-    memory_base_path: str = Field(default="./data/memory", description="Agent 记忆文件存放路径")
+    root_dir: str = Field(default="./data", description="单根目录，替代 repo_path + memory_base_path")
 
     model_config = ConfigDict(extra="forbid")
 
@@ -106,10 +105,35 @@ class Settings(BaseSettings):
     thread_read: str = "postgres"
     user_repo: str = "postgres"
     postgres: PostgresSettings = PostgresSettings()
-    repo_path: str = "./repo"
-    memory_base_path: str = "./data/memory"
+    root_dir: str = "./data"
 
     model_config = SettingsConfigDict(env_prefix="ORBION_", env_nested_delimiter="__")
+
+    @property
+    def projects_dir(self) -> Path:
+        return Path(self.root_dir) / "projects"
+
+    @property
+    def platform_memory_path(self) -> Path:
+        return Path(self.root_dir) / "memory.md"
+
+    def project_dir(self, project_id: str) -> Path:
+        return self.projects_dir / project_id
+
+    def project_memory_path(self, project_id: str) -> Path:
+        return self.project_dir(project_id) / "memory.md"
+
+    def agent_memory_path(self, project_id: str, agent_type: str) -> Path:
+        return self.project_dir(project_id) / "agents" / agent_type / "memory.md"
+
+    def project_repo_path(self, project_id: str, repo_name: str) -> Path:
+        return self.project_dir(project_id) / "repo" / repo_name
+
+    def thread_dir(self, project_id: str, thread_id: str) -> Path:
+        return self.project_dir(project_id) / "threads" / thread_id
+
+    def output_payload_path(self, project_id: str, output_id: str) -> Path:
+        return self.project_dir(project_id) / "outputs" / f"{output_id}.json"
 
     @classmethod
     def settings_customise_sources(

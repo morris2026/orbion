@@ -42,15 +42,15 @@ def test_tc1_3_settings_env_override(monkeypatch: MonkeyPatch) -> None:
     monkeypatch.setenv("ORBION_POSTGRES__PASSWORD", "testpass")
     monkeypatch.setenv("ORBION_JWT_SECRET", JWT_SECRET_TEST)
     monkeypatch.setenv("ORBION_ANTHROPIC_API_KEY", "sk-test-key")
-    monkeypatch.setenv("ORBION_REPO_PATH", "/tmp/repo")
-    monkeypatch.setenv("ORBION_MEMORY_BASE_PATH", "/tmp/memory")
+    monkeypatch.setenv("ORBION_ROOT_DIR", "/var/lib/orbion")
 
     s = get_settings()
     assert s.postgres.url == "postgresql://testuser:testpass@testhost:5433/testdb"
     assert s.jwt_secret == JWT_SECRET_TEST
     assert s.anthropic_api_key == "sk-test-key"
-    assert s.repo_path == "/tmp/repo"
-    assert s.memory_base_path == "/tmp/memory"
+    assert s.root_dir == "/var/lib/orbion"
+    assert not hasattr(s, "repo_path")
+    assert not hasattr(s, "memory_base_path")
 
 
 def test_orbion_config_schema_forbid_secrets() -> None:
@@ -73,6 +73,9 @@ def test_orbion_config_schema_defaults() -> None:
     assert config.database == "postgres"
     assert config.postgres.host == "localhost"
     assert config.postgres.port == 5432
+    assert config.root_dir == "./data"
+    assert not hasattr(config, "repo_path")
+    assert not hasattr(config, "memory_base_path")
 
 
 def test_config_file_parser_no_file_fallback(monkeypatch: MonkeyPatch) -> None:
@@ -123,3 +126,79 @@ def test_config_file_parser_reads_file(monkeypatch: MonkeyPatch) -> None:
     assert data["postgres"]["port"] == 5433
     assert data["postgres"]["db"] == "orbion"  # 默认值填充
     Path(config_path).unlink()
+
+
+class TestMvpFl1Settings:
+    """MVP-FL-1.1~1.7：Settings orbion_dir 替代双路径"""
+
+    def test_mvp_fl_1_1_default_root_dir(self, monkeypatch: MonkeyPatch) -> None:
+        """MVP-FL-1.1：Settings 默认 root_dir 为 ./data"""
+        monkeypatch.delenv("ORBION_ROOT_DIR", raising=False)
+        s = Settings(jwt_secret=JWT_SECRET_TEST)
+        assert s.root_dir == "./data"
+        assert not hasattr(s, "repo_path")
+        assert not hasattr(s, "memory_base_path")
+
+    def test_mvp_fl_1_2_env_override(self, monkeypatch: MonkeyPatch) -> None:
+        """MVP-FL-1.2：ORBION_ROOT_DIR 环境变量覆盖"""
+        monkeypatch.setenv("ORBION_ROOT_DIR", "/var/lib/orbion")
+        s = Settings(jwt_secret=JWT_SECRET_TEST)
+        assert s.root_dir == "/var/lib/orbion"
+
+    def test_mvp_fl_1_3_derived_paths_default(self, monkeypatch: MonkeyPatch) -> None:
+        """MVP-FL-1.3：派生路径计算 — 默认值"""
+        monkeypatch.delenv("ORBION_ROOT_DIR", raising=False)
+        s = Settings(jwt_secret=JWT_SECRET_TEST)
+        assert s.projects_dir == Path("./data/projects")
+        assert s.platform_memory_path == Path("./data/memory.md")
+        assert s.project_dir("p1") == Path("./data/projects/p1")
+        assert s.project_memory_path("p1") == Path("./data/projects/p1/memory.md")
+        assert s.agent_memory_path("p1", "summary") == Path("./data/projects/p1/agents/summary/memory.md")
+        assert s.project_repo_path("p1", "orbion") == Path("./data/projects/p1/repo/orbion")
+        assert s.thread_dir("p1", "t1") == Path("./data/projects/p1/threads/t1")
+        assert s.output_payload_path("p1", "o1") == Path("./data/projects/p1/outputs/o1.json")
+
+    def test_mvp_fl_1_4_derived_paths_absolute(self, monkeypatch: MonkeyPatch) -> None:
+        """MVP-FL-1.4：派生路径计算 — 绝对路径"""
+        monkeypatch.setenv("ORBION_ROOT_DIR", "/var/lib/orbion")
+        s = Settings(jwt_secret=JWT_SECRET_TEST)
+        assert s.projects_dir == Path("/var/lib/orbion/projects")
+        assert s.platform_memory_path == Path("/var/lib/orbion/memory.md")
+        assert s.project_dir("p1") == Path("/var/lib/orbion/projects/p1")
+        assert s.project_memory_path("p1") == Path("/var/lib/orbion/projects/p1/memory.md")
+        assert s.agent_memory_path("p1", "summary") == Path("/var/lib/orbion/projects/p1/agents/summary/memory.md")
+        assert s.project_repo_path("p1", "orbion") == Path("/var/lib/orbion/projects/p1/repo/orbion")
+        assert s.thread_dir("p1", "t1") == Path("/var/lib/orbion/projects/p1/threads/t1")
+        assert s.output_payload_path("p1", "o1") == Path("/var/lib/orbion/projects/p1/outputs/o1.json")
+
+    def test_mvp_fl_1_5_config_file_new_format(self, monkeypatch: MonkeyPatch) -> None:
+        """MVP-FL-1.5：orbion.json 解析新格式"""
+        with NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
+            json.dump({"root_dir": "./custom"}, f)
+            f.flush()
+            config_path = f.name
+
+        monkeypatch.setenv("ORBION_CONFIG_PATH", config_path)
+        s = Settings(jwt_secret=JWT_SECRET_TEST)
+        assert s.root_dir == "./custom"
+        Path(config_path).unlink()
+
+    def test_mvp_fl_1_6_config_file_old_format_rejected(self) -> None:
+        """MVP-FL-1.6：重构后 OrbionConfigSchema 不再包含 repo_path，旧格式报错"""
+        with pytest.raises(Exception, match="Extra inputs are not permitted"):
+            OrbionConfigSchema.model_validate({"repo_path": "./repo"})
+
+    def test_mvp_fl_1_7_parser_expands_root_dir(self, monkeypatch: MonkeyPatch) -> None:
+        """MVP-FL-1.7：OrbionConfigFileParser 展开 root_dir"""
+        from app.config import OrbionConfigFileParser
+
+        with NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
+            json.dump({"root_dir": "./custom"}, f)
+            f.flush()
+            config_path = f.name
+
+        monkeypatch.setenv("ORBION_CONFIG_PATH", config_path)
+        source = OrbionConfigFileParser(Settings)
+        data = source()
+        assert data["root_dir"] == "./custom"
+        Path(config_path).unlink()

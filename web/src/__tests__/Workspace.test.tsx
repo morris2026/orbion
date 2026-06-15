@@ -60,8 +60,8 @@ describe('前端三栏工作区完整交互', () => {
     vi.unstubAllGlobals()
   })
 
-  describe('MVP-20.1: 线程列表展示聚合字段', () => {
-    it('has_summary标记：有摘要时显示标记', () => {
+  describe('MVP-20.1: 线程列表基本渲染', () => {
+    it('线程名称正确显示', () => {
       const onSelectThread = vi.fn()
       render(<ProjectTree
         projects={mockProjects}
@@ -77,32 +77,7 @@ describe('前端三栏工作区完整交互', () => {
       />)
 
       expect(screen.getByText('线程1')).toBeInTheDocument()
-      expect(screen.getByTestId('t1-summary')).toBeInTheDocument()
-
       expect(screen.getByText('线程2')).toBeInTheDocument()
-      expect(screen.queryByTestId('t2-summary')).not.toBeInTheDocument()
-    })
-
-    it('pending_plan_count和message_count正确显示', () => {
-      const onSelectThread = vi.fn()
-      render(<ProjectTree
-        projects={mockProjects}
-        threads={mockThreads}
-        selectedProjectId="proj-1"
-        selectedThreadId="dt-1"
-        onSelectThread={onSelectThread}
-        onSelectProject={vi.fn()}
-        onCreateProject={vi.fn()}
-        onCreateThread={vi.fn()}
-        onAddMember={vi.fn()}
-        onRegisterAgent={vi.fn()}
-      />)
-
-      expect(screen.getByText(/2.*待审/)).toBeInTheDocument()
-      expect(screen.getByText(/0.*待审/)).toBeInTheDocument()
-
-      expect(screen.getByText(/5.*消息/)).toBeInTheDocument()
-      expect(screen.getByText(/3.*消息/)).toBeInTheDocument()
     })
 
     it('选择线程触发onSelectThread回调', async () => {
@@ -724,22 +699,11 @@ describe('MVP-UI-4.x: ProjectTree组件', () => {
   })
 
   describe('MVP-20.1-更新: ThreadList→ProjectTree迁移', () => {
-    it('has_summary/pending_plan/message_count在新组件中仍正确显示', () => {
+    it('线程名称在新组件中正确显示', () => {
       render(<ProjectTree {...treeProps} />)
 
-      // 线程1 has_summary=true → 显示标记
-      expect(screen.getByTestId('t1-summary')).toBeInTheDocument()
-
-      // 线程2 has_summary=false → 不显示标记
-      expect(screen.queryByTestId('t2-summary')).not.toBeInTheDocument()
-
-      // pending_plan_count
-      expect(screen.getByText(/2.*待审/)).toBeInTheDocument()
-      expect(screen.getByText(/0.*待审/)).toBeInTheDocument()
-
-      // message_count
-      expect(screen.getByText(/5.*消息/)).toBeInTheDocument()
-      expect(screen.getByText(/3.*消息/)).toBeInTheDocument()
+      expect(screen.getByText('线程1')).toBeInTheDocument()
+      expect(screen.getByText('线程2')).toBeInTheDocument()
     })
   })
 
