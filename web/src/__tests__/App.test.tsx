@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { AppRoutes } from '@/App'
 import * as authModule from '@/lib/auth'
+import * as sseModule from '@/lib/sse'
 
 // jsdom不支持ResizeObserver，全局mock
 global.ResizeObserver = class { observe() {} unobserve() {} disconnect() {} }
@@ -30,6 +31,9 @@ describe('App路由守卫', () => {
   beforeEach(() => {
     localStorage.clear()
     vi.restoreAllMocks()
+    // jsdom没有EventSource，mock SSE连接
+    vi.spyOn(sseModule, 'createSSEConnection').mockReturnValue({ close: vi.fn() } as unknown as EventSource)
+    vi.spyOn(sseModule, 'disconnectSSE').mockImplementation(() => {})
   })
 
   describe('MVP-19.7: JWT过期 → 重定向登录页', () => {

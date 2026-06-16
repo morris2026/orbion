@@ -1,10 +1,11 @@
-"""SSE推送与事件流端点集成测试：MVP-11.1–MVP-11.6"""
+"""SSE推送与事件流端点集成测试：MVP-11.1–MVP-11.6（用户级连接）"""
 
 import asyncio
 import json
 import uuid
 from collections.abc import MutableMapping
 from typing import Any, Literal
+from unittest.mock import AsyncMock
 
 import asyncpg
 from httpx import AsyncClient
@@ -24,6 +25,7 @@ from app.hub.events.types import (
     ExecutionPlanRejectedPayload,
     MemberAddedPayload,
     PlanTaskItem,
+    ProjectCreatedPayload,
     TaskOutputApprovedPayload,
     TaskOutputGeneratedPayload,
     TaskOutputRevisionRequestedPayload,
@@ -80,14 +82,24 @@ def _make_event(
     )
 
 
+def _make_mock_project_read(user_projects: dict[str, list[str]]) -> AsyncMock:
+    """构造mock ProjectReadProtocol，list_projects返回用户的项目ID列表"""
+    mock = AsyncMock()
+    mock.list_projects = AsyncMock(side_effect=lambda uid: [{"id": pid} for pid in user_projects.get(uid, [])])
+    return mock
+
+
 # -- MVP-11.2: DiscussionMessageCreated→SSE推送message_created --
 
 
-async def test_tc11_2_message_created_push(event_bus: InProcessEventBus, sse_channel: SSEChannel) -> None:
-    """MVP-11.2: DiscussionMessageCreated→SSE推送message_created，data含消息内容"""
+async def test_tc11_2_message_created_push(event_bus: InProcessEventBus) -> None:
+    """MVP-11.2: DiscussionMessageCreated→SSE推送message_created，data含消息内容和project_id"""
+    user_id = "user-test-2"
     project_id = "proj-test-2"
+    project_read = _make_mock_project_read({user_id: [project_id]})
+    sse_channel = SSEChannel(event_bus, project_read)
     queue: asyncio.Queue[dict[str, Any]] = asyncio.Queue()
-    sse_channel.add_connection(project_id, queue)
+    await sse_channel.add_connection(user_id, queue)
 
     payload = DiscussionMessageCreatedPayload(
         thread_id="thread-1", content="hello world", request_summary=False, message_id="msg-1"
@@ -105,18 +117,22 @@ async def test_tc11_2_message_created_push(event_bus: InProcessEventBus, sse_cha
     data = json.loads(sse_event["data"]) if isinstance(sse_event["data"], str) else sse_event["data"]
     assert data["content"] == "hello world"
     assert data["participant_id"] == "user-1"
+    assert data["project_id"] == project_id
 
-    sse_channel.remove_connection(project_id, queue)
+    sse_channel.remove_connection(user_id, queue)
 
 
 # -- MVP-11.3: DiscussionSummaryGenerated→SSE推送summary_generated --
 
 
-async def test_tc11_3_summary_generated_push(event_bus: InProcessEventBus, sse_channel: SSEChannel) -> None:
+async def test_tc11_3_summary_generated_push(event_bus: InProcessEventBus) -> None:
     """MVP-11.3: DiscussionSummaryGenerated→SSE推送summary_generated"""
+    user_id = "user-test-3"
     project_id = "proj-test-3"
+    project_read = _make_mock_project_read({user_id: [project_id]})
+    sse_channel = SSEChannel(event_bus, project_read)
     queue: asyncio.Queue[dict[str, Any]] = asyncio.Queue()
-    sse_channel.add_connection(project_id, queue)
+    await sse_channel.add_connection(user_id, queue)
 
     payload = DiscussionSummaryGeneratedPayload(
         thread_id="thread-1",
@@ -141,18 +157,22 @@ async def test_tc11_3_summary_generated_push(event_bus: InProcessEventBus, sse_c
     assert sse_event["event"] == "summary_generated"
     data = json.loads(sse_event["data"]) if isinstance(sse_event["data"], str) else sse_event["data"]
     assert data["consensus_points"] == ["共识1"]
+    assert data["project_id"] == project_id
 
-    sse_channel.remove_connection(project_id, queue)
-
-
-# -- MVP-11.4: 所有9种业务事件+agent_status_changed通过SSE推送 --
+    sse_channel.remove_connection(user_id, queue)
 
 
-async def test_tc11_4_all_event_types_push(event_bus: InProcessEventBus, sse_channel: SSEChannel) -> None:
-    """MVP-11.4: 所有9种业务事件+agent_status_changed通过SSE推送（共10种SSE event类型）"""
+# -- MVP-11.4: 所有9种业务事件+project_created通过SSE推送 --
+
+
+async def test_tc11_4_all_event_types_push(event_bus: InProcessEventBus) -> None:
+    """MVP-11.4: 所有9种业务事件+project_created通过SSE推送（共10种SSE event类型）"""
+    user_id = "user-test-4"
     project_id = "proj-test-4"
+    project_read = _make_mock_project_read({user_id: [project_id]})
+    sse_channel = SSEChannel(event_bus, project_read)
     queue: asyncio.Queue[dict[str, Any]] = asyncio.Queue()
-    sse_channel.add_connection(project_id, queue)
+    await sse_channel.add_connection(user_id, queue)
 
     # 9种业务事件→对应SSE event名
     business_events: list[tuple[str | EventType, str, dict[str, Any]]] = [
@@ -227,6 +247,16 @@ async def test_tc11_4_all_event_types_push(event_bus: InProcessEventBus, sse_cha
 
     await event_bus.wait_for_pending()
 
+    # 发布ProjectCreated事件
+    proj_created_payload = ProjectCreatedPayload(name="NewProj", description="desc")
+    proj_created_event = _make_event(
+        project_id=project_id,
+        event_type=EventType.ProjectCreated,
+        payload=proj_created_payload.model_dump(mode="json"),
+    )
+    await event_bus.publish(proj_created_event)
+    await event_bus.wait_for_pending()
+
     # 直接调用send_event推送agent_status_changed
     await sse_channel.send_event(
         project_id,
@@ -238,9 +268,9 @@ async def test_tc11_4_all_event_types_push(event_bus: InProcessEventBus, sse_cha
         },
     )
 
-    # 收集所有10种SSE event类型
+    # 收集所有11种SSE event类型（9业务+project_created+agent_status_changed）
     received_types: set[str] = set()
-    for _ in range(10):
+    for _ in range(11):
         sse_event = await asyncio.wait_for(queue.get(), timeout=5)
         received_types.add(sse_event["event"])
 
@@ -254,22 +284,28 @@ async def test_tc11_4_all_event_types_push(event_bus: InProcessEventBus, sse_cha
         "output_approved",
         "revision_requested",
         "member_added",
+        "project_created",
         "agent_status_changed",
     }
     assert received_types == expected_types
 
-    sse_channel.remove_connection(project_id, queue)
+    sse_channel.remove_connection(user_id, queue)
 
 
-# -- MVP-11.6: project_id过滤 --
+# -- MVP-11.6: 用户级项目过滤 --
 
 
-async def test_tc11_6_project_id_filter(event_bus: InProcessEventBus, sse_channel: SSEChannel) -> None:
-    """MVP-11.6: project_id过滤——订阅proj-A的SSE不收到proj-B的事件"""
+async def test_tc11_6_project_id_filter(event_bus: InProcessEventBus) -> None:
+    """MVP-11.6: 用户级连接——只有属于项目A的用户收到项目A的事件，不属于项目A的用户不收到"""
+    user_a = "user-A"
+    user_b = "user-B"
+    # user-a 属于 proj-A，user-b 属于 proj-B
+    project_read = _make_mock_project_read({user_a: ["proj-A"], user_b: ["proj-B"]})
+    sse_channel = SSEChannel(event_bus, project_read)
     queue_a: asyncio.Queue[dict[str, Any]] = asyncio.Queue()
     queue_b: asyncio.Queue[dict[str, Any]] = asyncio.Queue()
-    sse_channel.add_connection("proj-A", queue_a)
-    sse_channel.add_connection("proj-B", queue_b)
+    await sse_channel.add_connection(user_a, queue_a)
+    await sse_channel.add_connection(user_b, queue_b)
 
     # 在proj-B发布DiscussionMessageCreated
     payload = DiscussionMessageCreatedPayload(thread_id="thread-B", content="hello from B", message_id="msg-B")
@@ -281,18 +317,18 @@ async def test_tc11_6_project_id_filter(event_bus: InProcessEventBus, sse_channe
     await event_bus.publish(event)
     await event_bus.wait_for_pending()
 
-    # proj-B应收到事件
+    # user-b应收到事件
     sse_event_b = await asyncio.wait_for(queue_b.get(), timeout=5)
     assert sse_event_b["event"] == "message_created"
 
-    # proj-A不应收到proj-B的事件
+    # user-a不应收到proj-B的事件
     assert queue_a.empty()
 
-    sse_channel.remove_connection("proj-A", queue_a)
-    sse_channel.remove_connection("proj-B", queue_b)
+    sse_channel.remove_connection(user_a, queue_a)
+    sse_channel.remove_connection(user_b, queue_b)
 
 
-# -- MVP-11.1: 建立SSE长连接 + 项目成员授权 --
+# -- MVP-11.1: 建立SSE长连接（用户级） --
 
 
 async def test_tc11_1_sse_connection(
@@ -301,18 +337,18 @@ async def test_tc11_1_sse_connection(
     user_repo_provider: UserRepositoryProvider,
     db_conn: asyncpg.Connection,
 ) -> None:
-    """MVP-11.1: 建立SSE长连接——Content-Type: text/event-stream + 项目成员授权检查
+    """MVP-11.1: 建立SSE长连接——Content-Type: text/event-stream（用户级，无需project_id）
 
     httpx ASGITransport不支持SSE流式响应，client fixture初始化app.state后用ASGI直接调用。
     """
     user = await _create_user(user_repo_provider, "sseuser1", is_admin=True)
-    project = await _create_project(client, user["token"])
-    # 等待投影写入project_members，否则成员检查会403
+    await _create_project(client, user["token"])
+    # 等待投影写入project_members
     await event_bus.wait_for_pending()
 
     # 直接ASGI调用——绕过httpx以支持SSE流式响应
     token = user["token"]
-    query = f"project_id={project['id']}&token={token}"
+    query = f"token={token}"
     scope = {
         "type": "http",
         "asgi": {"version": "3.0"},
@@ -358,28 +394,5 @@ async def test_tc11_1_sse_connection(
 
 async def test_tc11_5_no_jwt_rejected(client: AsyncClient) -> None:
     """MVP-11.5: 无JWT→连接拒绝，返回401"""
-    response = await client.get("/events/stream?project_id=some-project")
+    response = await client.get("/events/stream")
     assert response.status_code == 401
-
-
-# -- MVP-11.5b: 非项目成员→403 --
-
-
-async def test_tc11_5b_non_member_rejected(
-    client: AsyncClient,
-    event_bus: InProcessEventBus,
-    user_repo_provider: UserRepositoryProvider,
-    db_conn: asyncpg.Connection,
-) -> None:
-    """MVP-11.5b: 非项目成员订阅项目SSE流→返回403"""
-    admin = await _create_user(user_repo_provider, "sseadmin", is_admin=True)
-    project = await _create_project(client, admin["token"])
-    await event_bus.wait_for_pending()
-    # 创建非成员用户
-    outsider = await _create_user(user_repo_provider, "outsider1", is_admin=False)
-    # outsider尝试订阅admin的项目SSE流
-    response = await client.get(
-        f"/events/stream?project_id={project['id']}",
-        headers={"Authorization": f"Bearer {outsider['token']}"},
-    )
-    assert response.status_code == 403

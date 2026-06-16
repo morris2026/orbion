@@ -271,8 +271,9 @@ async def test_tc22_6_sse_push_latency(
 ) -> None:
     """MVP-22.6: 建立SSE连接 → publish事件 → 前端收到SSE推送 → 计算从事件发布到前端收到的延迟"""
     project_id = "bench-proj-sse"
+    user_id = "bench-user-sse"
     queue: asyncio.Queue[dict[str, object]] = asyncio.Queue()
-    sse_channel.add_connection(project_id, queue)
+    await sse_channel.add_connection(user_id, queue)
 
     latencies: list[float] = []
     for _ in range(N_ROUNDS):
@@ -302,7 +303,7 @@ async def test_tc22_6_sse_push_latency(
         avg_round = sum(round_latencies) / len(round_latencies)
         latencies.append(avg_round)
 
-    sse_channel.remove_connection(project_id, queue)
+    sse_channel.remove_connection(user_id, queue)
 
     avg_latency = sum(latencies) / len(latencies)
     print("\nMVP-22.6 SSE推送延迟基线:")

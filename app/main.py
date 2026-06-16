@@ -83,8 +83,8 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     provider_cls = load_user_repo_provider(settings.user_repo)
     app.state.user_repo_provider = provider_cls()
     await app.state.user_repo_provider.connect()
-    # SSEChannel 初始化（订阅EventBus）
-    app.state.sse_channel = SSEChannel(app.state.event_bus)
+    # SSEChannel 初始化（订阅EventBus，用户级连接需读端查询用户项目列表）
+    app.state.sse_channel = SSEChannel(app.state.event_bus, app.state.project_read)
     # AgentRuntime + AgentScheduler + AgentService 初始化
     if settings.anthropic_api_key:
         adapter: ModelAdapter = ClaudeAdapter(api_key=settings.anthropic_api_key)

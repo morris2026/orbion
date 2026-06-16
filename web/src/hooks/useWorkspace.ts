@@ -105,8 +105,10 @@ export function useWorkspace(options?: UseWorkspaceOptions) {
   const [selectedRightTab, setSelectedRightTab] = useState<RightTab>(init?.selectedRightTab ?? 'file')
   const [fileTreeRefreshKey, setFileTreeRefreshKey] = useState(0)
 
-  // SSE回调需实时读取当前threadId，但不应触发连接重建
+  // SSE回调需实时读取当前projectId/threadId，但不应触发连接重建
+  const selectedProjectIdRef = useRef(selectedProjectId)
   const selectedThreadIdRef = useRef(selectedThreadId)
+  useEffect(() => { selectedProjectIdRef.current = selectedProjectId })
   useEffect(() => { selectedThreadIdRef.current = selectedThreadId })
 
   // 初始数据未注入时从API加载项目列表，然后加载所有项目的线程
@@ -146,11 +148,40 @@ export function useWorkspace(options?: UseWorkspaceOptions) {
       .catch(() => {})
   }, [selectedProjectId]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // SSE实时更新（只在切换项目时重建连接，切换线程不重建）
+  // 用户级SSE实时更新（登录后一次性建立，不随项目切换重建）
   useEffect(() => {
-    if (!selectedProjectId) return
-    const es = createSSEConnection(selectedProjectId, (raw: SSERawEvent) => {
+    const es = createSSEConnection((raw: SSERawEvent) => {
       const type = raw.event_type
+      const projectId = (raw as Record<string, unknown>).project_id as string | undefined
+      const currentProjectId = selectedProjectIdRef.current
+
+      // 用户级连接：按project_id过滤，只处理当前选中项目的事件
+      // member_added和project_created是跨项目事件，需要特殊处理
+      if (type === 'project_created') {
+        // 收到project_created事件，刷新项目列表
+        apiGet<ProjectListItem[]>('/projects')
+          .then((freshProjects) => {
+            setProjects([...freshProjects].sort((a, b) => a.name.localeCompare(b.name)))
+          })
+          .catch(() => {})
+        return
+      }
+
+      // 非当前项目的事件直接忽略（member_added除外）
+      // Why: 用户级连接收到所有项目事件，但UI只展示当前选中项目的计划/产出/消息
+      // 未选中项目时也忽略，避免数据混入空状态
+      if (!projectId || projectId !== currentProjectId) {
+        // member_added可能是其他项目添加成员，刷新项目列表即可
+        if (type === 'member_added') {
+          apiGet<ProjectListItem[]>('/projects')
+            .then((freshProjects) => {
+              setProjects([...freshProjects].sort((a, b) => a.name.localeCompare(b.name)))
+            })
+            .catch(() => {})
+        }
+        return
+      }
+
       if (type === 'message_created') {
         const event = raw as unknown as SSEMessageCreatedEvent
         if (event.thread_id === selectedThreadIdRef.current) {
@@ -196,7 +227,7 @@ export function useWorkspace(options?: UseWorkspaceOptions) {
       }
     })
     return () => disconnectSSE(es)
-  }, [selectedProjectId])
+  }, [])
 
   // 发送消息（POST仅触发后端发布事件，前端通过SSE回传显示——避免重复）
   const handleSendMessage = useCallback(

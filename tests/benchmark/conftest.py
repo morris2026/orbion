@@ -64,7 +64,14 @@ async def projections(event_bus: InProcessEventBus) -> AsyncGenerator[PostgresEv
 
 @pytest.fixture
 async def sse_channel(event_bus: InProcessEventBus) -> SSEChannel:
-    return SSEChannel(event_bus)
+    """SSEChannel——benchmark使用mock project_read，bench用户属于bench项目"""
+    from unittest.mock import AsyncMock
+
+    project_id = "bench-proj-sse"
+    user_id = "bench-user-sse"
+    mock_project_read = AsyncMock()
+    mock_project_read.list_projects = AsyncMock(side_effect=lambda uid: [{"id": project_id}] if uid == user_id else [])
+    return SSEChannel(event_bus, mock_project_read)
 
 
 def make_bench_event(

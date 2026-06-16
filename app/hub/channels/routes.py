@@ -1,14 +1,13 @@
-"""SSE流端点路由——GET /events/stream"""
+"""SSE流端点路由——GET /events/stream（用户级连接）"""
 
 import asyncio
 import json
 from collections.abc import AsyncGenerator
-from typing import Any, cast
+from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sse_starlette.sse import EventSourceResponse
 
-from app.biz.projects.read_repo import ProjectReadProtocol
 from app.config import Settings, get_settings
 from app.hub.auth.dependencies import get_current_user_from_token
 from app.hub.auth.models import User
@@ -31,36 +30,23 @@ async def _get_sse_user(
     raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
 
 
-async def _check_project_member(
-    request: Request,
-    project_id: str = Query(...),
-    user: User = Depends(_get_sse_user),
-) -> User:
-    """认证+项目成员授权：非成员无法订阅项目事件流"""
-    project_read: ProjectReadProtocol = cast(ProjectReadProtocol, request.app.state.project_read)
-    if not await project_read.check_member_exists(project_id, user.id):
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not a project member")
-    return user
-
-
 @router.get("/stream")
 async def event_stream(
     request: Request,
-    project_id: str = Query(...),
-    user: User = Depends(_check_project_member),
+    user: User = Depends(_get_sse_user),
 ) -> EventSourceResponse:
-    """SSE事件流端点：按project_id推送Orbion事件（仅项目成员可订阅）"""
+    """SSE事件流端点：用户级连接，推送该用户所有项目的事件"""
     sse_channel: SSEChannel = request.app.state.sse_channel
 
     async def generate() -> AsyncGenerator[dict[str, Any], None]:
         queue: asyncio.Queue[dict[str, Any]] = asyncio.Queue()
-        sse_channel.add_connection(project_id, queue)
-        yield {"event": "connected", "data": json.dumps({"project_id": project_id})}
+        await sse_channel.add_connection(user.id, queue)
+        yield {"event": "connected", "data": json.dumps({"user_id": user.id})}
         try:
             while True:
                 sse_event = await queue.get()
                 yield sse_event
         finally:
-            sse_channel.remove_connection(project_id, queue)
+            sse_channel.remove_connection(user.id, queue)
 
     return EventSourceResponse(generate(), ping=15)

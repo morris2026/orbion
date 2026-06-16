@@ -31,7 +31,7 @@ class MockEventSource {
   }
 }
 
-describe('sse.ts — SSE连接管理封装', () => {
+describe('sse.ts — SSE连接管理封装（用户级连接）', () => {
   beforeEach(() => {
     vi.restoreAllMocks()
     localStorage.clear()
@@ -42,9 +42,9 @@ describe('sse.ts — SSE连接管理封装', () => {
     vi.spyOn(authModule, 'getToken').mockReturnValue('jwt-abc')
 
     const onEvent = vi.fn()
-    const conn = createSSEConnection('proj-1', onEvent)
+    const conn = createSSEConnection(onEvent)
 
-    expect(conn.url).toBe('/events/stream?project_id=proj-1&token=jwt-abc')
+    expect(conn.url).toBe('/events/stream?token=jwt-abc')
 
     vi.unstubAllGlobals()
   })
@@ -54,9 +54,9 @@ describe('sse.ts — SSE连接管理封装', () => {
     vi.spyOn(authModule, 'getToken').mockReturnValue(null)
 
     const onEvent = vi.fn()
-    const conn = createSSEConnection('proj-1', onEvent)
+    const conn = createSSEConnection(onEvent)
 
-    expect(conn.url).toBe('/events/stream?project_id=proj-1')
+    expect(conn.url).toBe('/events/stream')
 
     vi.unstubAllGlobals()
   })
@@ -66,12 +66,13 @@ describe('sse.ts — SSE连接管理封装', () => {
     vi.spyOn(authModule, 'getToken').mockReturnValue('jwt-abc')
 
     const onEvent = vi.fn()
-    const conn = createSSEConnection('proj-1', onEvent) as MockEventSource
+    const conn = createSSEConnection(onEvent) as MockEventSource
 
-    // 模拟后端推送message_created named event
-    conn.emit('message_created', '{"message_id":"m1","content":"hello"}')
+    // 模拟后端推送message_created named event（包含project_id）
+    conn.emit('message_created', '{"project_id":"proj-1","message_id":"m1","content":"hello"}')
     expect(onEvent).toHaveBeenCalledWith({
       event_type: 'message_created',
+      project_id: 'proj-1',
       message_id: 'm1',
       content: 'hello',
     })
@@ -84,7 +85,7 @@ describe('sse.ts — SSE连接管理封装', () => {
     vi.spyOn(authModule, 'getToken').mockReturnValue('jwt-abc')
 
     const onEvent = vi.fn()
-    const conn = createSSEConnection('proj-1', onEvent)
+    const conn = createSSEConnection(onEvent)
     disconnectSSE(conn)
 
     expect(conn.close).toHaveBeenCalled()

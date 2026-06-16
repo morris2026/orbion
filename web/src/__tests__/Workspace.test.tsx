@@ -213,7 +213,7 @@ describe('前端三栏工作区完整交互', () => {
 
       // mock SSE连接，捕获事件回调
       let sseOnEvent: ((event: Record<string, unknown>) => void) | null = null
-      vi.spyOn(sseModule, 'createSSEConnection').mockImplementation((_projectId: string, onEvent: (event: Record<string, unknown>) => void) => {
+      vi.spyOn(sseModule, 'createSSEConnection').mockImplementation((onEvent: (event: Record<string, unknown>) => void) => {
         sseOnEvent = onEvent
         return { close: vi.fn() } as unknown as EventSource
       })
@@ -232,6 +232,7 @@ describe('前端三栏工作区完整交互', () => {
       // 模拟message_created SSE事件——使用后端真实字段名
       sseOnEvent!({
         event_type: 'message_created',
+        project_id: 'proj-1',
         message_id: 'm-new',
         thread_id: 't1',
         participant_id: 'u2',
@@ -252,7 +253,7 @@ describe('前端三栏工作区完整交互', () => {
       vi.spyOn(authModule, 'getIsAdmin').mockReturnValue(false)
 
       let sseOnEvent: ((event: Record<string, unknown>) => void) | null = null
-      vi.spyOn(sseModule, 'createSSEConnection').mockImplementation((_projectId: string, onEvent: (event: Record<string, unknown>) => void) => {
+      vi.spyOn(sseModule, 'createSSEConnection').mockImplementation((onEvent: (event: Record<string, unknown>) => void) => {
         sseOnEvent = onEvent
         return { close: vi.fn() } as unknown as EventSource
       })
@@ -264,6 +265,7 @@ describe('前端三栏工作区完整交互', () => {
       act(() => {
         sseOnEvent!({
           event_type: 'plan_proposed',
+          project_id: 'proj-1',
           plan_id: 'p-new',
           thread_id: 't1',
           participant_id: 'a2',
@@ -294,7 +296,7 @@ describe('消息显示：POST触发后端→SSE推送显示（单一来源）', 
     vi.spyOn(authModule, 'getIsAdmin').mockReturnValue(false)
 
     let sseOnEvent: ((event: Record<string, unknown>) => void) | null = null
-    vi.spyOn(sseModule, 'createSSEConnection').mockImplementation((_projectId: string, onEvent: (event: Record<string, unknown>) => void) => {
+    vi.spyOn(sseModule, 'createSSEConnection').mockImplementation((onEvent: (event: Record<string, unknown>) => void) => {
       sseOnEvent = onEvent
       return { close: vi.fn() } as unknown as EventSource
     })
@@ -329,6 +331,7 @@ describe('消息显示：POST触发后端→SSE推送显示（单一来源）', 
     act(() => {
       sseOnEvent!({
         event_type: 'message_created',
+        project_id: 'proj-1',
         message_id: 'msg-sse-test',
         thread_id: 't1',
         participant_id: 'u1',
@@ -1625,7 +1628,7 @@ describe('SSE系统消息触发文件树刷新', () => {
     vi.spyOn(authModule, 'getIsAdmin').mockReturnValue(false)
 
     let sseOnEvent: ((event: Record<string, unknown>) => void) | null = null
-    vi.spyOn(sseModule, 'createSSEConnection').mockImplementation((_projectId: string, onEvent: (event: Record<string, unknown>) => void) => {
+    vi.spyOn(sseModule, 'createSSEConnection').mockImplementation((onEvent: (event: Record<string, unknown>) => void) => {
       sseOnEvent = onEvent
       return { close: vi.fn() } as unknown as EventSource
     })
@@ -1638,6 +1641,7 @@ describe('SSE系统消息触发文件树刷新', () => {
     act(() => {
       sseOnEvent!({
         event_type: 'message_created',
+        project_id: 'proj-1',
         message_id: 'm-sys-1',
         thread_id: 't1',
         participant_id: 'system',
@@ -1659,7 +1663,7 @@ describe('SSE系统消息触发文件树刷新', () => {
     vi.spyOn(authModule, 'getIsAdmin').mockReturnValue(false)
 
     let sseOnEvent: ((event: Record<string, unknown>) => void) | null = null
-    vi.spyOn(sseModule, 'createSSEConnection').mockImplementation((_projectId: string, onEvent: (event: Record<string, unknown>) => void) => {
+    vi.spyOn(sseModule, 'createSSEConnection').mockImplementation((onEvent: (event: Record<string, unknown>) => void) => {
       sseOnEvent = onEvent
       return { close: vi.fn() } as unknown as EventSource
     })
@@ -1672,6 +1676,7 @@ describe('SSE系统消息触发文件树刷新', () => {
     act(() => {
       sseOnEvent!({
         event_type: 'message_created',
+        project_id: 'proj-1',
         message_id: 'm-sys-2',
         thread_id: 't1',
         participant_id: 'system',
@@ -1693,7 +1698,7 @@ describe('SSE系统消息触发文件树刷新', () => {
     vi.spyOn(authModule, 'getIsAdmin').mockReturnValue(false)
 
     let sseOnEvent: ((event: Record<string, unknown>) => void) | null = null
-    vi.spyOn(sseModule, 'createSSEConnection').mockImplementation((_projectId: string, onEvent: (event: Record<string, unknown>) => void) => {
+    vi.spyOn(sseModule, 'createSSEConnection').mockImplementation((onEvent: (event: Record<string, unknown>) => void) => {
       sseOnEvent = onEvent
       return { close: vi.fn() } as unknown as EventSource
     })
@@ -1707,6 +1712,7 @@ describe('SSE系统消息触发文件树刷新', () => {
     act(() => {
       sseOnEvent!({
         event_type: 'message_created',
+        project_id: 'proj-1',
         message_id: 'm-human',
         thread_id: 't1',
         participant_id: 'u1',
@@ -1727,7 +1733,7 @@ describe('SSE系统消息触发文件树刷新', () => {
     vi.spyOn(authModule, 'getIsAdmin').mockReturnValue(false)
 
     let sseOnEvent: ((event: Record<string, unknown>) => void) | null = null
-    vi.spyOn(sseModule, 'createSSEConnection').mockImplementation((_projectId: string, onEvent: (event: Record<string, unknown>) => void) => {
+    vi.spyOn(sseModule, 'createSSEConnection').mockImplementation((onEvent: (event: Record<string, unknown>) => void) => {
       sseOnEvent = onEvent
       return { close: vi.fn() } as unknown as EventSource
     })
@@ -1741,6 +1747,7 @@ describe('SSE系统消息触发文件树刷新', () => {
     act(() => {
       sseOnEvent!({
         event_type: 'message_created',
+        project_id: 'proj-1',
         message_id: 'm-sys-other',
         thread_id: 't1',
         participant_id: 'system',
@@ -1760,7 +1767,7 @@ describe('SSE系统消息触发文件树刷新', () => {
     vi.spyOn(authModule, 'getIsAdmin').mockReturnValue(false)
 
     let sseOnEvent: ((event: Record<string, unknown>) => void) | null = null
-    vi.spyOn(sseModule, 'createSSEConnection').mockImplementation((_projectId: string, onEvent: (event: Record<string, unknown>) => void) => {
+    vi.spyOn(sseModule, 'createSSEConnection').mockImplementation((onEvent: (event: Record<string, unknown>) => void) => {
       sseOnEvent = onEvent
       return { close: vi.fn() } as unknown as EventSource
     })
@@ -1773,6 +1780,7 @@ describe('SSE系统消息触发文件树刷新', () => {
     act(() => {
       sseOnEvent!({
         event_type: 'message_created',
+        project_id: 'proj-1',
         message_id: 'm-sys-1',
         thread_id: 't1',
         participant_id: 'system',
@@ -1790,6 +1798,7 @@ describe('SSE系统消息触发文件树刷新', () => {
     act(() => {
       sseOnEvent!({
         event_type: 'message_created',
+        project_id: 'proj-1',
         message_id: 'm-sys-2',
         thread_id: 't1',
         participant_id: 'system',

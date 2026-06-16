@@ -20,7 +20,7 @@ from app.biz.agents.templates import AgentTemplateManager
 from app.biz.credentials.service import CredentialService
 from app.biz.files.service import FileService
 from app.biz.git.service import GitService
-from app.biz.projects.read_repo import load_project_read_impl
+from app.biz.projects.read_repo import ProjectReadProtocol, load_project_read_impl
 from app.biz.projects.service import ProjectService
 from app.biz.repos.service import RepoService
 from app.biz.threads.read_repo import load_thread_read_impl
@@ -62,9 +62,20 @@ async def user_repo_provider() -> AsyncGenerator[UserRepositoryProvider, None]:
 
 
 @pytest.fixture
-async def sse_channel(event_bus: InProcessEventBus) -> SSEChannel:
+async def sse_channel(event_bus: InProcessEventBus, project_read_for_sse: ProjectReadProtocol) -> SSEChannel:
     """SSEChannel——直接SSE单元测试使用，不依赖HTTP client"""
-    return SSEChannel(event_bus)
+    return SSEChannel(event_bus, project_read_for_sse)
+
+
+@pytest.fixture
+async def project_read_for_sse() -> AsyncGenerator[ProjectReadProtocol, None]:
+    """ProjectReadProtocol实例，供SSEChannel查询用户项目列表"""
+    settings = get_settings()
+    read_cls = load_project_read_impl(settings.project_read)
+    project_read = read_cls()
+    await project_read.connect()
+    yield project_read
+    await project_read.close()
 
 
 @pytest.fixture

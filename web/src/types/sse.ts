@@ -1,7 +1,8 @@
-/** SSE事件类型定义 — 匹配后端sse.py推送的字段名，与REST API的MessageResponse/PlanResponse不同 */
+/** SSE事件类型定义 — 匹配后端sse.py推送的字段名，用户级连接所有事件包含project_id */
 
 export interface SSEMessageCreatedEvent {
   event_type: 'message_created'
+  project_id: string
   message_id: string
   thread_id: string
   participant_id: string
@@ -13,6 +14,7 @@ export interface SSEMessageCreatedEvent {
 
 export interface SSESummaryGeneratedEvent {
   event_type: 'summary_generated'
+  project_id: string
   summary_id: string
   thread_id: string
   participant_id: string
@@ -27,6 +29,7 @@ export interface SSESummaryGeneratedEvent {
 
 export interface SSEPlanProposedEvent {
   event_type: 'plan_proposed'
+  project_id: string
   plan_id: string
   thread_id: string
   participant_id: string
@@ -45,6 +48,7 @@ export interface SSEPlanProposedEvent {
 
 export interface SSEPlanApprovedEvent {
   event_type: 'plan_approved'
+  project_id: string
   plan_id: string
   participant_id: string
   participant_type: 'human'
@@ -56,6 +60,7 @@ export interface SSEPlanApprovedEvent {
 
 export interface SSEPlanRejectedEvent {
   event_type: 'plan_rejected'
+  project_id: string
   plan_id: string
   participant_id: string
   participant_type: 'human'
@@ -67,6 +72,7 @@ export interface SSEPlanRejectedEvent {
 
 export interface SSEOutputGeneratedEvent {
   event_type: 'output_generated'
+  project_id: string
   output_id: string
   task_id: string
   plan_id: string
@@ -82,6 +88,7 @@ export interface SSEOutputGeneratedEvent {
 
 export interface SSEOutputApprovedEvent {
   event_type: 'output_approved'
+  project_id: string
   output_id: string
   participant_id: string
   participant_type: 'human'
@@ -92,6 +99,7 @@ export interface SSEOutputApprovedEvent {
 
 export interface SSERevisionRequestedEvent {
   event_type: 'revision_requested'
+  project_id: string
   output_id: string
   task_id: string
   participant_id: string
@@ -104,10 +112,22 @@ export interface SSERevisionRequestedEvent {
 
 export interface SSEMemberAddedEvent {
   event_type: 'member_added'
+  project_id: string
   participant_id: string
   participant_type: 'human' | 'agent'
   participant_display_name: string
   roles: string[]
+  created_at: string
+}
+
+export interface SSEProjectCreatedEvent {
+  event_type: 'project_created'
+  project_id: string
+  participant_id: string
+  participant_type: 'human'
+  participant_display_name: string
+  name: string
+  description: string | null
   created_at: string
 }
 
@@ -121,3 +141,4 @@ export type SSEEvent =
   | SSEOutputApprovedEvent
   | SSERevisionRequestedEvent
   | SSEMemberAddedEvent
+  | SSEProjectCreatedEvent

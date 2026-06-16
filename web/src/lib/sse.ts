@@ -1,4 +1,4 @@
-/** SSE连接管理封装 — EventSource wrapper with JWT auth and typed event parsing */
+/** SSE连接管理封装 — 用户级EventSource wrapper with JWT auth and typed event parsing */
 
 import { getToken } from './auth'
 
@@ -18,14 +18,14 @@ const SSE_EVENT_TYPES = [
   'output_approved',
   'revision_requested',
   'member_added',
+  'project_created',
 ]
 
 export function createSSEConnection(
-  projectId: string,
   onEvent: (event: SSERawEvent) => void,
 ): EventSource {
   const token = getToken()
-  const url = `/events/stream?project_id=${projectId}${token ? `&token=${token}` : ''}`
+  const url = `/events/stream${token ? `?token=${token}` : ''}`
   const es = new EventSource(url)
 
   // 后端推送named events（event: message_created等），必须用addEventListener接收
