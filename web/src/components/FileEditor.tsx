@@ -93,7 +93,7 @@ export function FileEditor({
           original={originalContent ?? ''}
           modified={fileContent}
           height="100%"
-          theme="vs-dark"
+          theme="vs"
           options={{ readOnly: true, renderSideBySide: true }}
         />
       )
@@ -103,7 +103,7 @@ export function FileEditor({
         height="100%"
         language={getLanguage(filePath)}
         value={fileContent}
-        theme="vs-dark"
+        theme="vs"
         onChange={(value) => onContentChange(value ?? '')}
         onMount={handleEditorMount}
         options={{
