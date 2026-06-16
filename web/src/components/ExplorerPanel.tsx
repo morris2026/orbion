@@ -83,32 +83,30 @@ export function ExplorerPanel({ fileTree, selectedFile, onFileSelect }: Explorer
     return () => observer.disconnect()
   }, [])
 
-  if (fileTree.length === 0) {
-    return (
-      <div className="p-4 text-sm text-muted-foreground" data-testid="explorer-empty">
-        暂无文件
-      </div>
-    )
-  }
-
   return (
-    <div className="h-full overflow-auto" ref={containerRef} data-testid="explorer-panel">
-      <Tree
-        data={treeData}
-        openByDefault={false}
-        width="100%"
-        height={height}
-        indent={16}
-        rowHeight={28}
-        selection={selectedFile ?? undefined}
-        onActivate={(node) => {
-          if (node.isLeaf) {
-            onFileSelect(node.id)
-          }
-        }}
-      >
-        {NodeRenderer}
-      </Tree>
+    <div className="h-full overflow-hidden" ref={containerRef} data-testid={fileTree.length === 0 ? 'explorer-empty' : 'explorer-panel'}>
+      {fileTree.length === 0 ? (
+        <div className="p-4 text-sm text-muted-foreground">
+          暂无文件
+        </div>
+      ) : (
+        <Tree
+          data={treeData}
+          openByDefault={false}
+          width="100%"
+          height={height}
+          indent={16}
+          rowHeight={28}
+          selection={selectedFile ?? undefined}
+          onActivate={(node) => {
+            if (node.isLeaf) {
+              onFileSelect(node.id)
+            }
+          }}
+        >
+          {NodeRenderer}
+        </Tree>
+      )}
     </div>
   )
 }

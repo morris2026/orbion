@@ -127,6 +127,55 @@ describe('MVP-RE-5.2: ExplorerPanel 文件树渲染', () => {
   })
 })
 
+describe('ExplorerPanel ResizeObserver 初始化', () => {
+  it('首次渲染空文件树后填充数据，ResizeObserver 仍能正确获取容器高度', async () => {
+    // 用可追踪的 ResizeObserver mock
+    let observerCallback: ResizeObserverCallback | null = null
+    const mockObserve = vi.fn()
+    const mockDisconnect = vi.fn()
+    const OriginalRO = global.ResizeObserver
+    global.ResizeObserver = class {
+      constructor(cb: ResizeObserverCallback) { observerCallback = cb }
+      observe = mockObserve
+      unobserve = vi.fn()
+      disconnect = mockDisconnect
+    }
+
+    const { rerender } = render(
+      <ExplorerPanel fileTree={[]} selectedFile={null} onFileSelect={vi.fn()} />
+    )
+
+    // 修复后：containerRef 始终挂载，空文件树时 observe 也会被调用
+    expect(mockObserve).toHaveBeenCalled()
+
+    // 填充文件树数据
+    rerender(
+      <ExplorerPanel fileTree={mockFileTree} selectedFile={null} onFileSelect={vi.fn()} />
+    )
+
+    // 同一个 observer 实例仍然在监听，不需要重新创建
+    expect(mockObserve).toHaveBeenCalledTimes(1)
+
+    global.ResizeObserver = OriginalRO
+  })
+
+  it('容器不应产生独立滚动，由 Tree 虚拟滚动控制', () => {
+    render(
+      <ExplorerPanel
+        fileTree={mockFileTree}
+        selectedFile={null}
+        onFileSelect={vi.fn()}
+      />
+    )
+
+    const panel = screen.getByTestId('explorer-panel')
+    // overflow 不能是 auto，否则与 react-arborist 虚拟滚动产生双重滚动
+    expect(panel.className).not.toContain('overflow-auto')
+    // 应该由 overflow-hidden 阻止外层滚动，Tree 内部自行管理滚动
+    expect(panel.className).toContain('overflow-hidden')
+  })
+})
+
 describe('MVP-RE-5.3: ExplorerPanel 点击文件', () => {
   beforeEach(() => {
     vi.restoreAllMocks()
