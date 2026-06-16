@@ -123,6 +123,7 @@ export default function Workspace({ workspaceOptions }: WorkspaceProps) {
               outputs={ws.outputs}
               onApprovePlan={ws.handleApprovePlan}
               onRejectPlan={ws.handleRejectPlan}
+              fileTreeRefreshKey={ws.fileTreeRefreshKey}
             />
           </div>
         </Panel>

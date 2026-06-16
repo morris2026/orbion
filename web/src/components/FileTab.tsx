@@ -10,9 +10,10 @@ import type { ActivityPanel } from '@/components/ActivityBar'
 
 interface FileTabProps {
   projectId: string | null
+  refreshKey?: number
 }
 
-export function FileTab({ projectId }: FileTabProps) {
+export function FileTab({ projectId, refreshKey }: FileTabProps) {
   const {
     repos,
     selectedRepo,
@@ -32,7 +33,7 @@ export function FileTab({ projectId }: FileTabProps) {
     stageFiles,
     unstageFiles,
     commitChanges,
-  } = useFileTab({ projectId })
+  } = useFileTab({ projectId, refreshKey })
 
   const [activePanel, setActivePanel] = useState<ActivityPanel>('explorer')
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)

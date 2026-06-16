@@ -20,6 +20,8 @@ class EventBus(Protocol):
 
     async def publish(self, event: Event) -> None: ...
 
+    async def wait_for_pending(self) -> None: ...
+
     def subscribe(
         self,
         event_type: str,

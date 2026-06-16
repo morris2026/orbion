@@ -376,3 +376,86 @@ describe('MVP-RE-5.8: useFileTab — 切换项目重置状态', () => {
     expect(result.current.selectedFile).toBeNull()
   })
 })
+
+describe('useFileTab — refreshKey 触发重新获取', () => {
+  beforeEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  it('refreshKey 变化 → 仓库列表和文件树重新获取', async () => {
+    const initialRepos: RepoInfo[] = [{ name: 'orbion' }]
+    const updatedRepos: RepoInfo[] = [{ name: 'orbion' }, { name: 'new-repo' }]
+    const initialTree: FileNode[] = [{ path: 'a.ts', type: 'file', name: 'a.ts' }]
+    const updatedTree: FileNode[] = [{ path: 'a.ts', type: 'file', name: 'a.ts' }, { path: 'b.ts', type: 'file', name: 'b.ts' }]
+
+    let callCount = 0
+    vi.spyOn(apiModule, 'apiGet').mockImplementation((url: string) => {
+      if (url === '/projects/proj-1/repos') {
+        callCount++
+        return Promise.resolve(callCount === 1 ? initialRepos : updatedRepos)
+      }
+      if (url === '/projects/proj-1/repos/orbion/tree') {
+        return Promise.resolve(callCount <= 1 ? initialTree : updatedTree)
+      }
+      if (url === '/projects/proj-1/repos/orbion/status') {
+        return Promise.resolve({ staged: [], changes: [] })
+      }
+      return Promise.resolve([])
+    })
+
+    const { result, rerender } = renderHook(
+      ({ refreshKey }: { refreshKey: number }) => useFileTab({ projectId: 'proj-1', refreshKey }),
+      { initialProps: { refreshKey: 0 } }
+    )
+
+    // 初始加载
+    await waitFor(() => {
+      expect(result.current.repos).toEqual(initialRepos)
+      expect(result.current.fileTree).toEqual(initialTree)
+    })
+
+    const reposCallCountBefore = apiModule.apiGet.mock.calls.filter(
+      (args: [string]) => args[0] === '/projects/proj-1/repos'
+    ).length
+
+    // refreshKey 变化 → 重新获取
+    rerender({ refreshKey: 1 })
+
+    await waitFor(() => {
+      expect(result.current.repos).toEqual(updatedRepos)
+      expect(result.current.fileTree).toEqual(updatedTree)
+    })
+
+    // 确认 repos API 被再次调用
+    const reposCallCountAfter = apiModule.apiGet.mock.calls.filter(
+      (args: [string]) => args[0] === '/projects/proj-1/repos'
+    ).length
+    expect(reposCallCountAfter).toBeGreaterThan(reposCallCountBefore)
+  })
+
+  it('refreshKey 不变 → 不额外请求', async () => {
+    vi.spyOn(apiModule, 'apiGet').mockImplementation((url: string) => {
+      if (url === '/projects/proj-1/repos') return Promise.resolve(mockRepos)
+      if (url === '/projects/proj-1/repos/orbion/tree') return Promise.resolve(mockFileTree)
+      if (url === '/projects/proj-1/repos/orbion/status') return Promise.resolve(mockGitStatus)
+      return Promise.resolve([])
+    })
+
+    const { result, rerender } = renderHook(
+      ({ refreshKey }: { refreshKey: number }) => useFileTab({ projectId: 'proj-1', refreshKey }),
+      { initialProps: { refreshKey: 0 } }
+    )
+
+    await waitFor(() => {
+      expect(result.current.repos).toEqual(mockRepos)
+    })
+
+    const callCountBefore = apiModule.apiGet.mock.calls.length
+
+    // rerender 但 refreshKey 不变
+    rerender({ refreshKey: 0 })
+
+    // 不应有新的 API 请求
+    expect(apiModule.apiGet.mock.calls.length).toBe(callCountBefore)
+  })
+})

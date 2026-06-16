@@ -94,6 +94,43 @@ class ThreadService:
             "created_at": now,
         }
 
+    async def send_system_message(self, project_id: str, thread_id: str, content: str) -> dict[str, Any]:
+        """以 system 身份发送消息 — 通用系统通知接口"""
+        message_id = str(uuid.uuid4())
+        now = datetime.now(UTC)
+        payload = DiscussionMessageCreatedPayload(
+            thread_id=thread_id,
+            content=content,
+            request_summary=False,
+            message_id=message_id,
+        )
+
+        event = Event(
+            event_id=str(uuid.uuid4()),
+            project_id=project_id,
+            event_type=EventType.DiscussionMessageCreated,
+            participant_id="system",
+            participant_type="system",
+            participant_display_name="系统",
+            payload=payload.model_dump(mode="json"),
+            correlation_id=thread_id,
+            created_at=now,
+        )
+
+        await self._event_store.append(event)
+        await self._event_bus.publish(event)
+
+        return {
+            "id": message_id,
+            "thread_id": thread_id,
+            "participant_id": "system",
+            "participant_type": "system",
+            "display_name": "系统",
+            "content": content,
+            "event_type": "DiscussionMessageCreated",
+            "created_at": now,
+        }
+
     async def list_threads(self, project_id: str) -> list[dict[str, Any]]:
         """线程列表含聚合字段"""
         return await self._thread_read.list_threads(project_id)

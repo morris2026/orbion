@@ -47,7 +47,10 @@ async def add_repo(
     is_member = await project_read.check_member_exists(project_id, user.id)
     if not is_member:
         raise HTTPException(status_code=403, detail="Not a project member")
-    result = await asyncio.to_thread(repo_service.add_repo, project_id, url=body.url, name=body.name)
+    # 获取默认线程 ID 用于发送系统消息
+    project = await project_read.get_project(project_id, user.id)
+    thread_id = project.get("default_thread_id") if project else None
+    result = await repo_service.add_repo(project_id, url=body.url, name=body.name, user_id=user.id, thread_id=thread_id)
     if "error" in result:
         detail = result.get("error", "添加仓库失败")
         raise HTTPException(status_code=400, detail=detail)

@@ -39,7 +39,7 @@ class Event(BaseModel):
     project_id: str = Field(max_length=EVENT_PROJECT_ID_MAX_LEN)
     event_type: str = Field(max_length=EVENT_TYPE_MAX_LEN)
     participant_id: str = Field(max_length=EVENT_PARTICIPANT_ID_MAX_LEN)
-    participant_type: Literal["human", "agent"] = Field(max_length=EVENT_PARTICIPANT_TYPE_MAX_LEN)
+    participant_type: Literal["human", "agent", "system"] = Field(max_length=EVENT_PARTICIPANT_TYPE_MAX_LEN)
     participant_display_name: str = Field(default="", max_length=EVENT_PARTICIPANT_DISPLAY_NAME_MAX_LEN)
     payload: dict[str, Any] = Field(default_factory=dict)
     correlation_id: str

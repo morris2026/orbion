@@ -97,6 +97,103 @@ describe('CreateProjectDialog', () => {
       })
     })
   })
+
+  describe('MVP-UI-5.1a: 仓库输入', () => {
+    it('渲染时显示仓库输入框', () => {
+      render(<CreateProjectDialog open={true} onClose={vi.fn()} onCreateProject={vi.fn()} onSelectThread={vi.fn()} />)
+      expect(screen.getByLabelText(/仓库/i)).toBeInTheDocument()
+    })
+
+    it('不填仓库 → 创建项目后不调用 repos API', async () => {
+      const user = userEvent.setup()
+      const apiPostSpy = vi.spyOn(apiModule, 'apiPost').mockResolvedValue({ id: 'p1', name: '无仓库', description: null, role: 'owner', default_thread_id: 'dt1', created_at: '' })
+
+      render(<CreateProjectDialog open={true} onClose={vi.fn()} onCreateProject={vi.fn()} onSelectThread={vi.fn()} />)
+
+      await user.type(screen.getByLabelText(/项目名称/i), '无仓库')
+      await user.click(screen.getByRole('button', { name: /创建/i }))
+
+      await waitFor(() => {
+        // 只调用创建项目，不调用 repos
+        expect(apiPostSpy).toHaveBeenCalledTimes(1)
+        expect(apiPostSpy).toHaveBeenCalledWith('/projects', { name: '无仓库', description: null })
+      })
+    })
+
+    it('填入 URL → 创建项目后调用 repos API 传 { url }', async () => {
+      const user = userEvent.setup()
+      const apiPostSpy = vi.spyOn(apiModule, 'apiPost')
+        .mockResolvedValueOnce({ id: 'p1', name: 'URL项目', description: null, role: 'owner', default_thread_id: 'dt1', created_at: '' })
+        .mockResolvedValueOnce({ name: 'my-repo' })
+
+      render(<CreateProjectDialog open={true} onClose={vi.fn()} onCreateProject={vi.fn()} onSelectThread={vi.fn()} />)
+
+      await user.type(screen.getByLabelText(/项目名称/i), 'URL项目')
+      await user.type(screen.getByLabelText(/仓库/i), 'https://github.com/example/my-repo.git')
+      await user.click(screen.getByRole('button', { name: /创建/i }))
+
+      await waitFor(() => {
+        expect(apiPostSpy).toHaveBeenCalledTimes(2)
+        expect(apiPostSpy).toHaveBeenNthCalledWith(1, '/projects', { name: 'URL项目', description: null })
+        expect(apiPostSpy).toHaveBeenNthCalledWith(2, '/projects/p1/repos', { url: 'https://github.com/example/my-repo.git' })
+      })
+    })
+
+    it('填入目录名 → 创建项目后调用 repos API 传 { name }', async () => {
+      const user = userEvent.setup()
+      const apiPostSpy = vi.spyOn(apiModule, 'apiPost')
+        .mockResolvedValueOnce({ id: 'p1', name: '目录项目', description: null, role: 'owner', default_thread_id: 'dt1', created_at: '' })
+        .mockResolvedValueOnce({ name: 'my-app' })
+
+      render(<CreateProjectDialog open={true} onClose={vi.fn()} onCreateProject={vi.fn()} onSelectThread={vi.fn()} />)
+
+      await user.type(screen.getByLabelText(/项目名称/i), '目录项目')
+      await user.type(screen.getByLabelText(/仓库/i), 'my-app')
+      await user.click(screen.getByRole('button', { name: /创建/i }))
+
+      await waitFor(() => {
+        expect(apiPostSpy).toHaveBeenCalledTimes(2)
+        expect(apiPostSpy).toHaveBeenNthCalledWith(1, '/projects', { name: '目录项目', description: null })
+        expect(apiPostSpy).toHaveBeenNthCalledWith(2, '/projects/p1/repos', { name: 'my-app' })
+      })
+    })
+
+    it('仓库初始化失败 → 对话框关闭，错误通过系统消息通知', async () => {
+      const user = userEvent.setup()
+      const onCreateProject = vi.fn()
+      const onSelectThread = vi.fn()
+      const onClose = vi.fn()
+
+      vi.spyOn(apiModule, 'apiPost')
+        .mockResolvedValueOnce({ id: 'p1', name: '失败项目', description: null, role: 'owner', default_thread_id: 'dt1', created_at: '' })
+        .mockRejectedValueOnce(new apiModule.ApiError(500, '仓库初始化失败'))
+
+      render(<CreateProjectDialog open={true} onClose={onClose} onCreateProject={onCreateProject} onSelectThread={onSelectThread} />)
+
+      await user.type(screen.getByLabelText(/项目名称/i), '失败项目')
+      await user.type(screen.getByLabelText(/仓库/i), 'my-repo')
+      await user.click(screen.getByRole('button', { name: /创建/i }))
+
+      // fire-and-forget：项目创建成功后对话框立即关闭，仓库错误通过系统消息通知
+      await waitFor(() => {
+        expect(onCreateProject).toHaveBeenCalled()
+        expect(onClose).toHaveBeenCalled()
+      })
+    })
+
+    it('点击钥匙图标 → 打开凭据管理对话框', async () => {
+      const user = userEvent.setup()
+      vi.spyOn(apiModule, 'apiGet').mockResolvedValue([])
+
+      render(<CreateProjectDialog open={true} onClose={vi.fn()} onCreateProject={vi.fn()} onSelectThread={vi.fn()} />)
+
+      await user.click(screen.getByRole('button', { name: /管理凭据/i }))
+
+      await waitFor(() => {
+        expect(screen.getByText('Git 凭据')).toBeInTheDocument()
+      })
+    })
+  })
 })
 
 describe('CreateThreadDialog', () => {

@@ -23,14 +23,16 @@ function formatTimestamp(dateStr: string): string {
 export default function MessageBubble({ message, currentUserId }: MessageBubbleProps) {
   const isSelf = message.participant_id === currentUserId && message.participant_type === 'human'
   const isAgent = message.participant_type === 'agent'
+  const isSystem = message.participant_type === 'system'
 
-  const avatarContent = isAgent ? '🤖' : message.display_name.charAt(0)
+  const avatarContent = isAgent ? '🤖' : isSystem ? '⚙️' : message.display_name.charAt(0)
 
   // 自己：右对齐蓝色泡泡，名字和时间右对齐（时间→名字）
   // 别人：左对齐浅色泡泡，名字和时间左对齐（名字→时间）
   // Agent：左对齐浅蓝泡泡+蓝色边框，名字和时间左对齐
+  // System：左对齐灰色泡泡，名字和时间左对齐
   const align = isSelf ? 'right' : 'left'
-  const participantType = isSelf ? 'self' : isAgent ? 'agent' : 'other'
+  const participantType = isSelf ? 'self' : isAgent ? 'agent' : isSystem ? 'system' : 'other'
 
   return (
     <div
@@ -71,7 +73,9 @@ export default function MessageBubble({ message, currentUserId }: MessageBubbleP
               ? 'bg-blue-500 text-white'
               : isAgent
                 ? 'bg-blue-50 border border-blue-200 text-blue-800'
-                : 'bg-gray-100 text-foreground'
+                : isSystem
+                  ? 'bg-gray-50 border border-gray-200 text-gray-700'
+                  : 'bg-gray-100 text-foreground'
           }`}
         >
           <p className="text-sm whitespace-pre-wrap break-words [word-break:break-word]">{message.content}</p>

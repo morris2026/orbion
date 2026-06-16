@@ -24,11 +24,13 @@ interface RightPanelTabsProps {
   outputs: OutputResponse[]
   onApprovePlan: (planId: string) => void
   onRejectPlan: (planId: string, reason: string) => void
+  fileTreeRefreshKey?: number
 }
 
 export function RightPanelTabs({
   projectId, selectedTab, onTabChange,
   plans, outputs, onApprovePlan, onRejectPlan,
+  fileTreeRefreshKey,
 }: RightPanelTabsProps) {
   return (
     <div className="flex flex-col h-full">
@@ -51,7 +53,7 @@ export function RightPanelTabs({
       </div>
       <div className="flex-1 overflow-hidden">
         {selectedTab === 'file' ? (
-          <FileTab projectId={projectId} />
+          <FileTab projectId={projectId} refreshKey={fileTreeRefreshKey} />
         ) : selectedTab === 'plan' ? (
           <ExecutionPanel
             plans={plans}

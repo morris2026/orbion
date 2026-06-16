@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { KeyRoundIcon } from 'lucide-react'
 import {
   Dialog,
   DialogContent,
@@ -10,7 +11,8 @@ import {
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { apiPost, ApiError } from '@/lib/api'
-import type { ProjectListItem } from '@/types/api'
+import type { ProjectListItem, AddRepoRequest } from '@/types/api'
+import CredentialsDialog from '@/components/CredentialsDialog'
 
 interface CreateProjectDialogProps {
   open: boolean
@@ -22,8 +24,10 @@ interface CreateProjectDialogProps {
 export default function CreateProjectDialog({ open, onClose, onCreateProject, onSelectThread }: CreateProjectDialogProps) {
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
+  const [repo, setRepo] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [showCredentials, setShowCredentials] = useState(false)
 
   const canSubmit = name.trim().length > 0 && !submitting
 
@@ -32,11 +36,19 @@ export default function CreateProjectDialog({ open, onClose, onCreateProject, on
     setSubmitting(true)
     setError(null)
     try {
-      // 后端原子创建项目+默认线程，响应含default_thread_id
       const newProject: ProjectListItem = await apiPost('/projects', {
         name: name.trim(),
         description: description.trim() || null,
       })
+
+      // 初始化仓库（不等待完成，clone 在后台进行，结果通过系统消息推送到聊天框）
+      const repoValue = repo.trim()
+      if (repoValue) {
+        const isUrl = /^(https?:\/\/|git@|ssh:\/\/)/.test(repoValue)
+        const body: AddRepoRequest = isUrl ? { url: repoValue } : { name: repoValue }
+        apiPost(`/projects/${newProject.id}/repos`, body).catch(() => { /* 错误通过系统消息通知 */ })
+      }
+
       onCreateProject(newProject)
       if (newProject.default_thread_id) {
         onSelectThread(newProject.id, newProject.default_thread_id)
@@ -84,6 +96,27 @@ export default function CreateProjectDialog({ open, onClose, onCreateProject, on
               rows={3}
             />
           </div>
+          <div>
+            <div className="flex items-center justify-between">
+              <label htmlFor="project-repo" className="text-sm font-medium">仓库（可选）</label>
+              <button
+                className="text-muted-foreground hover:text-foreground"
+                onClick={() => setShowCredentials(true)}
+                aria-label="管理凭据"
+                type="button"
+              >
+                <KeyRoundIcon className="h-4 w-4" />
+              </button>
+            </div>
+            <input
+              id="project-repo"
+              aria-label="仓库"
+              className="w-full mt-1 p-2 border rounded text-sm"
+              value={repo}
+              onChange={(e) => setRepo(e.target.value)}
+              placeholder="Git 仓库 URL 或目录名"
+            />
+          </div>
           {error && <p className="text-sm text-destructive">{error}</p>}
         </div>
         <DialogFooter>
@@ -91,6 +124,7 @@ export default function CreateProjectDialog({ open, onClose, onCreateProject, on
           <Button onClick={handleSubmit} disabled={!canSubmit}>{submitting ? '创建中...' : '创建'}</Button>
         </DialogFooter>
       </DialogContent>
+      <CredentialsDialog open={showCredentials} onClose={() => setShowCredentials(false)} />
     </Dialog>
   )
 }

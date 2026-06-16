@@ -62,9 +62,10 @@ class ProjectService:
         if self._settings:
             self._init_project_dirs(self._settings, project_id)
 
-        # 写入event_log + 发布到EventBus（fire-and-forget，投影最终一致）
+        # 写入event_log + 发布到EventBus（等待投影处理完成，确保后续查询可见）
         await self._event_store.append(event)
         await self._event_bus.publish(event)
+        await self._event_bus.wait_for_pending()
 
         # 从命令输入构造响应（CQRS写端不从读端取数据）
         return {

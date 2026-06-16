@@ -6,9 +6,10 @@ export type ViewMode = 'edit' | 'diff'
 
 export interface UseFileTabOptions {
   projectId: string | null
+  refreshKey?: number
 }
 
-export function useFileTab({ projectId }: UseFileTabOptions) {
+export function useFileTab({ projectId, refreshKey }: UseFileTabOptions) {
   const [repos, setRepos] = useState<RepoInfo[]>([])
   const [selectedRepo, setSelectedRepo] = useState<string | null>(null)
   const [fileTree, setFileTree] = useState<FileNode[]>([])
@@ -71,7 +72,7 @@ export function useFileTab({ projectId }: UseFileTabOptions) {
       setViewMode('edit')
     }
     prevProjectIdRef.current = projectId
-  }, [projectId])
+  }, [projectId, refreshKey])
 
   // 加载文件树和 git status
   useEffect(() => {
@@ -88,7 +89,7 @@ export function useFileTab({ projectId }: UseFileTabOptions) {
     apiGet<GitStatusResult>(`/projects/${projectId}/repos/${selectedRepo}/status`)
       .then(setGitStatus)
       .catch(() => setGitStatus({ staged: [], changes: [] }))
-  }, [projectId, selectedRepo])
+  }, [projectId, selectedRepo, refreshKey])
 
   const selectRepo = useCallback((repoName: string) => {
     setSelectedRepo(repoName)

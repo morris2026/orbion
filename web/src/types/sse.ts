@@ -5,7 +5,7 @@ export interface SSEMessageCreatedEvent {
   message_id: string
   thread_id: string
   participant_id: string
-  participant_type: 'human' | 'agent'
+  participant_type: 'human' | 'agent' | 'system'
   participant_display_name: string
   content: string
   created_at: string

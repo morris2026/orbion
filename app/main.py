@@ -14,6 +14,8 @@ from app.biz.agents.runtime import AgentRuntime
 from app.biz.agents.scheduler import AgentScheduler
 from app.biz.agents.service import AgentService
 from app.biz.agents.templates import AgentTemplateManager
+from app.biz.credentials.routes import router as credential_router
+from app.biz.credentials.service import CredentialService
 from app.biz.files.routes import router as file_router
 from app.biz.files.service import FileService
 from app.biz.git.routes import router as git_router
@@ -102,8 +104,10 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     app.state.output_service = OutputService(app.state.event_store, app.state.event_bus, app.state.event_projections)
     # GitService 初始化（订阅TaskOutputApproved事件，审批通过后自动commit）
     app.state.git_service = GitService(settings, app.state.event_bus, app.state.event_projections)
-    # RepoService 初始化（仓库扫描/添加/删除）
-    app.state.repo_service = RepoService(settings)
+    # CredentialService 初始化（凭据加密存储）
+    app.state.credential_service = CredentialService(settings)
+    # RepoService 初始化（仓库扫描/添加/删除，依赖CredentialService+ThreadService）
+    app.state.repo_service = RepoService(settings, app.state.credential_service, app.state.thread_service)
     # FileService 初始化（文件树/读取/保存）
     app.state.file_service = FileService(settings)
     yield
@@ -136,6 +140,7 @@ app.include_router(output_action_router, prefix="/outputs", tags=["outputs"])
 
 # 仓库模块 — 仓库管理端点嵌套在项目路径下
 app.include_router(repo_router, prefix="/projects", tags=["repos"])
+app.include_router(credential_router, tags=["credentials"])
 
 # 文件模块 — 文件操作端点嵌套在项目路径下
 app.include_router(file_router, prefix="/projects", tags=["files"])

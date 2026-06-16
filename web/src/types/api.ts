@@ -26,7 +26,7 @@ export interface MessageResponse {
   id: string
   thread_id: string
   participant_id: string
-  participant_type: 'human' | 'agent'
+  participant_type: 'human' | 'agent' | 'system'
   display_name: string
   content: string
   event_type: string
@@ -112,6 +112,11 @@ export interface RepoInfo {
   name: string
 }
 
+export interface AddRepoRequest {
+  url?: string
+  name?: string
+}
+
 export interface GitFileStatus {
   path: string
   status: 'A' | 'M' | 'D' | 'R' | 'U'
@@ -128,4 +133,19 @@ export interface StageRequest {
 
 export interface CommitRequest {
   message: string
+}
+
+export type CredentialType = 'github'
+
+export interface Credential {
+  id: string
+  type: CredentialType
+  name: string
+  created_at: string
+}
+
+export interface CreateCredentialRequest {
+  type: CredentialType
+  name: string
+  token: string
 }

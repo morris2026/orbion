@@ -17,6 +17,7 @@ from app.biz.agents.runtime import AgentRuntime
 from app.biz.agents.scheduler import AgentScheduler
 from app.biz.agents.service import AgentService
 from app.biz.agents.templates import AgentTemplateManager
+from app.biz.credentials.service import CredentialService
 from app.biz.files.service import FileService
 from app.biz.git.service import GitService
 from app.biz.projects.read_repo import load_project_read_impl
@@ -118,7 +119,8 @@ async def client(
     app.state.agent_scheduler = agent_scheduler
     app.state.agent_service = agent_service
     app.state.agent_template_manager = agent_template_manager
-    app.state.repo_service = RepoService(settings)
+    app.state.credential_service = CredentialService(settings)
+    app.state.repo_service = RepoService(settings, app.state.credential_service, app.state.thread_service)
     app.state.file_service = FileService(settings)
     app.state.git_service = GitService(settings, event_bus, projections)
 

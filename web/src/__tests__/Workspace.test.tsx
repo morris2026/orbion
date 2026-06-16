@@ -39,6 +39,7 @@ const mockProjects: ProjectListItem[] = [
 const mockMessages = [
   { id: 'm1', thread_id: 't1', participant_id: 'u1', participant_type: 'human', display_name: '用户A', content: '你好', event_type: 'DiscussionMessageCreated', created_at: '2024-01-01T10:00:00Z' },
   { id: 'm2', thread_id: 't1', participant_id: 'a1', participant_type: 'agent', display_name: '总结Agent', content: '讨论要点如下', event_type: 'DiscussionSummaryGenerated', created_at: '2024-01-01T11:00:00Z' },
+  { id: 'm3', thread_id: 't1', participant_id: 'system', participant_type: 'system', display_name: '系统', content: '仓库 orbion 已克隆', event_type: 'DiscussionMessageCreated', created_at: '2024-01-01T12:00:00Z' },
 ]
 
 /** mock计划数据 */
@@ -113,6 +114,13 @@ describe('前端三栏工作区完整交互', () => {
       render(<MessageBubble message={mockMessages[1]} currentUserId="u1" />)
       const bubble = screen.getByTestId('bubble-m2')
       expect(bubble).toHaveAttribute('data-participant-type', 'agent')
+      expect(bubble).toHaveAttribute('data-align', 'left')
+    })
+
+    it('participant_type="system" → 系统消息特定颜色泡泡', () => {
+      render(<MessageBubble message={mockMessages[2]} currentUserId="u1" />)
+      const bubble = screen.getByTestId('bubble-m3')
+      expect(bubble).toHaveAttribute('data-participant-type', 'system')
       expect(bubble).toHaveAttribute('data-align', 'left')
     })
   })
@@ -1588,6 +1596,212 @@ describe('MVP-UI-COL.x: 三栏可拖拽布局', () => {
       expect(leftPanel).toBeInTheDocument()
       expect(middlePanel).toBeInTheDocument()
       expect(rightPanel).toBeInTheDocument()
+    })
+  })
+})
+
+describe('SSE系统消息触发文件树刷新', () => {
+  beforeEach(() => {
+    localStorage.clear()
+    vi.restoreAllMocks()
+    vi.unstubAllGlobals()
+  })
+
+  const baseInitialState: UseWorkspaceOptions = {
+    initialState: {
+      projects: [{ id: 'proj-1', name: '项目1', description: null, role: 'owner', default_thread_id: 't1', created_at: '' }],
+      selectedProjectId: 'proj-1',
+      threads: mockThreads,
+      selectedThreadId: 't1',
+      messages: [],
+      plans: [],
+      outputs: [],
+    },
+  }
+
+  it('系统消息含"已克隆" → fileTreeRefreshKey 从 0 递增到 1', async () => {
+    vi.spyOn(authModule, 'isAuthenticated').mockReturnValue(true)
+    vi.spyOn(authModule, 'isTokenExpired').mockReturnValue(false)
+    vi.spyOn(authModule, 'getIsAdmin').mockReturnValue(false)
+
+    let sseOnEvent: ((event: Record<string, unknown>) => void) | null = null
+    vi.spyOn(sseModule, 'createSSEConnection').mockImplementation((_projectId: string, onEvent: (event: Record<string, unknown>) => void) => {
+      sseOnEvent = onEvent
+      return { close: vi.fn() } as unknown as EventSource
+    })
+    vi.spyOn(sseModule, 'disconnectSSE').mockImplementation(() => {})
+
+    const { result } = renderHook(() => useWorkspace(baseInitialState), { wrapper: ({ children }) => <MemoryRouter>{children}</MemoryRouter> })
+
+    expect(result.current.fileTreeRefreshKey).toBe(0)
+
+    act(() => {
+      sseOnEvent!({
+        event_type: 'message_created',
+        message_id: 'm-sys-1',
+        thread_id: 't1',
+        participant_id: 'system',
+        participant_type: 'system',
+        participant_display_name: '系统',
+        content: '仓库 orbion 已克隆',
+        created_at: '2024-01-01T12:00:00Z',
+      })
+    })
+
+    await waitFor(() => {
+      expect(result.current.fileTreeRefreshKey).toBe(1)
+    })
+  })
+
+  it('系统消息含"已初始化" → fileTreeRefreshKey 递增', async () => {
+    vi.spyOn(authModule, 'isAuthenticated').mockReturnValue(true)
+    vi.spyOn(authModule, 'isTokenExpired').mockReturnValue(false)
+    vi.spyOn(authModule, 'getIsAdmin').mockReturnValue(false)
+
+    let sseOnEvent: ((event: Record<string, unknown>) => void) | null = null
+    vi.spyOn(sseModule, 'createSSEConnection').mockImplementation((_projectId: string, onEvent: (event: Record<string, unknown>) => void) => {
+      sseOnEvent = onEvent
+      return { close: vi.fn() } as unknown as EventSource
+    })
+    vi.spyOn(sseModule, 'disconnectSSE').mockImplementation(() => {})
+
+    const { result } = renderHook(() => useWorkspace(baseInitialState), { wrapper: ({ children }) => <MemoryRouter>{children}</MemoryRouter> })
+
+    expect(result.current.fileTreeRefreshKey).toBe(0)
+
+    act(() => {
+      sseOnEvent!({
+        event_type: 'message_created',
+        message_id: 'm-sys-2',
+        thread_id: 't1',
+        participant_id: 'system',
+        participant_type: 'system',
+        participant_display_name: '系统',
+        content: '仓库 myrepo 已初始化',
+        created_at: '2024-01-01T12:00:00Z',
+      })
+    })
+
+    await waitFor(() => {
+      expect(result.current.fileTreeRefreshKey).toBe(1)
+    })
+  })
+
+  it('非系统消息不触发 fileTreeRefreshKey 递增', async () => {
+    vi.spyOn(authModule, 'isAuthenticated').mockReturnValue(true)
+    vi.spyOn(authModule, 'isTokenExpired').mockReturnValue(false)
+    vi.spyOn(authModule, 'getIsAdmin').mockReturnValue(false)
+
+    let sseOnEvent: ((event: Record<string, unknown>) => void) | null = null
+    vi.spyOn(sseModule, 'createSSEConnection').mockImplementation((_projectId: string, onEvent: (event: Record<string, unknown>) => void) => {
+      sseOnEvent = onEvent
+      return { close: vi.fn() } as unknown as EventSource
+    })
+    vi.spyOn(sseModule, 'disconnectSSE').mockImplementation(() => {})
+
+    const { result } = renderHook(() => useWorkspace(baseInitialState), { wrapper: ({ children }) => <MemoryRouter>{children}</MemoryRouter> })
+
+    expect(result.current.fileTreeRefreshKey).toBe(0)
+
+    // 人类消息，内容匹配但 participant_type 不是 system
+    act(() => {
+      sseOnEvent!({
+        event_type: 'message_created',
+        message_id: 'm-human',
+        thread_id: 't1',
+        participant_id: 'u1',
+        participant_type: 'human',
+        participant_display_name: '用户A',
+        content: '仓库 orbion 已克隆',
+        created_at: '2024-01-01T12:00:00Z',
+      })
+    })
+
+    // 不应该递增
+    expect(result.current.fileTreeRefreshKey).toBe(0)
+  })
+
+  it('系统消息不含"已克隆"/"已初始化"不触发递增', async () => {
+    vi.spyOn(authModule, 'isAuthenticated').mockReturnValue(true)
+    vi.spyOn(authModule, 'isTokenExpired').mockReturnValue(false)
+    vi.spyOn(authModule, 'getIsAdmin').mockReturnValue(false)
+
+    let sseOnEvent: ((event: Record<string, unknown>) => void) | null = null
+    vi.spyOn(sseModule, 'createSSEConnection').mockImplementation((_projectId: string, onEvent: (event: Record<string, unknown>) => void) => {
+      sseOnEvent = onEvent
+      return { close: vi.fn() } as unknown as EventSource
+    })
+    vi.spyOn(sseModule, 'disconnectSSE').mockImplementation(() => {})
+
+    const { result } = renderHook(() => useWorkspace(baseInitialState), { wrapper: ({ children }) => <MemoryRouter>{children}</MemoryRouter> })
+
+    expect(result.current.fileTreeRefreshKey).toBe(0)
+
+    // 系统消息但内容不含"已克隆"或"已初始化"
+    act(() => {
+      sseOnEvent!({
+        event_type: 'message_created',
+        message_id: 'm-sys-other',
+        thread_id: 't1',
+        participant_id: 'system',
+        participant_type: 'system',
+        participant_display_name: '系统',
+        content: '仓库克隆失败，请检查 URL 和凭据',
+        created_at: '2024-01-01T12:00:00Z',
+      })
+    })
+
+    expect(result.current.fileTreeRefreshKey).toBe(0)
+  })
+
+  it('多次系统消息连续递增 fileTreeRefreshKey', async () => {
+    vi.spyOn(authModule, 'isAuthenticated').mockReturnValue(true)
+    vi.spyOn(authModule, 'isTokenExpired').mockReturnValue(false)
+    vi.spyOn(authModule, 'getIsAdmin').mockReturnValue(false)
+
+    let sseOnEvent: ((event: Record<string, unknown>) => void) | null = null
+    vi.spyOn(sseModule, 'createSSEConnection').mockImplementation((_projectId: string, onEvent: (event: Record<string, unknown>) => void) => {
+      sseOnEvent = onEvent
+      return { close: vi.fn() } as unknown as EventSource
+    })
+    vi.spyOn(sseModule, 'disconnectSSE').mockImplementation(() => {})
+
+    const { result } = renderHook(() => useWorkspace(baseInitialState), { wrapper: ({ children }) => <MemoryRouter>{children}</MemoryRouter> })
+
+    expect(result.current.fileTreeRefreshKey).toBe(0)
+
+    act(() => {
+      sseOnEvent!({
+        event_type: 'message_created',
+        message_id: 'm-sys-1',
+        thread_id: 't1',
+        participant_id: 'system',
+        participant_type: 'system',
+        participant_display_name: '系统',
+        content: '仓库 orbion 已克隆',
+        created_at: '2024-01-01T12:00:00Z',
+      })
+    })
+
+    await waitFor(() => {
+      expect(result.current.fileTreeRefreshKey).toBe(1)
+    })
+
+    act(() => {
+      sseOnEvent!({
+        event_type: 'message_created',
+        message_id: 'm-sys-2',
+        thread_id: 't1',
+        participant_id: 'system',
+        participant_type: 'system',
+        participant_display_name: '系统',
+        content: '仓库 docs 已初始化',
+        created_at: '2024-01-01T12:01:00Z',
+      })
+    })
+
+    await waitFor(() => {
+      expect(result.current.fileTreeRefreshKey).toBe(2)
     })
   })
 })

@@ -103,6 +103,7 @@ export function useWorkspace(options?: UseWorkspaceOptions) {
   const [plans, setPlans] = useState<PlanResponse[]>(init?.plans ?? [])
   const [outputs, setOutputs] = useState<OutputResponse[]>(init?.outputs ?? [])
   const [selectedRightTab, setSelectedRightTab] = useState<RightTab>(init?.selectedRightTab ?? 'file')
+  const [fileTreeRefreshKey, setFileTreeRefreshKey] = useState(0)
 
   // SSE回调需实时读取当前threadId，但不应触发连接重建
   const selectedThreadIdRef = useRef(selectedThreadId)
@@ -154,6 +155,10 @@ export function useWorkspace(options?: UseWorkspaceOptions) {
         const event = raw as unknown as SSEMessageCreatedEvent
         if (event.thread_id === selectedThreadIdRef.current) {
           setMessages((prev) => [...prev, mapMessageFromSSE(event)])
+        }
+        // 仓库相关系统消息 → 刷新文件树
+        if (event.participant_type === 'system' && (event.content?.includes('已克隆') || event.content?.includes('已初始化'))) {
+          setFileTreeRefreshKey((k) => k + 1)
         }
       } else if (type === 'summary_generated') {
         const event = raw as unknown as SSESummaryGeneratedEvent
@@ -292,6 +297,7 @@ export function useWorkspace(options?: UseWorkspaceOptions) {
     threads, setThreads, selectedThreadId, setSelectedThreadId,
     messages, setMessages, plans, setPlans, outputs, setOutputs,
     selectedRightTab, setSelectedRightTab,
+    fileTreeRefreshKey,
     handleSendMessage, handleApprovePlan, handleRejectPlan,
     handleCreateProject, handleCreateThread, handleRegisterAgent,
     handleAddMember, handleApproveOutput, handleRequestRevision,
