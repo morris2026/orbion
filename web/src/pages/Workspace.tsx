@@ -39,10 +39,9 @@ export default function Workspace({ workspaceOptions }: WorkspaceProps) {
     <div className="h-screen bg-background flex flex-col">
       <TopBar />
       <Group orientation="horizontal" className="flex-1 min-h-0"
-        id="workspace-columns"
-                defaultLayout={{ "workspace-left": 20, "workspace-middle": 40, "workspace-right": 40 }}>
+        id="workspace-columns">
         {/* 左栏：项目树形导航 */}
-        <Panel id="workspace-left" minSize={256} maxSize={400}
+        <Panel id="workspace-left" minSize={256} defaultSize={256} maxSize={400}
           className="bg-card overflow-hidden">
           <ProjectTree
             projects={ws.projects}
@@ -80,7 +79,7 @@ export default function Workspace({ workspaceOptions }: WorkspaceProps) {
           className={SEP_CLASS} />
 
         {/* 中栏：讨论面板 */}
-        <Panel id="workspace-middle" minSize="20"
+        <Panel id="workspace-middle" minSize={320} defaultSize={320}
           className="overflow-hidden">
           {ws.selectedThreadId ? (
             <DiscussionPanel
@@ -99,7 +98,7 @@ export default function Workspace({ workspaceOptions }: WorkspaceProps) {
           className={SEP_CLASS} />
 
         {/* 右栏：Tab 容器 */}
-        <Panel id="workspace-right" minSize="20"
+        <Panel id="workspace-right" minSize={400}
           className="bg-card overflow-hidden">
           <RightPanelTabs
               projectId={ws.selectedProjectId}

@@ -90,7 +90,7 @@ export function FileTab({ projectId, refreshKey }: FileTabProps) {
               id="filetab-sidebar"
               minSize={150}
               maxSize={400}
-              defaultSize={240}
+              defaultSize={150}
               className="overflow-hidden border-r"
             >
               <div className="h-full flex flex-col" data-testid="sidebar-panel">
