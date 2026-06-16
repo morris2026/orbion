@@ -52,7 +52,17 @@ function buildTree(files: FileNode[]): TreeNode[] {
     }
   }
 
-  return root
+  return sortNodes(root)
+}
+
+/** 文件夹优先，同类型按名称字母序 */
+function sortNodes(nodes: TreeNode[]): TreeNode[] {
+  return nodes.sort((a, b) => {
+    const aDir = a.children !== undefined
+    const bDir = b.children !== undefined
+    if (aDir !== bDir) return aDir ? -1 : 1
+    return a.name.localeCompare(b.name)
+  }).map(n => n.children ? { ...n, children: sortNodes(n.children) } : n)
 }
 
 /** 递归确保路径上所有目录节点都存在 */

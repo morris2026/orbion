@@ -80,6 +80,30 @@ describe('MVP-RE-5.1: ActivityBar 图标切换', () => {
   })
 })
 
+describe('ExplorerPanel 文件树排序', () => {
+  it('文件夹排在文件前面，同类型按字母序', () => {
+    const mixedTree: FileNode[] = [
+      { path: 'z-file.txt', type: 'file', name: 'z-file.txt' },
+      { path: 'a-dir', type: 'dir', name: 'a-dir' },
+      { path: 'b-dir', type: 'dir', name: 'b-dir' },
+      { path: 'a-file.txt', type: 'file', name: 'a-file.txt' },
+      { path: 'a-dir/nested.ts', type: 'file', name: 'nested.ts' },
+    ]
+
+    render(
+      <ExplorerPanel fileTree={mixedTree} selectedFile={null} onFileSelect={vi.fn()} />
+    )
+
+    // 获取顶级节点的文本顺序
+    const panel = screen.getByTestId('explorer-panel')
+    const nodes = panel.querySelectorAll('[data-testid^="tree-node-"]')
+    const names = Array.from(nodes).map(n => n.textContent!.replace(/[▶▼ ]/g, '').trim())
+
+    // 文件夹优先：a-dir, b-dir 在前；文件在后：a-file.txt, z-file.txt
+    expect(names).toEqual(['a-dir', 'b-dir', 'a-file.txt', 'z-file.txt'])
+  })
+})
+
 describe('MVP-RE-5.2: ExplorerPanel 文件树渲染', () => {
   beforeEach(() => {
     vi.restoreAllMocks()
