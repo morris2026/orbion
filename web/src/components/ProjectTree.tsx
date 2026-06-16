@@ -74,7 +74,7 @@ export default function ProjectTree({
       <TooltipProvider delay={0}>
         <div className="p-4">
           <div className="flex items-center justify-between mb-2">
-            <h2 className="text-sm font-semibold">Orbion</h2>
+            <h2 className="text-sm font-semibold">项目</h2>
             <Tooltip>
               <TooltipTrigger render={<Button variant="ghost" size="icon" className="h-6 w-6 rounded-md bg-primary/10 hover:bg-primary/20" onClick={onCreateProject} aria-label="新建项目" />}>
                 <PlusIcon className="h-4 w-4" />
@@ -94,7 +94,7 @@ export default function ProjectTree({
         <div className="p-4 space-y-2">
           {/* 顶部新建项目按钮 */}
           <div className="flex items-center justify-between mb-2">
-            <h2 className="text-sm font-semibold">Orbion</h2>
+            <h2 className="text-sm font-semibold">项目</h2>
             <Tooltip>
               <TooltipTrigger render={<Button variant="ghost" size="icon" className="h-6 w-6 rounded-md bg-primary/10 hover:bg-primary/20" onClick={onCreateProject} aria-label="新建项目" />}>
                 <PlusIcon className="h-4 w-4" />

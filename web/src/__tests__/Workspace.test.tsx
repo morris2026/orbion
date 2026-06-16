@@ -860,7 +860,7 @@ describe('MVP-UI-4.x: ProjectTree组件', () => {
       // 渲染顺序应为 Alpha → Beta → Zeta
       // 用textContent定位项目节点顺序——检查项目名称在DOM中的出现顺序
       const projectNames = unsortedProjects.map(p => p.name).sort((a, b) => a.localeCompare(b))
-      const container = screen.getByText('Orbion').closest('.p-4')!
+      const container = screen.getByText('项目').closest('.p-4')!
       // Alpha出现在Zeta之前
       const alphaIndex = container.textContent!.indexOf(projectNames[0])
       const betaIndex = container.textContent!.indexOf(projectNames[1])

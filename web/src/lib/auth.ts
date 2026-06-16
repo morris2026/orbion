@@ -59,3 +59,19 @@ export function getCurrentUserId(): string | null {
   if (typeof payload.sub !== 'string') return null
   return payload.sub
 }
+
+/** 获取当前用户名（JWT中的username字段） */
+export function getUsername(): string | null {
+  const payload = decodeToken()
+  if (!payload) return null
+  if (typeof payload.username !== 'string') return null
+  return payload.username
+}
+
+/** 获取当前用户显示名称（JWT中的display_name字段） */
+export function getDisplayName(): string | null {
+  const payload = decodeToken()
+  if (!payload) return null
+  if (typeof payload.display_name !== 'string') return null
+  return payload.display_name
+}

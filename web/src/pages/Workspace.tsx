@@ -1,11 +1,10 @@
 import { useState } from 'react'
-import { clearToken, getIsAdmin, getCurrentUserId } from '@/lib/auth'
-import { useNavigate } from 'react-router-dom'
-import { Button } from '@/components/ui/button'
+import { getCurrentUserId } from '@/lib/auth'
 import { Group, Panel, Separator } from 'react-resizable-panels'
 import ProjectTree from '@/components/ProjectTree'
 import DiscussionPanel from '@/components/DiscussionPanel'
 import { RightPanelTabs } from '@/components/RightPanelTabs'
+import { TopBar } from '@/components/TopBar'
 import CreateProjectDialog from '@/components/CreateProjectDialog'
 import CreateThreadDialog from '@/components/CreateThreadDialog'
 import AddMemberDialog from '@/components/AddMemberDialog'
@@ -23,7 +22,6 @@ interface WorkspaceProps {
 }
 
 export default function Workspace({ workspaceOptions }: WorkspaceProps) {
-  const navigate = useNavigate()
   const ws = useWorkspace(workspaceOptions)
 
   const [showCreateProject, setShowCreateProject] = useState(false)
@@ -32,19 +30,15 @@ export default function Workspace({ workspaceOptions }: WorkspaceProps) {
   const [showRegisterAgent, setShowRegisterAgent] = useState(false)
   const [dialogProjectId, setDialogProjectId] = useState<string | null>(null)
 
-  const handleLogout = () => {
-    clearToken()
-    navigate('/login')
-  }
-
   const openProjectDialog = (setter: React.Dispatch<React.SetStateAction<boolean>>, projectId: string) => {
     setDialogProjectId(projectId)
     setter(true)
   }
 
   return (
-    <div className="h-screen bg-background">
-      <Group orientation="horizontal" className="h-full"
+    <div className="h-screen bg-background flex flex-col">
+      <TopBar />
+      <Group orientation="horizontal" className="flex-1 min-h-0"
         id="workspace-columns"
                 defaultLayout={{ "workspace-left": 20, "workspace-middle": 40, "workspace-right": 40 }}>
         {/* 左栏：项目树形导航 */}
@@ -107,15 +101,7 @@ export default function Workspace({ workspaceOptions }: WorkspaceProps) {
         {/* 右栏：Tab 容器 */}
         <Panel id="workspace-right" minSize="20"
           className="bg-card overflow-hidden">
-          <div className="flex flex-col h-full">
-            <div className="flex items-center gap-1 px-2 py-1 border-b">
-              {getIsAdmin() && (
-                <Button variant="outline" size="sm" onClick={() => navigate('/approval')}>用户审批管理</Button>
-              )}
-              <div className="flex-1" />
-              <Button variant="ghost" size="sm" onClick={handleLogout}>登出</Button>
-            </div>
-            <RightPanelTabs
+          <RightPanelTabs
               projectId={ws.selectedProjectId}
               selectedTab={ws.selectedRightTab}
               onTabChange={ws.setSelectedRightTab}
@@ -125,7 +111,6 @@ export default function Workspace({ workspaceOptions }: WorkspaceProps) {
               onRejectPlan={ws.handleRejectPlan}
               fileTreeRefreshKey={ws.fileTreeRefreshKey}
             />
-          </div>
         </Panel>
       </Group>
 
