@@ -84,7 +84,7 @@ describe('MVP-RE-7.2: RepoList 选中仓库', () => {
 })
 
 describe('MVP-RE-7.3: RepoList 折叠', () => {
-  it('点击折叠按钮 → onToggleCollapse 回调被调用', async () => {
+  it('点击仓库列表标题行 → onToggleCollapse 回调被调用', async () => {
     const user = userEvent.setup()
     const onToggleCollapse = vi.fn()
     render(
@@ -98,12 +98,13 @@ describe('MVP-RE-7.3: RepoList 折叠', () => {
       />
     )
 
-    await user.click(screen.getByRole('button', { name: /折叠/i }))
+    // 点击标题行（包含 ChevronDown 图标和"仓库列表"文字）
+    await user.click(screen.getByText('仓库列表'))
     expect(onToggleCollapse).toHaveBeenCalled()
   })
 
-  it('折叠状态下仓库列表隐藏，显示展开按钮', () => {
-    render(
+  it('折叠时显示 ChevronRight，仓库列表隐藏；展开时显示 ChevronDown', () => {
+    const { rerender } = render(
       <RepoList
         repos={mockRepos}
         selectedRepo="orbion"
@@ -114,8 +115,25 @@ describe('MVP-RE-7.3: RepoList 折叠', () => {
       />
     )
 
-    expect(screen.getByRole('button', { name: /展开/i })).toBeInTheDocument()
+    // 折叠状态：ChevronRight，仓库列表不可见
+    expect(document.querySelector('.lucide-chevron-right')).toBeInTheDocument()
     expect(screen.queryByText('orbion')).not.toBeInTheDocument()
+
+    // 重新渲染为展开状态
+    rerender(
+      <RepoList
+        repos={mockRepos}
+        selectedRepo="orbion"
+        changeCounts={mockChangeCounts}
+        onSelectRepo={vi.fn()}
+        collapsed={false}
+        onToggleCollapse={vi.fn()}
+      />
+    )
+
+    // 展开状态：ChevronDown，仓库列表可见
+    expect(document.querySelector('.lucide-chevron-down')).toBeInTheDocument()
+    expect(screen.getByText('orbion')).toBeInTheDocument()
   })
 })
 
@@ -139,8 +157,8 @@ describe('MVP-RE-7.3a: 拖拽调高', () => {
     const topPanel = screen.getByTestId('sc-top-panel')
     const bottomPanel = screen.getByTestId('repo-status').parentElement!
 
-    // 初始高度 200px
-    expect(topPanel).toHaveStyle({ height: '200px' })
+    // 默认两行高度 60px
+    expect(topPanel).toHaveStyle({ height: '60px' })
 
     // 拖拽：mouseDown + mouseMove(向下50px) + mouseUp
     fireEvent.mouseDown(separator, { clientY: 100 })
@@ -148,7 +166,7 @@ describe('MVP-RE-7.3a: 拖拽调高', () => {
     fireEvent.mouseUp(document)
 
     // 上栏高度增加 50px
-    expect(topPanel).toHaveStyle({ height: '250px' })
+    expect(topPanel).toHaveStyle({ height: '110px' })
     // 下栏仍存在（flex-1 自动调整）
     expect(bottomPanel).toHaveClass('flex-1')
   })
@@ -171,7 +189,7 @@ describe('MVP-RE-7.3a: 拖拽调高', () => {
     const separator = screen.getByTestId('sc-separator')
     const topPanel = screen.getByTestId('sc-top-panel')
 
-    // 初始 200px，向上拖 200px → 理论 0px，截断为 50px
+    // 初始 60px，向上拖 200px → 理论 -140px，截断为 50px
     fireEvent.mouseDown(separator, { clientY: 100 })
     fireEvent.mouseMove(document, { clientY: -100 })
     fireEvent.mouseUp(document)
@@ -180,8 +198,6 @@ describe('MVP-RE-7.3a: 拖拽调高', () => {
   })
 
   it('向下拖拽超过上限 → 上栏高度被截断', () => {
-    // 模拟容器高度 300px 的场景：上限 = 300 - 100 = 200
-    // 给容器设置固定高度让 clientHeight 有值
     const { container } = render(
       <div style={{ height: '300px' }}>
         <SourceControlPanel
@@ -205,17 +221,99 @@ describe('MVP-RE-7.3a: 拖拽调高', () => {
     // mock clientHeight 为 300（jsdom 默认为 0）
     vi.spyOn(scPanel, 'clientHeight', 'get').mockReturnValue(300)
 
-    // 初始 200px，向下拖 200px → 理论 400px，上限 200px，截断为 200px
+    // 初始 60px，向下拖 200px → 理论 260px，上限 200px，截断为 200px
     fireEvent.mouseDown(separator, { clientY: 100 })
     fireEvent.mouseMove(document, { clientY: 300 })
     fireEvent.mouseUp(document)
 
-    // 上限 = 300 - 100 = 200，所以 400 被截断为 200
+    // 上限 = 300 - 100 = 200，所以 260 被截断为 200
     expect(topPanel).toHaveStyle({ height: '200px' })
+  })
+
+  it('仓库列表折叠时拖拽分隔条 → 高度不变', async () => {
+    const user = userEvent.setup()
+    render(
+      <SourceControlPanel
+        repos={mockRepos}
+        selectedRepo="orbion"
+        gitStatus={{ staged: mockStaged, changes: mockChanges }}
+        changeCounts={mockChangeCounts}
+        onSelectRepo={vi.fn()}
+        onStage={vi.fn()}
+        onUnstage={vi.fn()}
+        onCommit={vi.fn()}
+        onFileSelect={vi.fn()}
+      />
+    )
+
+    const separator = screen.getByTestId('sc-separator')
+    const topPanel = screen.getByTestId('sc-top-panel')
+
+    // 折叠仓库列表
+    await user.click(screen.getByText('仓库列表'))
+
+    // 折叠后拖拽：高度应保持 auto，不受拖拽影响
+    fireEvent.mouseDown(separator, { clientY: 100 })
+    fireEvent.mouseMove(document, { clientY: 200 })
+    fireEvent.mouseUp(document)
+
+    expect(topPanel).toHaveStyle({ height: 'auto' })
   })
 })
 
-describe('MVP-RE-7.4: RepoStatus — Staged 分组', () => {
+describe('MVP-RE-7.4: RepoStatus 总标题栏折叠', () => {
+  it('点击"变更"标题行 → 折叠下栏内容，文件列表和 Commit 输入框都隐藏', async () => {
+    const user = userEvent.setup()
+    render(
+      <RepoStatus
+        staged={mockStaged}
+        changes={mockChanges}
+        onStage={vi.fn()}
+        onUnstage={vi.fn()}
+        onCommit={vi.fn()}
+        onFileSelect={vi.fn()}
+      />
+    )
+
+    // 初始展开：文件可见
+    expect(screen.getByText('src/new.ts')).toBeInTheDocument()
+    expect(screen.getByText('src/util.ts')).toBeInTheDocument()
+    expect(screen.getByPlaceholderText(/commit message/i)).toBeInTheDocument()
+
+    // 点击"变更"标题折叠
+    await user.click(screen.getByText('变更'))
+    expect(screen.queryByText('src/new.ts')).not.toBeInTheDocument()
+    expect(screen.queryByText('src/util.ts')).not.toBeInTheDocument()
+    expect(screen.queryByPlaceholderText(/commit message/i)).not.toBeInTheDocument()
+
+    // 再次点击展开
+    await user.click(screen.getByText('变更'))
+    expect(screen.getByText('src/new.ts')).toBeInTheDocument()
+  })
+
+  it('折叠时显示 ChevronRight，展开时显示 ChevronDown', () => {
+    render(
+      <RepoStatus
+        staged={mockStaged}
+        changes={[]}
+        onStage={vi.fn()}
+        onUnstage={vi.fn()}
+        onCommit={vi.fn()}
+        onFileSelect={vi.fn()}
+      />
+    )
+
+    // 初始展开：ChevronDown
+    const titleRow = screen.getByText('变更').closest('button')!
+    expect(titleRow.querySelector('.lucide-chevron-down')).toBeInTheDocument()
+
+    // 点击折叠
+    fireEvent.click(screen.getByText('变更'))
+    expect(titleRow.querySelector('.lucide-chevron-right')).toBeInTheDocument()
+  })
+})
+
+describe('MVP-RE-7.4b: RepoStatus — Staged 分组', () => {
   it('Staged Changes 分组显示 2 个文件，状态标识正确', () => {
     render(
       <RepoStatus
@@ -243,7 +341,7 @@ describe('MVP-RE-7.4: RepoStatus — Staged 分组', () => {
   })
 })
 
-describe('MVP-RE-7.5: RepoStatus — Changes 分组', () => {
+describe('MVP-RE-7.5b: RepoStatus — Changes 分组', () => {
   it('Changes 分组显示 2 个文件，状态标识 M 黄色', () => {
     render(
       <RepoStatus

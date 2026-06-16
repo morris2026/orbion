@@ -26,9 +26,10 @@ export function SourceControlPanel({
   onCommit,
   onFileSelect,
 }: SourceControlPanelProps) {
-  const [collapsed, setCollapsed] = useState(false)
-  const [topHeight, setTopHeight] = useState(200)
-  const topHeightRef = useRef(200)
+  const [repoListCollapsed, setRepoListCollapsed] = useState(false)
+  // 默认高度显示标题行 + 约1.5行仓库项，用户可拖动调整
+  const [topHeight, setTopHeight] = useState(60)
+  const topHeightRef = useRef(60)
   const dragRef = useRef<{ startY: number; startHeight: number } | null>(null)
   const containerRef = useRef<HTMLDivElement | null>(null)
 
@@ -38,20 +39,20 @@ export function SourceControlPanel({
   }, [])
 
   const handleToggleCollapse = useCallback(() => {
-    setCollapsed((prev) => !prev)
+    setRepoListCollapsed((prev) => !prev)
   }, [])
 
   const handleSeparatorMouseDown = useCallback((e: React.MouseEvent) => {
+    if (repoListCollapsed) return
     e.preventDefault()
     dragRef.current = { startY: e.clientY, startHeight: topHeightRef.current }
-  }, [])
+  }, [repoListCollapsed])
 
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
       if (!dragRef.current) return
       const delta = e.clientY - dragRef.current.startY
       const containerHeight = containerRef.current?.clientHeight ?? 0
-      // 下栏最小保留 100px，上栏最小 50px
       const maxHeight = containerHeight > 150 ? containerHeight - 100 : containerHeight > 0 ? 50 : Infinity
       updateTopHeight(Math.max(50, Math.min(maxHeight, dragRef.current.startHeight + delta)))
     }
@@ -69,13 +70,13 @@ export function SourceControlPanel({
   return (
     <div className="h-full flex flex-col" data-testid="source-control-panel" ref={containerRef}>
       {/* 上栏：RepoList */}
-      <div style={{ height: collapsed ? 'auto' : `${topHeight}px` }} data-testid="sc-top-panel">
+      <div style={{ height: repoListCollapsed ? 'auto' : `${topHeight}px` }} data-testid="sc-top-panel">
         <RepoList
           repos={repos}
           selectedRepo={selectedRepo}
           changeCounts={changeCounts}
           onSelectRepo={onSelectRepo}
-          collapsed={collapsed}
+          collapsed={repoListCollapsed}
           onToggleCollapse={handleToggleCollapse}
         />
       </div>

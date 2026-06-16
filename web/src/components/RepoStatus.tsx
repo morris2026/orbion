@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { ChevronRightIcon, ChevronDownIcon } from 'lucide-react'
 import type { GitFileStatus } from '@/types/api'
 
 interface RepoStatusProps {
@@ -27,6 +28,7 @@ export function RepoStatus({
   onFileSelect,
 }: RepoStatusProps) {
   const [commitMessage, setCommitMessage] = useState('')
+  const [collapsed, setCollapsed] = useState(false)
 
   const handleCommit = () => {
     if (!commitMessage.trim()) return
@@ -43,6 +45,20 @@ export function RepoStatus({
 
   return (
     <div className="flex flex-col h-full overflow-auto" data-testid="repo-status">
+      {/* 总标题栏 */}
+      <button
+        className="flex items-center gap-1 w-full px-2 py-1 border-b cursor-pointer hover:bg-muted/50 text-left"
+        onClick={() => setCollapsed((prev) => !prev)}
+        aria-expanded={!collapsed}
+        aria-controls="repo-status-content"
+      >
+        {collapsed
+          ? <ChevronRightIcon className="h-4 w-4 shrink-0 text-muted-foreground" />
+          : <ChevronDownIcon className="h-4 w-4 shrink-0 text-muted-foreground" />}
+        <span className="text-xs font-medium text-muted-foreground">变更</span>
+      </button>
+
+      {!collapsed && (<div id="repo-status-content">
       {/* Staged Changes */}
       {staged.length > 0 && (
         <div className="border-b">
@@ -136,6 +152,7 @@ export function RepoStatus({
           </div>
         </div>
       )}
+      </div>)}
     </div>
   )
 }
