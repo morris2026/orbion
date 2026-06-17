@@ -20,7 +20,7 @@ interface ProjectTreeProps {
   onAddMember: (projectId: string) => void
   onRegisterAgent: (projectId: string) => void
   onDeleteProject: (projectId: string) => void
-  onDeleteThread: (threadId: string, projectId: string) => void
+  onDeleteThread: (threadId: string) => void
 }
 
 /** 计算项目的总未读数，排除当前选中线程的未读 */
@@ -253,7 +253,7 @@ export default function ProjectTree({
             if (deleteTarget.type === 'project') {
               onDeleteProject(deleteTarget.id)
             } else {
-              onDeleteThread(deleteTarget.id, deleteTarget.projectId)
+              onDeleteThread(deleteTarget.id)
             }
           }}
         />

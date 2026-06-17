@@ -5,6 +5,7 @@ import ProjectTree from '@/components/ProjectTree'
 import DiscussionPanel from '@/components/DiscussionPanel'
 import { RightPanelTabs } from '@/components/RightPanelTabs'
 import { TopBar } from '@/components/TopBar'
+import { WorkspaceSidebar } from '@/components/WorkspaceSidebar'
 import CreateProjectDialog from '@/components/CreateProjectDialog'
 import CreateThreadDialog from '@/components/CreateThreadDialog'
 import AddMemberDialog from '@/components/AddMemberDialog'
@@ -29,6 +30,9 @@ export default function Workspace({ workspaceOptions }: WorkspaceProps) {
   const [showAddMember, setShowAddMember] = useState(false)
   const [showRegisterAgent, setShowRegisterAgent] = useState(false)
   const [dialogProjectId, setDialogProjectId] = useState<string | null>(null)
+  const [showLeft, setShowLeft] = useState(true)
+  const [showMiddle, setShowMiddle] = useState(true)
+  const [showRight, setShowRight] = useState(true)
 
   const openProjectDialog = (setter: React.Dispatch<React.SetStateAction<boolean>>, projectId: string) => {
     setDialogProjectId(projectId)
@@ -38,80 +42,100 @@ export default function Workspace({ workspaceOptions }: WorkspaceProps) {
   return (
     <div className="h-screen bg-background flex flex-col">
       <TopBar />
-      <Group orientation="horizontal" className="flex-1 min-h-0"
-        id="workspace-columns">
-        {/* 左栏：项目树形导航 */}
-        <Panel id="workspace-left" minSize={256} defaultSize={256} maxSize={400}
-          className="bg-card overflow-hidden">
-          <ProjectTree
-            projects={ws.projects}
-            threads={ws.threads}
-            selectedProjectId={ws.selectedProjectId}
-            selectedThreadId={ws.selectedThreadId}
-            onSelectThread={ws.setSelectedThreadId}
-            onSelectProject={ws.setSelectedProjectId}
-            onCreateProject={() => setShowCreateProject(true)}
-            onCreateThread={(projectId) => openProjectDialog(setShowCreateThread, projectId)}
-            onAddMember={(projectId) => openProjectDialog(setShowAddMember, projectId)}
-            onRegisterAgent={(projectId) => openProjectDialog(setShowRegisterAgent, projectId)}
-            onDeleteProject={(projectId) => {
-              ws.setProjects((prev) => prev.filter((p) => p.id !== projectId))
-              ws.setThreads((prev) => prev.filter((t) => t.project_id !== projectId))
-              if (ws.selectedProjectId === projectId) {
-                ws.setSelectedProjectId(null)
-                ws.setSelectedThreadId(null)
-                ws.setMessages([])
-                ws.setPlans([])
-                ws.setOutputs([])
-              }
-            }}
-            onDeleteThread={(threadId, _projectId) => {
-              ws.setThreads((prev) => prev.filter((t) => t.id !== threadId))
-              if (ws.selectedThreadId === threadId) {
-                ws.setSelectedThreadId(null)
-                ws.setMessages([])
-              }
-            }}
-          />
-        </Panel>
-
-        <Separator id="workspace-separator-left"
-          className={SEP_CLASS} />
-
-        {/* 中栏：讨论面板 */}
-        <Panel id="workspace-middle" minSize={320} defaultSize={320}
-          className="overflow-hidden">
-          {ws.selectedThreadId ? (
-            <DiscussionPanel
-              messages={ws.messages}
-              currentUserId={getCurrentUserId() ?? ''}
-              onSendMessage={ws.handleSendMessage}
-            />
-          ) : (
-            <div className="p-4">
-              <p className="text-sm text-muted-foreground">选择线程开始讨论</p>
-            </div>
+      <div className="flex-1 min-h-0 flex">
+        <WorkspaceSidebar
+          showLeft={showLeft}
+          showMiddle={showMiddle}
+          showRight={showRight}
+          onToggleLeft={() => setShowLeft((v) => !v)}
+          onToggleMiddle={() => setShowMiddle((v) => !v)}
+          onToggleRight={() => setShowRight((v) => !v)}
+        />
+        <Group orientation="horizontal" className="flex-1 min-h-0"
+          id="workspace-columns">
+          {/* 左栏：项目树形导航 */}
+          {showLeft && (
+            <Panel id="workspace-left" minSize={256} defaultSize={256} maxSize={400}
+              className="bg-card overflow-hidden">
+              <ProjectTree
+                projects={ws.projects}
+                threads={ws.threads}
+                selectedProjectId={ws.selectedProjectId}
+                selectedThreadId={ws.selectedThreadId}
+                onSelectThread={ws.setSelectedThreadId}
+                onSelectProject={ws.setSelectedProjectId}
+                onCreateProject={() => setShowCreateProject(true)}
+                onCreateThread={(projectId) => openProjectDialog(setShowCreateThread, projectId)}
+                onAddMember={(projectId) => openProjectDialog(setShowAddMember, projectId)}
+                onRegisterAgent={(projectId) => openProjectDialog(setShowRegisterAgent, projectId)}
+                onDeleteProject={(projectId) => {
+                  ws.setProjects((prev) => prev.filter((p) => p.id !== projectId))
+                  ws.setThreads((prev) => prev.filter((t) => t.project_id !== projectId))
+                  if (ws.selectedProjectId === projectId) {
+                    ws.setSelectedProjectId(null)
+                    ws.setSelectedThreadId(null)
+                    ws.setMessages([])
+                    ws.setPlans([])
+                    ws.setOutputs([])
+                  }
+                }}
+                onDeleteThread={(threadId) => {
+                  ws.setThreads((prev) => prev.filter((t) => t.id !== threadId))
+                  if (ws.selectedThreadId === threadId) {
+                    ws.setSelectedThreadId(null)
+                    ws.setMessages([])
+                  }
+                }}
+              />
+            </Panel>
           )}
-        </Panel>
 
-        <Separator id="workspace-separator-right"
-          className={SEP_CLASS} />
+          {showLeft && (showMiddle || showRight) && (
+            <Separator id="workspace-separator-left"
+              className={SEP_CLASS} />
+          )}
 
-        {/* 右栏：Tab 容器 */}
-        <Panel id="workspace-right" minSize={400}
-          className="bg-card overflow-hidden">
-          <RightPanelTabs
-              projectId={ws.selectedProjectId}
-              selectedTab={ws.selectedRightTab}
-              onTabChange={ws.setSelectedRightTab}
-              plans={ws.plans}
-              outputs={ws.outputs}
-              onApprovePlan={ws.handleApprovePlan}
-              onRejectPlan={ws.handleRejectPlan}
-              fileTreeRefreshKey={ws.fileTreeRefreshKey}
-            />
-        </Panel>
-      </Group>
+          {/* 中栏：讨论面板 */}
+          {showMiddle && (
+            <Panel id="workspace-middle" minSize={320} defaultSize={320}
+              className="overflow-hidden">
+              {ws.selectedThreadId ? (
+                <DiscussionPanel
+                  messages={ws.messages}
+                  currentUserId={getCurrentUserId() ?? ''}
+                  onSendMessage={ws.handleSendMessage}
+                />
+              ) : (
+                <div className="p-4">
+                  <p className="text-sm text-muted-foreground">选择线程开始讨论</p>
+                </div>
+              )}
+            </Panel>
+          )}
+
+          {showMiddle && showRight && (
+            <Separator id="workspace-separator-right"
+              className={SEP_CLASS} />
+          )}
+
+          {/* 右栏：Tab 容器 */}
+          {showRight && (
+            <Panel id="workspace-right" minSize={400}
+              className="bg-card overflow-hidden">
+              <RightPanelTabs
+                  projectId={ws.selectedProjectId}
+                  selectedTab={ws.selectedRightTab}
+                  onTabChange={ws.setSelectedRightTab}
+                  plans={ws.plans}
+                  outputs={ws.outputs}
+                  onApprovePlan={ws.handleApprovePlan}
+                  onRejectPlan={ws.handleRejectPlan}
+                  fileTreeRefreshKey={ws.fileTreeRefreshKey}
+                />
+            </Panel>
+          )}
+        </Group>
+      </div>
 
       {/* Dialogs */}
       <CreateProjectDialog
