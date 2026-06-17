@@ -1,14 +1,15 @@
 import { FileTab } from '@/components/FileTab'
 import ExecutionPanel from '@/components/ExecutionPanel'
+import { File, ListChecks, Package, Bot } from 'lucide-react'
 import type { PlanResponse, OutputResponse } from '@/types/api'
 
 export type RightTab = 'file' | 'plan' | 'output' | 'agent'
 
-const TABS: { key: RightTab; label: string }[] = [
-  { key: 'file', label: '文件' },
-  { key: 'plan', label: '计划' },
-  { key: 'output', label: '产出' },
-  { key: 'agent', label: 'Agent' },
+const TABS: { key: RightTab; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
+  { key: 'file', label: '文件', icon: File },
+  { key: 'plan', label: '计划', icon: ListChecks },
+  { key: 'output', label: '产出', icon: Package },
+  { key: 'agent', label: 'Agent', icon: Bot },
 ]
 
 const PLACEHOLDER: Record<Exclude<RightTab, 'file' | 'plan'>, string> = {
@@ -41,12 +42,13 @@ export function RightPanelTabs({
             role="tab"
             aria-selected={selectedTab === tab.key}
             onClick={() => onTabChange(tab.key)}
-            className={`px-3 py-1.5 text-xs font-medium transition-colors
+            className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium transition-colors
               ${selectedTab === tab.key
                 ? 'text-foreground border-b-2 border-primary'
                 : 'text-muted-foreground hover:text-foreground'
               }`}
           >
+            <tab.icon className="h-3.5 w-3.5" />
             {tab.label}
           </button>
         ))}
