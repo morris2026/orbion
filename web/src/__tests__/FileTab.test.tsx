@@ -97,7 +97,7 @@ describe('ExplorerPanel 文件树排序', () => {
     // 获取顶级节点的文本顺序
     const panel = screen.getByTestId('explorer-panel')
     const nodes = panel.querySelectorAll('[data-testid^="tree-node-"]')
-    const names = Array.from(nodes).map(n => n.textContent!.replace(/[▶▼ ]/g, '').trim())
+    const names = Array.from(nodes).map(n => n.textContent!.trim())
 
     // 文件夹优先：a-dir, b-dir 在前；文件在后：a-file.txt, z-file.txt
     expect(names).toEqual(['a-dir', 'b-dir', 'a-file.txt', 'z-file.txt'])
@@ -133,9 +133,9 @@ describe('MVP-RE-5.2: ExplorerPanel 文件树渲染', () => {
       />
     )
 
-    // 目录节点有 ▶ 折叠标识
+    // 目录节点有折叠图标（ChevronRight SVG）
     const srcNode = screen.getByTestId('tree-node-src')
-    expect(srcNode.textContent).toContain('▶')
+    expect(srcNode.querySelector('svg')).toBeInTheDocument()
   })
 
   it('空文件树显示空状态', () => {
@@ -247,16 +247,16 @@ describe('MVP-RE-5.3: ExplorerPanel 点击文件', () => {
     )
 
     // src 文件夹初始折叠，子文件不可见
-    expect(screen.getByTestId('tree-node-src').textContent).toContain('▶')
+    const srcNode = screen.getByTestId('tree-node-src')
+    expect(screen.queryByText('main.ts')).not.toBeInTheDocument()
 
     // 点击 src 文件夹
-    fireEvent.click(screen.getByTestId('tree-node-src'))
+    fireEvent.click(srcNode)
 
-    // 文件夹展开：箭头变为 ▼，子文件可见
+    // 文件夹展开，子文件可见
     await waitFor(() => {
-      expect(screen.getByTestId('tree-node-src').textContent).toContain('▼')
+      expect(screen.getByText('main.ts')).toBeInTheDocument()
     })
-    expect(screen.getByText('main.ts')).toBeInTheDocument()
   })
 
   it('点击已展开的文件夹 → 文件夹折叠隐藏子节点', async () => {
@@ -269,15 +269,16 @@ describe('MVP-RE-5.3: ExplorerPanel 点击文件', () => {
     )
 
     // 先展开 src 文件夹
-    fireEvent.click(screen.getByTestId('tree-node-src'))
+    const srcNode = screen.getByTestId('tree-node-src')
+    fireEvent.click(srcNode)
     await waitFor(() => {
-      expect(screen.getByTestId('tree-node-src').textContent).toContain('▼')
+      expect(screen.getByText('main.ts')).toBeInTheDocument()
     })
 
     // 再次点击 → 折叠
-    fireEvent.click(screen.getByTestId('tree-node-src'))
+    fireEvent.click(srcNode)
     await waitFor(() => {
-      expect(screen.getByTestId('tree-node-src').textContent).toContain('▶')
+      expect(screen.queryByText('main.ts')).not.toBeInTheDocument()
     })
     expect(screen.queryByText('main.ts')).not.toBeInTheDocument()
   })

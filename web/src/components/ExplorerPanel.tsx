@@ -1,5 +1,6 @@
 import { useMemo, useRef, useState, useEffect } from 'react'
 import { Tree } from 'react-arborist'
+import { ChevronDownIcon, ChevronRightIcon } from 'lucide-react'
 import type { FileNode } from '@/types/api'
 
 interface ExplorerPanelProps {
@@ -135,11 +136,11 @@ function NodeRenderer({ node, style }: { node: any; style: React.CSSProperties }
       data-testid={`tree-node-${node.id}`}
     >
       {node.isInternal ? (
-        <span className="text-muted-foreground text-xs">
-          {node.isOpen ? '▼' : '▶'}
-        </span>
+        node.isOpen
+          ? <ChevronDownIcon className="h-4 w-4 shrink-0 text-muted-foreground" />
+          : <ChevronRightIcon className="h-4 w-4 shrink-0 text-muted-foreground" />
       ) : (
-        <span className="w-3" />
+        <span className="w-4 shrink-0" />
       )}
       <span className="text-sm truncate">{node.data.name}</span>
     </div>
