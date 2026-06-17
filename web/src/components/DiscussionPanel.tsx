@@ -85,7 +85,7 @@ export default function DiscussionPanel({ messages, currentUserId, onSendMessage
   return (
     <Group orientation="vertical" className="h-full"
       id="discussion-panel"
-      defaultLayout={{ "discussion-messages": 8, "discussion-input": 2 }}
+      defaultLayout={{ "discussion-messages": 85, "discussion-input": 15 }}
     >
       {/* 消息区域 */}
       <Panel id="discussion-messages" minSize="60"
