@@ -236,6 +236,51 @@ describe('MVP-RE-5.3: ExplorerPanel 点击文件', () => {
     // 目录双击只展开/折叠，不应触发文件选择
     expect(onFileSelect).not.toHaveBeenCalled()
   })
+
+  it('点击文件夹节点 → 文件夹展开显示子节点', async () => {
+    render(
+      <ExplorerPanel
+        fileTree={mockFileTree}
+        selectedFile={null}
+        onFileSelect={vi.fn()}
+      />
+    )
+
+    // src 文件夹初始折叠，子文件不可见
+    expect(screen.getByTestId('tree-node-src').textContent).toContain('▶')
+
+    // 点击 src 文件夹
+    fireEvent.click(screen.getByTestId('tree-node-src'))
+
+    // 文件夹展开：箭头变为 ▼，子文件可见
+    await waitFor(() => {
+      expect(screen.getByTestId('tree-node-src').textContent).toContain('▼')
+    })
+    expect(screen.getByText('main.ts')).toBeInTheDocument()
+  })
+
+  it('点击已展开的文件夹 → 文件夹折叠隐藏子节点', async () => {
+    render(
+      <ExplorerPanel
+        fileTree={mockFileTree}
+        selectedFile={null}
+        onFileSelect={vi.fn()}
+      />
+    )
+
+    // 先展开 src 文件夹
+    fireEvent.click(screen.getByTestId('tree-node-src'))
+    await waitFor(() => {
+      expect(screen.getByTestId('tree-node-src').textContent).toContain('▼')
+    })
+
+    // 再次点击 → 折叠
+    fireEvent.click(screen.getByTestId('tree-node-src'))
+    await waitFor(() => {
+      expect(screen.getByTestId('tree-node-src').textContent).toContain('▶')
+    })
+    expect(screen.queryByText('main.ts')).not.toBeInTheDocument()
+  })
 })
 
 describe('MVP-RE-5.4: useFileTab — 加载仓库列表', () => {

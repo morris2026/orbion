@@ -126,7 +126,12 @@ function NodeRenderer({ node, style }: { node: any; style: React.CSSProperties }
     <div
       style={style}
       className={`flex items-center gap-1 px-2 cursor-pointer hover:bg-accent/50 ${node.isSelected ? 'bg-accent' : ''}`}
-      onClick={() => node.handleClick({} as React.MouseEvent)}
+      onClick={() => {
+        if (node.isInternal) {
+          node.toggle()
+        }
+        node.handleClick({} as React.MouseEvent)
+      }}
       data-testid={`tree-node-${node.id}`}
     >
       {node.isInternal ? (
