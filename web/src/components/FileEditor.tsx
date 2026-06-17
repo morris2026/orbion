@@ -111,7 +111,8 @@ export function FileEditor({
         onMount={handleEditorMount}
         options={{
           minimap: { enabled: false },
-          fontSize: 13,
+          fontFamily: 'Consolas, Microsoft Yahei, monospace',
+          fontSize: 16,
           lineNumbers: 'on',
           scrollBeyondLastLine: false,
           wordWrap: 'on',
