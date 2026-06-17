@@ -186,8 +186,7 @@ class GitService:
         self._validate_paths(paths)
         repo = git.Repo(repo_path)
         if repo.head.is_valid():
-            for p in paths:
-                repo.index.reset(p, head=True)
+            repo.index.reset("HEAD", paths=paths)
         else:
             repo.index.remove(paths, working_tree=False)
 

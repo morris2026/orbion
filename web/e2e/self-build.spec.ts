@@ -626,6 +626,11 @@ test.describe('MVP-RE-9.x: 右栏文件编辑器 E2E', () => {
     // 点击文件
     await fileNode.dblclick()
 
+    // .md 文件默认预览模式，需点击"编辑"按钮切换到编辑器
+    const editBtn = page.getByTestId('btn-editor')
+    await expect(editBtn).toBeVisible({ timeout: 5000 })
+    await editBtn.click()
+
     // 验证 Monaco 编辑器加载（Monaco 渲染后编辑区域有 textarea）
     const editorArea = page.locator('.monaco-editor')
     await expect(editorArea).toBeVisible({ timeout: 10000 })

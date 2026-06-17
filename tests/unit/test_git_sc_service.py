@@ -1,7 +1,9 @@
-"""Source Control 服务测试 — MVP-RE-3.1, 3.2"""
+"""Source Control 服务测试 — MVP-RE-3.1, 3.2, 3.4"""
 
 from pathlib import Path
 from unittest.mock import MagicMock
+
+import git
 
 from app.biz.git.service import GitService
 from app.config import Settings
@@ -22,8 +24,6 @@ def _make_git_service(settings: Settings) -> GitService:
 
 def _init_repo_with_changes(repo_path: Path) -> None:
     """创建仓库并产生已修改+已staged文件"""
-    import git
-
     repo_path.mkdir(parents=True, exist_ok=True)
     repo = git.Repo.init(str(repo_path))
     (repo_path / "README.md").write_text("# init\n")
@@ -59,8 +59,6 @@ class TestMvpRe3GitScService:
 
     def test_mvp_re_3_2_status_no_changes(self, tmp_path: Path) -> None:
         """MVP-RE-3.2：无变更时 staged 和 changes 均为空"""
-        import git
-
         settings = _make_settings(tmp_path)
         repo_path = settings.project_repo_path("p1", "myrepo")
         repo_path.mkdir(parents=True, exist_ok=True)
@@ -74,3 +72,70 @@ class TestMvpRe3GitScService:
 
         assert result["staged"] == []
         assert result["changes"] == []
+
+    def test_unstage_new_file_with_commit(self, tmp_path: Path) -> None:
+        """有 commit 的仓库 unstage 新增文件(A)：文件从 staged 移到 changes"""
+        settings = _make_settings(tmp_path)
+        repo_path = settings.project_repo_path("p1", "myrepo")
+        _init_repo_with_changes(repo_path)
+
+        service = _make_git_service(settings)
+        staged_before = [f["path"] for f in service.status("p1", "myrepo")["staged"]]
+        assert "staged.txt" in staged_before
+
+        service.unstage("p1", "myrepo", ["staged.txt"])
+
+        result = service.status("p1", "myrepo")
+        staged_paths = [f["path"] for f in result["staged"]]
+        changes_paths = [f["path"] for f in result["changes"]]
+        assert "staged.txt" not in staged_paths
+        assert "staged.txt" in changes_paths
+        # 工作区文件仍在
+        assert (repo_path / "staged.txt").exists()
+
+    def test_unstage_modified_file_with_commit(self, tmp_path: Path) -> None:
+        """有 commit 的仓库 unstage 修改文件(M)：staged 清空，工作区内容不变"""
+        settings = _make_settings(tmp_path)
+        repo_path = settings.project_repo_path("p1", "myrepo")
+        repo_path.mkdir(parents=True, exist_ok=True)
+        repo = git.Repo.init(str(repo_path))
+        (repo_path / "README.md").write_text("init")
+        repo.index.add(["README.md"])
+        repo.index.commit("init")
+        (repo_path / "README.md").write_text("modified")
+        repo.index.add(["README.md"])
+
+        service = _make_git_service(settings)
+        staged_before = [f["path"] for f in service.status("p1", "myrepo")["staged"]]
+        assert "README.md" in staged_before
+
+        service.unstage("p1", "myrepo", ["README.md"])
+
+        result = service.status("p1", "myrepo")
+        staged_paths = [f["path"] for f in result["staged"]]
+        changes_paths = [f["path"] for f in result["changes"]]
+        assert "README.md" not in staged_paths
+        assert "README.md" in changes_paths
+        # 工作区内容保持修改后状态
+        assert (repo_path / "README.md").read_text() == "modified"
+
+    def test_unstage_file_no_commit(self, tmp_path: Path) -> None:
+        """无 commit 的仓库 unstage 文件：从 index 移除，文件变为 untracked"""
+        settings = _make_settings(tmp_path)
+        repo_path = settings.project_repo_path("p1", "myrepo")
+        repo_path.mkdir(parents=True, exist_ok=True)
+        repo = git.Repo.init(str(repo_path))
+        (repo_path / "new.txt").write_text("hello")
+        repo.index.add(["new.txt"])
+
+        service = _make_git_service(settings)
+        staged_before = [f["path"] for f in service.status("p1", "myrepo")["staged"]]
+        assert "new.txt" in staged_before
+
+        service.unstage("p1", "myrepo", ["new.txt"])
+
+        result = service.status("p1", "myrepo")
+        staged_paths = [f["path"] for f in result["staged"]]
+        changes_paths = [f["path"] for f in result["changes"]]
+        assert "new.txt" not in staged_paths
+        assert "new.txt" in changes_paths
