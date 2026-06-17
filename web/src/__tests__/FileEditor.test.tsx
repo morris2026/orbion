@@ -8,10 +8,11 @@ global.ResizeObserver = class { observe() {} unobserve() {} disconnect() {} }
 Element.prototype.getAnimations = vi.fn().mockReturnValue([])
 
 // Mock Monaco Editor — jsdom 无法加载真实 Monaco
+const mockUpdateOptions = vi.fn()
 vi.mock('@monaco-editor/react', () => ({
   Editor: vi.fn(({ value, onChange, onMount }) => {
     const handleEditorMount = (el: HTMLTextAreaElement) => {
-      onMount?.({ getValue: () => el.value, focus: vi.fn() })
+      onMount?.({ getValue: () => el.value, focus: vi.fn(), updateOptions: mockUpdateOptions })
     }
     return (
       <textarea
@@ -386,6 +387,32 @@ describe('MVP-RE-6.10: 切换文件', () => {
     )
 
     expect(screen.getByTestId('monaco-editor')).toHaveValue('content B')
+  })
+})
+
+describe('MVP-RE-6.12: 编辑器选项 — Unicode 高亮', () => {
+  beforeEach(() => {
+    mockUpdateOptions.mockClear()
+  })
+
+  it('mount 时关闭 unicodeHighlight 避免中文标点显示小框', () => {
+    render(
+      <FileEditor
+        filePath="src/main.ts"
+        fileContent="const x = [1, 2]"
+        isDirty={false}
+        viewMode="edit"
+        originalContent={null}
+        onSave={vi.fn()}
+        onContentChange={vi.fn()}
+      />
+    )
+
+    expect(mockUpdateOptions).toHaveBeenCalledWith(
+      expect.objectContaining({
+        unicodeHighlight: { nonBasicASCII: false, ambiguousCharacters: false, invisibleCharacters: false },
+      })
+    )
   })
 })
 

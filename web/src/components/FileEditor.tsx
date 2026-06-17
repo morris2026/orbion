@@ -65,6 +65,9 @@ export function FileEditor({
 
   const handleEditorMount = useCallback((editor: editor.IStandaloneCodeEditor) => {
     editorRef.current = editor
+    editor.updateOptions({
+      unicodeHighlight: { nonBasicASCII: false, ambiguousCharacters: false, invisibleCharacters: false },
+    })
   }, [])
 
   // 无文件时显示占位
