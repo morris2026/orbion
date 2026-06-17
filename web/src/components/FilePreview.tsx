@@ -19,7 +19,7 @@ export function FilePreview({ content, onClose }: FilePreviewProps) {
           ✕
         </button>
       </div>
-      <div className="flex-1 overflow-auto p-4 prose prose-sm dark:prose-invert max-w-none" style={{ fontFamily: 'Consolas, Microsoft Yahei, monospace' }}>
+      <div className="flex-1 overflow-auto p-4 prose dark:prose-invert max-w-none">
         <ReactMarkdown remarkPlugins={[remarkGfm]}>{content}</ReactMarkdown>
       </div>
     </div>
