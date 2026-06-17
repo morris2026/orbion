@@ -42,8 +42,6 @@ describe('MVP-RE-7.1: RepoList 渲染', () => {
         selectedRepo="orbion"
         changeCounts={mockChangeCounts}
         onSelectRepo={vi.fn()}
-        collapsed={false}
-        onToggleCollapse={vi.fn()}
       />
     )
 
@@ -69,8 +67,6 @@ describe('MVP-RE-7.2: RepoList 选中仓库', () => {
         selectedRepo="orbion"
         changeCounts={mockChangeCounts}
         onSelectRepo={onSelectRepo}
-        collapsed={false}
-        onToggleCollapse={vi.fn()}
       />
     )
 
@@ -83,62 +79,8 @@ describe('MVP-RE-7.2: RepoList 选中仓库', () => {
   })
 })
 
-describe('MVP-RE-7.3: RepoList 折叠', () => {
-  it('点击仓库列表标题行 → onToggleCollapse 回调被调用', async () => {
-    const user = userEvent.setup()
-    const onToggleCollapse = vi.fn()
-    render(
-      <RepoList
-        repos={mockRepos}
-        selectedRepo="orbion"
-        changeCounts={mockChangeCounts}
-        onSelectRepo={vi.fn()}
-        collapsed={false}
-        onToggleCollapse={onToggleCollapse}
-      />
-    )
-
-    // 点击标题行（包含 ChevronDown 图标和"仓库列表"文字）
-    await user.click(screen.getByText('仓库列表'))
-    expect(onToggleCollapse).toHaveBeenCalled()
-  })
-
-  it('折叠时显示 ChevronRight，仓库列表隐藏；展开时显示 ChevronDown', () => {
-    const { rerender } = render(
-      <RepoList
-        repos={mockRepos}
-        selectedRepo="orbion"
-        changeCounts={mockChangeCounts}
-        onSelectRepo={vi.fn()}
-        collapsed={true}
-        onToggleCollapse={vi.fn()}
-      />
-    )
-
-    // 折叠状态：ChevronRight，仓库列表不可见
-    expect(document.querySelector('.lucide-chevron-right')).toBeInTheDocument()
-    expect(screen.queryByText('orbion')).not.toBeInTheDocument()
-
-    // 重新渲染为展开状态
-    rerender(
-      <RepoList
-        repos={mockRepos}
-        selectedRepo="orbion"
-        changeCounts={mockChangeCounts}
-        onSelectRepo={vi.fn()}
-        collapsed={false}
-        onToggleCollapse={vi.fn()}
-      />
-    )
-
-    // 展开状态：ChevronDown，仓库列表可见
-    expect(document.querySelector('.lucide-chevron-down')).toBeInTheDocument()
-    expect(screen.getByText('orbion')).toBeInTheDocument()
-  })
-})
-
-describe('MVP-RE-7.3a: 拖拽调高', () => {
-  it('拖拽分隔条 → 上栏高度增加，下栏高度随之调整', () => {
+describe('MVP-RE-7.3: 仓库列表高度自适应', () => {
+  it('仓库列表容器使用 rem 单位的 maxHeight，随根字号缩放', () => {
     render(
       <SourceControlPanel
         repos={mockRepos}
@@ -153,25 +95,11 @@ describe('MVP-RE-7.3a: 拖拽调高', () => {
       />
     )
 
-    const separator = screen.getByTestId('sc-separator')
-    const topPanel = screen.getByTestId('sc-top-panel')
-    const bottomPanel = screen.getByTestId('repo-status').parentElement!
-
-    // 默认两行高度 60px
-    expect(topPanel).toHaveStyle({ height: '60px' })
-
-    // 拖拽：mouseDown + mouseMove(向下50px) + mouseUp
-    fireEvent.mouseDown(separator, { clientY: 100 })
-    fireEvent.mouseMove(document, { clientY: 150 })
-    fireEvent.mouseUp(document)
-
-    // 上栏高度增加 50px
-    expect(topPanel).toHaveStyle({ height: '110px' })
-    // 下栏仍存在（flex-1 自动调整）
-    expect(bottomPanel).toHaveClass('flex-1')
+    const repoContainer = screen.getByTestId('repo-list').parentElement!
+    expect(repoContainer).toHaveStyle({ maxHeight: '8.75rem' })
   })
 
-  it('向上拖拽低于最小值 → 上栏高度截断为 50px', () => {
+  it('仓库列表容器可滚动', () => {
     render(
       <SourceControlPanel
         repos={mockRepos}
@@ -186,52 +114,11 @@ describe('MVP-RE-7.3a: 拖拽调高', () => {
       />
     )
 
-    const separator = screen.getByTestId('sc-separator')
-    const topPanel = screen.getByTestId('sc-top-panel')
-
-    // 初始 60px，向上拖 200px → 理论 -140px，截断为 50px
-    fireEvent.mouseDown(separator, { clientY: 100 })
-    fireEvent.mouseMove(document, { clientY: -100 })
-    fireEvent.mouseUp(document)
-
-    expect(topPanel).toHaveStyle({ height: '50px' })
+    const repoContainer = screen.getByTestId('repo-list').parentElement!
+    expect(repoContainer).toHaveClass('overflow-auto')
   })
 
-  it('向下拖拽超过上限 → 上栏高度被截断', () => {
-    const { container } = render(
-      <div style={{ height: '300px' }}>
-        <SourceControlPanel
-          repos={mockRepos}
-          selectedRepo="orbion"
-          gitStatus={{ staged: mockStaged, changes: mockChanges }}
-          changeCounts={mockChangeCounts}
-          onSelectRepo={vi.fn()}
-          onStage={vi.fn()}
-          onUnstage={vi.fn()}
-          onCommit={vi.fn()}
-          onFileSelect={vi.fn()}
-        />
-      </div>
-    )
-
-    const separator = screen.getByTestId('sc-separator')
-    const topPanel = screen.getByTestId('sc-top-panel')
-    const scPanel = container.querySelector('[data-testid="source-control-panel"]') as HTMLElement
-
-    // mock clientHeight 为 300（jsdom 默认为 0）
-    vi.spyOn(scPanel, 'clientHeight', 'get').mockReturnValue(300)
-
-    // 初始 60px，向下拖 200px → 理论 260px，上限 200px，截断为 200px
-    fireEvent.mouseDown(separator, { clientY: 100 })
-    fireEvent.mouseMove(document, { clientY: 300 })
-    fireEvent.mouseUp(document)
-
-    // 上限 = 300 - 100 = 200，所以 260 被截断为 200
-    expect(topPanel).toHaveStyle({ height: '200px' })
-  })
-
-  it('仓库列表折叠时拖拽分隔条 → 高度不变', async () => {
-    const user = userEvent.setup()
+  it('无拖拽分隔条', () => {
     render(
       <SourceControlPanel
         repos={mockRepos}
@@ -246,18 +133,7 @@ describe('MVP-RE-7.3a: 拖拽调高', () => {
       />
     )
 
-    const separator = screen.getByTestId('sc-separator')
-    const topPanel = screen.getByTestId('sc-top-panel')
-
-    // 折叠仓库列表
-    await user.click(screen.getByText('仓库列表'))
-
-    // 折叠后拖拽：高度应保持 auto，不受拖拽影响
-    fireEvent.mouseDown(separator, { clientY: 100 })
-    fireEvent.mouseMove(document, { clientY: 200 })
-    fireEvent.mouseUp(document)
-
-    expect(topPanel).toHaveStyle({ height: 'auto' })
+    expect(screen.queryByTestId('sc-separator')).not.toBeInTheDocument()
   })
 })
 
