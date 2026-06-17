@@ -3,6 +3,7 @@ import { Editor, DiffEditor } from '@monaco-editor/react'
 import { Group, Panel, Separator } from 'react-resizable-panels'
 import { FilePreview } from '@/components/FilePreview'
 import { Button } from '@/components/ui/button'
+import { Code, Eye, ArrowLeftRight, Save } from 'lucide-react'
 import type { editor } from 'monaco-editor'
 import type { ViewMode } from '@/hooks/useFileTab'
 
@@ -28,19 +29,31 @@ export function FileEditor({
   onContentChange,
   monacoError = false,
 }: FileEditorProps) {
-  const [showPreview, setShowPreview] = useState(false)
+  const isMarkdown = filePath?.endsWith('.md') ?? false
+  const [showEditor, setShowEditor] = useState(!isMarkdown)
+  const [showPreview, setShowPreview] = useState(isMarkdown)
   const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null)
   const [previewContent, setPreviewContent] = useState(fileContent ?? '')
   const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  // 切换文件时关闭预览
+  // 切换文件时重置：md 默认预览，其他默认编辑；Monaco 失败时 md 也默认编辑
   useEffect(() => {
-    setShowPreview(false)
-  }, [filePath, viewMode])
+    if (isMarkdown && !monacoError) {
+      setShowEditor(false)
+      setShowPreview(true)
+    } else {
+      setShowEditor(true)
+      setShowPreview(false)
+    }
+  }, [filePath, viewMode, isMarkdown, monacoError])
 
-  // 预览内容 debounce 300ms 跟随编辑内容
+  // 预览内容同步：编辑器可见时 debounce 300ms，否则直接同步
   useEffect(() => {
     if (!showPreview) return
+    if (!showEditor) {
+      setPreviewContent(fileContent ?? '')
+      return
+    }
     if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current)
     debounceTimerRef.current = setTimeout(() => {
       setPreviewContent(fileContent ?? '')
@@ -48,7 +61,7 @@ export function FileEditor({
     return () => {
       if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current)
     }
-  }, [fileContent, showPreview])
+  }, [fileContent, showPreview, showEditor])
 
   // Ctrl+S 快捷键
   const handleKeyDown = useCallback(
@@ -60,8 +73,6 @@ export function FileEditor({
     },
     [onSave]
   )
-
-  const isMarkdown = filePath?.endsWith('.md') ?? false
 
   const handleEditorMount = useCallback((editor: editor.IStandaloneCodeEditor) => {
     editorRef.current = editor
@@ -121,6 +132,21 @@ export function FileEditor({
     )
   }
 
+  const canHideEditor = showPreview
+  const canHidePreview = showEditor
+
+  const handleToggle = () => {
+    if (showEditor && showPreview) {
+      setShowEditor(false)
+    } else if (showEditor) {
+      setShowEditor(false)
+      setShowPreview(true)
+    } else {
+      setShowEditor(true)
+      setShowPreview(false)
+    }
+  }
+
   return (
     <div className="h-full flex flex-col" data-testid="file-editor-area" onKeyDown={handleKeyDown} tabIndex={0}>
       {/* Tab 栏 + 工具栏 */}
@@ -135,15 +161,43 @@ export function FileEditor({
         </div>
         <div className="flex items-center gap-1">
           {isMarkdown && !monacoError && (
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-7 text-xs"
-              onClick={() => setShowPreview(!showPreview)}
-              aria-label={showPreview ? '关闭预览' : '预览'}
-            >
-              {showPreview ? '关闭预览' : '预览'}
-            </Button>
+            <>
+              <Button
+                variant="ghost"
+                size="sm"
+                className={`h-7 text-xs ${showEditor ? 'bg-primary/10 text-primary' : ''}`}
+                onClick={() => setShowEditor(!showEditor)}
+                disabled={!canHideEditor}
+                aria-label="编辑"
+                data-testid="btn-editor"
+              >
+                <Code className="h-3.5 w-3.5" />
+                编辑
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                className={`h-7 text-xs ${showPreview ? 'bg-primary/10 text-primary' : ''}`}
+                onClick={() => setShowPreview(!showPreview)}
+                disabled={!canHidePreview}
+                aria-label="预览"
+                data-testid="btn-preview"
+              >
+                <Eye className="h-3.5 w-3.5" />
+                预览
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 text-xs"
+                onClick={handleToggle}
+                aria-label="切换编辑/预览"
+                data-testid="btn-toggle"
+              >
+                <ArrowLeftRight className="h-3.5 w-3.5" />
+                切换
+              </Button>
+            </>
           )}
           <Button
             variant="ghost"
@@ -153,22 +207,27 @@ export function FileEditor({
             disabled={!isDirty}
             aria-label="保存"
           >
+            <Save className="h-3.5 w-3.5" />
             保存
           </Button>
         </div>
       </div>
 
-      {/* 编辑区 + 预览区 */}
-      {showPreview && isMarkdown && !monacoError ? (
+      {/* 内容区 */}
+      {showEditor && showPreview ? (
         <Group orientation="horizontal" className="flex-1 min-h-0" data-testid="editor-preview-group">
           <Panel id="editor-panel" minSize="20%" defaultSize="50%" className="overflow-hidden">
             {renderEditor()}
           </Panel>
           <Separator className="w-px bg-border" />
           <Panel id="preview-panel" minSize="20%" defaultSize="50%" className="overflow-hidden">
-            <FilePreview content={previewContent} onClose={() => setShowPreview(false)} />
+            <FilePreview content={previewContent} />
           </Panel>
         </Group>
+      ) : showPreview ? (
+        <div className="flex-1 min-h-0">
+          <FilePreview content={previewContent} />
+        </div>
       ) : (
         <div className="flex-1 min-h-0">
           {renderEditor()}

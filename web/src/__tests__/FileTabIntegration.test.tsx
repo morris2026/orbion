@@ -257,7 +257,7 @@ describe('MVP-RE-8.4: Explorer 点击文件 → 主区域显示', () => {
     vi.restoreAllMocks()
   })
 
-  it('在 ExplorerPanel 双击文件 → FileEditor 显示文件内容', async () => {
+  it('在 ExplorerPanel 双击 .md 文件 → FileEditor 显示预览', async () => {
     const user = userEvent.setup()
     vi.spyOn(apiModule, 'apiGet').mockImplementation((url: string) => {
       if (url === '/projects/proj-1/repos') return Promise.resolve(mockRepos)
@@ -276,13 +276,12 @@ describe('MVP-RE-8.4: Explorer 点击文件 → 主区域显示', () => {
       expect(screen.getByText('README.md')).toBeInTheDocument()
     })
 
-    // 双击文件
+    // 双击 .md 文件
     await user.dblClick(screen.getByText('README.md'))
 
-    // FileEditor 显示文件内容
+    // .md 文件默认显示预览
     await waitFor(() => {
-      const editor = screen.getByTestId('monaco-editor')
-      expect(editor).toHaveValue('# Hello')
+      expect(screen.getByTestId('file-preview')).toBeInTheDocument()
     })
   })
 })
@@ -335,7 +334,7 @@ describe('MVP-RE-8.6: 编辑+预览左右分栏', () => {
     vi.restoreAllMocks()
   })
 
-  it('打开 .md 文件并打开预览 → 编辑区在左，预览区在右', async () => {
+  it('打开 .md 文件并点击编辑 → 编辑区和预览区同时显示', async () => {
     const user = userEvent.setup()
     vi.spyOn(apiModule, 'apiGet').mockImplementation((url: string) => {
       if (url === '/projects/proj-1/repos') return Promise.resolve(mockRepos)
@@ -357,19 +356,16 @@ describe('MVP-RE-8.6: 编辑+预览左右分栏', () => {
     // 双击打开 .md 文件
     await user.dblClick(screen.getByText('README.md'))
 
-    // 等待编辑器渲染
+    // .md 文件默认只显示预览
     await waitFor(() => {
-      expect(screen.getByTestId('monaco-editor')).toHaveValue('# Hello')
+      expect(screen.getByTestId('file-preview')).toBeInTheDocument()
     })
 
-    // 点击预览按钮
-    await user.click(screen.getByRole('button', { name: /预览/i }))
+    // 点击编辑按钮
+    await user.click(screen.getByTestId('btn-editor'))
 
-    // 预览区出现
-    expect(screen.getByTestId('file-preview')).toBeInTheDocument()
-    // 编辑区仍在
+    // 编辑区和预览区同时显示
     expect(screen.getByTestId('monaco-editor')).toBeInTheDocument()
-    // 编辑区和预览区使用 react-resizable-panels 分栏（可拖拽调整宽度）
-    // 具体拖拽行为在步骤9 E2E 中验证
+    expect(screen.getByTestId('file-preview')).toBeInTheDocument()
   })
 })
