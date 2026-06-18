@@ -102,7 +102,7 @@ export function useWorkspace(options?: UseWorkspaceOptions) {
   const [messages, setMessages] = useState<MessageResponse[]>(init?.messages ?? [])
   const [plans, setPlans] = useState<PlanResponse[]>(init?.plans ?? [])
   const [outputs, setOutputs] = useState<OutputResponse[]>(init?.outputs ?? [])
-  const [selectedRightTab, setSelectedRightTab] = useState<RightTab>(init?.selectedRightTab ?? 'file')
+  const [selectedRightTab, setSelectedRightTab] = useState<RightTab>(init?.selectedRightTab ?? 'flow')
   const [fileTreeRefreshKey, setFileTreeRefreshKey] = useState(0)
 
   // SSE回调需实时读取当前projectId/threadId，但不应触发连接重建
@@ -199,7 +199,7 @@ export function useWorkspace(options?: UseWorkspaceOptions) {
       } else if (type === 'plan_proposed') {
         const event = raw as unknown as SSEPlanProposedEvent
         setPlans((prev) => [...prev, mapPlanFromSSE(event)])
-        setSelectedRightTab('plan')
+        setSelectedRightTab('flow')
       } else if (type === 'plan_approved') {
         const event = raw as unknown as SSEPlanApprovedEvent
         setPlans((prev) =>
@@ -213,7 +213,7 @@ export function useWorkspace(options?: UseWorkspaceOptions) {
       } else if (type === 'output_generated') {
         const event = raw as unknown as SSEOutputGeneratedEvent
         setOutputs((prev) => [...prev, mapOutputFromSSE(event)])
-        setSelectedRightTab('plan')
+        setSelectedRightTab('flow')
       } else if (type === 'output_approved') {
         const event = raw as unknown as SSEOutputApprovedEvent
         setOutputs((prev) =>

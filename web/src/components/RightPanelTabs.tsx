@@ -1,21 +1,14 @@
 import { FileTab } from '@/components/FileTab'
 import ExecutionPanel from '@/components/ExecutionPanel'
-import { File, ListChecks, Package, Bot } from 'lucide-react'
+import { Workflow, File } from 'lucide-react'
 import type { PlanResponse, OutputResponse } from '@/types/api'
 
-export type RightTab = 'file' | 'plan' | 'output' | 'agent'
+export type RightTab = 'flow' | 'file'
 
 const TABS: { key: RightTab; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
+  { key: 'flow', label: '流程', icon: Workflow },
   { key: 'file', label: '文件', icon: File },
-  { key: 'plan', label: '计划', icon: ListChecks },
-  { key: 'output', label: '产出', icon: Package },
-  { key: 'agent', label: 'Agent', icon: Bot },
 ]
-
-const PLACEHOLDER: Record<Exclude<RightTab, 'file' | 'plan'>, string> = {
-  output: '产出 — 后续实现',
-  agent: 'Agent — 后续实现',
-}
 
 interface RightPanelTabsProps {
   projectId: string | null
@@ -54,9 +47,7 @@ export function RightPanelTabs({
         ))}
       </div>
       <div className="flex-1 overflow-hidden">
-        {selectedTab === 'file' ? (
-          <FileTab projectId={projectId} refreshKey={fileTreeRefreshKey} />
-        ) : selectedTab === 'plan' ? (
+        {selectedTab === 'flow' ? (
           <ExecutionPanel
             plans={plans}
             outputs={outputs}
@@ -64,9 +55,7 @@ export function RightPanelTabs({
             onRejectPlan={onRejectPlan}
           />
         ) : (
-          <div className="flex items-center justify-center h-full text-sm text-muted-foreground">
-            {PLACEHOLDER[selectedTab]}
-          </div>
+          <FileTab projectId={projectId} refreshKey={fileTreeRefreshKey} />
         )}
       </div>
     </div>

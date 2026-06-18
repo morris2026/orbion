@@ -1834,7 +1834,7 @@ describe('MVP-RE-9.x: 右栏 Tab 容器', () => {
     vi.restoreAllMocks()
   })
 
-  it('MVP-RE-9.1: 显示 Tab 栏，默认选中「文件」，内容为 FileTab', () => {
+  it('MVP-RE-9.1: 显示 Tab 栏，默认选中「流程」，内容为 ExecutionPanel', () => {
     vi.spyOn(authModule, 'isAuthenticated').mockReturnValue(true)
     vi.spyOn(authModule, 'isTokenExpired').mockReturnValue(false)
     vi.spyOn(authModule, 'getIsAdmin').mockReturnValue(false)
@@ -1847,21 +1847,21 @@ describe('MVP-RE-9.x: 右栏 Tab 容器', () => {
       </MemoryRouter>
     )
 
-    // Tab 栏显示四个 Tab
+    // Tab 栏显示两个 Tab：流程、文件
+    expect(screen.getByRole('tab', { name: /流程/i })).toBeInTheDocument()
     expect(screen.getByRole('tab', { name: /文件/i })).toBeInTheDocument()
-    expect(screen.getByRole('tab', { name: /计划/i })).toBeInTheDocument()
-    expect(screen.getByRole('tab', { name: /产出/i })).toBeInTheDocument()
-    expect(screen.getByRole('tab', { name: /agent/i })).toBeInTheDocument()
+    expect(screen.queryByRole('tab', { name: /产出/i })).not.toBeInTheDocument()
+    expect(screen.queryByRole('tab', { name: /agent/i })).not.toBeInTheDocument()
 
-    // 默认选中「文件」Tab
-    const fileTab = screen.getByRole('tab', { name: /文件/i })
-    expect(fileTab).toHaveAttribute('aria-selected', 'true')
+    // 默认选中「流程」Tab
+    const flowTab = screen.getByRole('tab', { name: /流程/i })
+    expect(flowTab).toHaveAttribute('aria-selected', 'true')
 
-    // 文件 Tab 内容为 FileTab（活动栏是 FileTab 的特征元素）
-    expect(screen.getByRole('button', { name: /explorer/i })).toBeInTheDocument()
+    // 流程 Tab 内容为 ExecutionPanel
+    expect(screen.getByText('暂无执行计划')).toBeInTheDocument()
   })
 
-  it('MVP-RE-9.2: 点击「计划」Tab → Tab 切换 + ExecutionPanel', async () => {
+  it('MVP-RE-9.2: 点击「文件」Tab → Tab 切换 + FileTab', async () => {
     const user = userEvent.setup()
     vi.spyOn(authModule, 'isAuthenticated').mockReturnValue(true)
     vi.spyOn(authModule, 'isTokenExpired').mockReturnValue(false)
@@ -1875,17 +1875,17 @@ describe('MVP-RE-9.x: 右栏 Tab 容器', () => {
       </MemoryRouter>
     )
 
-    // 点击「计划」Tab
-    const planTab = screen.getByRole('tab', { name: /计划/i })
-    await user.click(planTab)
-
-    // Tab 切换到计划
-    expect(planTab).toHaveAttribute('aria-selected', 'true')
-    // 「文件」Tab 不再选中
+    // 点击「文件」Tab
     const fileTab = screen.getByRole('tab', { name: /文件/i })
-    expect(fileTab).toHaveAttribute('aria-selected', 'false')
-    // 计划 Tab 内容为 ExecutionPanel
-    expect(screen.getByText('暂无执行计划')).toBeInTheDocument()
+    await user.click(fileTab)
+
+    // Tab 切换到文件
+    expect(fileTab).toHaveAttribute('aria-selected', 'true')
+    // 「流程」Tab 不再选中
+    const flowTab = screen.getByRole('tab', { name: /流程/i })
+    expect(flowTab).toHaveAttribute('aria-selected', 'false')
+    // 文件 Tab 内容为 FileTab（活动栏是 FileTab 的特征元素）
+    expect(screen.getByRole('button', { name: /explorer/i })).toBeInTheDocument()
   })
 
   it('MVP-RE-9.3: 右栏显示 RightPanelTabs 而非独立 ExecutionPanel', () => {
@@ -1902,9 +1902,10 @@ describe('MVP-RE-9.x: 右栏 Tab 容器', () => {
     )
 
     // 右栏存在 Tab 栏（RightPanelTabs 的特征）
+    expect(screen.getByRole('tab', { name: /流程/i })).toBeInTheDocument()
     expect(screen.getByRole('tab', { name: /文件/i })).toBeInTheDocument()
 
-    // 默认选中文件 Tab，ExecutionPanel 内容不可见
-    expect(screen.queryByText('暂无执行计划')).not.toBeInTheDocument()
+    // 默认选中流程 Tab，FileTab 内容（活动栏）不可见
+    expect(screen.queryByRole('button', { name: /explorer/i })).not.toBeInTheDocument()
   })
 })
