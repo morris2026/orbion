@@ -131,3 +131,32 @@ CREATE TABLE task_outputs (
 
 CREATE INDEX idx_task_outputs_project ON task_outputs (project_id, plan_id);
 CREATE INDEX idx_task_outputs_status  ON task_outputs (project_id, status);
+
+-- 9. worktrees — git worktree 生命周期元数据
+-- 详见 docs/specs/1.10-mvp-git-worktree-model.md §11
+CREATE TABLE worktrees (
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    project_id      UUID        NOT NULL REFERENCES projects(id),
+    repo_name       VARCHAR(128) NOT NULL,
+    worktree_type   VARCHAR(16) NOT NULL CHECK (worktree_type IN ('main', 'task')),
+    branch_name     VARCHAR(256) NOT NULL,
+    path            VARCHAR(1024) NOT NULL,  -- worktree 在文件系统的绝对路径
+    status          VARCHAR(16) NOT NULL DEFAULT 'active'
+        CHECK (status IN ('active', 'conflicting', 'archived')),
+    created_by      UUID        NOT NULL,    -- 创建者 user_id（task 类型为系统时存系统占位 UUID）
+    task_id         UUID        NULL,        -- task 类型关联的任务 ID；main 类型为 NULL
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX idx_worktrees_project_type ON worktrees (project_id, worktree_type);
+CREATE INDEX idx_worktrees_task         ON worktrees (task_id) WHERE task_id IS NOT NULL;
+
+-- 活跃 worktree 唯一约束：DB 层兜底防并发竞态
+-- 同项目同分支同时只能有一个非 archived 的 worktree；archived 记录保留多条用于审计
+CREATE UNIQUE INDEX uq_worktrees_active_branch
+    ON worktrees (project_id, branch_name)
+    WHERE status != 'archived';
+CREATE UNIQUE INDEX uq_worktrees_active_task
+    ON worktrees (task_id)
+    WHERE task_id IS NOT NULL AND status != 'archived';

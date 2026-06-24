@@ -614,9 +614,10 @@ test.describe('MVP-RE-9.x: 右栏文件编辑器 E2E', () => {
     await page.goto('/workspace')
     await page.getByText(project.name).click()
 
-    // 验证右栏 Tab 栏存在
+    // 验证右栏 Tab 栏存在；默认是"流程"tab，需切换到"文件"
     const fileTab = page.getByRole('tab', { name: /文件/ })
     await expect(fileTab).toBeVisible()
+    await fileTab.click()
     await expect(fileTab).toHaveAttribute('aria-selected', 'true')
 
     // 验证文件树中出现 hello.md
@@ -687,6 +688,11 @@ test.describe('MVP-RE-9.x: 右栏文件编辑器 E2E', () => {
     // 导航到 workspace 并选中项目
     await page.goto('/workspace')
     await page.getByText(project.name).click()
+
+    // 右栏默认是"流程"tab，ActivityBar 在"文件"tab 内，需先切换
+    const fileTab = page.getByRole('tab', { name: /文件/ })
+    await expect(fileTab).toBeVisible()
+    await fileTab.click()
 
     // 切换到 Source Control 活动栏
     const scBtn = page.getByRole('button', { name: /source.?control/i })

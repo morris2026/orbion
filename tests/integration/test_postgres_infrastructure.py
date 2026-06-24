@@ -22,7 +22,7 @@ async def test_postgres_migration_creates_tables_and_indexes() -> None:
     conn = await asyncpg.connect(settings.postgres.url)
     try:
         await conn.execute(
-            "DROP TABLE IF EXISTS task_outputs, execution_plans, thread_messages, "
+            "DROP TABLE IF EXISTS worktrees, task_outputs, execution_plans, thread_messages, "
             "threads, project_members, projects, users, event_log CASCADE"
         )
 
@@ -41,6 +41,7 @@ async def test_postgres_migration_creates_tables_and_indexes() -> None:
             "thread_messages",
             "execution_plans",
             "task_outputs",
+            "worktrees",
         }
         assert expected_tables <= table_names, f"缺少表: {expected_tables - table_names}"
 
@@ -60,6 +61,10 @@ async def test_postgres_migration_creates_tables_and_indexes() -> None:
             "idx_execution_plans_status",
             "idx_task_outputs_project",
             "idx_task_outputs_status",
+            "idx_worktrees_project_type",
+            "idx_worktrees_task",
+            "uq_worktrees_active_branch",
+            "uq_worktrees_active_task",
         }
         assert expected_indexes <= index_names, f"缺少索引: {expected_indexes - index_names}"
 
@@ -75,5 +80,34 @@ async def test_postgres_migration_creates_tables_and_indexes() -> None:
         columns = await conn.fetch("SELECT column_name FROM information_schema.columns WHERE table_name = 'projects'")
         column_names = {row["column_name"] for row in columns}
         assert "default_thread_id" in column_names
+
+        # 验证 worktrees 表字段齐全（GW-1.1）
+        wt_columns = await conn.fetch(
+            "SELECT column_name FROM information_schema.columns WHERE table_name = 'worktrees'"
+        )
+        wt_column_names = {row["column_name"] for row in wt_columns}
+        expected_wt_columns = {
+            "id",
+            "project_id",
+            "repo_name",
+            "worktree_type",
+            "branch_name",
+            "path",
+            "status",
+            "created_by",
+            "task_id",
+            "created_at",
+            "updated_at",
+        }
+        assert expected_wt_columns <= wt_column_names, f"缺少 worktrees 字段: {expected_wt_columns - wt_column_names}"
+
+        # 验证 worktrees CHECK 约束
+        wt_checks = await conn.fetch(
+            "SELECT pg_get_constraintdef(oid) AS def FROM pg_constraint "
+            "WHERE conrelid = 'worktrees'::regclass AND contype = 'c'"
+        )
+        wt_check_defs = {row["def"] for row in wt_checks}
+        assert any("worktree_type" in c and "main" in c for c in wt_check_defs), "缺少 worktree_type CHECK"
+        assert any("status" in c and "active" in c for c in wt_check_defs), "缺少 status CHECK"
     finally:
         await conn.close()

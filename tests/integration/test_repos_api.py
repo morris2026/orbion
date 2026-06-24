@@ -1,5 +1,8 @@
 """仓库管理 API 集成测试 — MVP-RE-1.3, 1.4, 1.5, 1.6, 1.7, 1.8"""
 
+import subprocess
+from pathlib import Path
+
 import pytest
 from httpx import AsyncClient
 
@@ -9,6 +12,28 @@ from app.hub.auth.service import create_access_token, hash_password
 from app.hub.events.bus import InProcessEventBus
 
 pytestmark = pytest.mark.asyncio
+
+
+@pytest.fixture(scope="session")
+def upstream_bare_repo(tmp_path_factory: pytest.TempPathFactory) -> Path:
+    """本地 bare 仓库作为 clone 源，替代 github.com 避免网络抖动
+
+    Why: 直接 clone github.com 在 WSL2 GnuTLS 下偶发 TLS 中断导致 flaky。
+    本 fixture 仍走 RepoService.add_repo 的 subprocess git clone 代码路径，
+    仅把远端换成本地 file:// URL，验证逻辑等价。
+    """
+    src = tmp_path_factory.mktemp("src")
+    subprocess.run(["git", "init", "-b", "main", str(src)], check=True, capture_output=True)
+    (src / "README.md").write_text("# upstream\n")
+    subprocess.run(["git", "-C", str(src), "add", "README.md"], check=True, capture_output=True)
+    subprocess.run(
+        ["git", "-C", str(src), "-c", "user.email=u@orbion", "-c", "user.name=u", "commit", "-m", "init"],
+        check=True,
+        capture_output=True,
+    )
+    bare = tmp_path_factory.mktemp("upstream") / "Hello-World.git"
+    subprocess.run(["git", "clone", "--bare", str(src), str(bare)], check=True, capture_output=True)
+    return bare
 
 
 async def _create_user(provider: UserRepositoryProvider, username: str, is_admin: bool = False) -> dict[str, str]:
@@ -39,14 +64,20 @@ def _auth(token: str) -> dict[str, str]:
 
 class TestMvpRe1ReposApi:
     async def test_mvp_re_1_3_add_repo_by_url(
-        self, client: AsyncClient, user_repo_provider: UserRepositoryProvider, event_bus: InProcessEventBus
+        self,
+        client: AsyncClient,
+        user_repo_provider: UserRepositoryProvider,
+        event_bus: InProcessEventBus,
+        upstream_bare_repo: Path,
     ) -> None:
         """MVP-RE-1.3：通过 URL 添加仓库（git clone）"""
         user = await _create_user(user_repo_provider, "repouser1")
         project_id = await _create_project(client, user["token"], event_bus)
+        # 用本地 file:// bare 仓库替代 github.com，消除网络抖动
+        upstream_url = f"file://{upstream_bare_repo}"
         resp = await client.post(
             f"/projects/{project_id}/repos",
-            json={"url": "https://github.com/octocat/Hello-World.git", "name": "hello-world"},
+            json={"url": upstream_url, "name": "hello-world"},
             headers=_auth(user["token"]),
         )
         assert resp.status_code == 201
