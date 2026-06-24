@@ -44,21 +44,36 @@ class MergeResult:
 class GitCommandService:
     """git 二进制命令封装
 
-    所有方法均为同步阻塞调用——git 操作通常毫秒级，且上层 WorktreeService 会通过
-    asyncio.to_thread 调度并在全局 _global_git_lock 内串行化（§5.4）。
+    所有方法均为同步阻塞调用——git 操作通常毫秒级。调用方（WorktreeService）
+    通过 asyncio.to_thread 调度并在全局 _global_git_lock 内串行化（§5.4），
+    避免 subprocess 阻塞 event loop。
     """
+
+    # git 命令超时（秒）。Why：防止 ssh 挂起、gc 慢等导致全局锁被无限期持有
+    _CMD_TIMEOUT = 30
 
     def _run(self, args: list[str], cwd: str) -> subprocess.CompletedProcess[str]:
         """执行 git 命令，返回 CompletedProcess（不抛异常，由调用方判断 returncode）
 
         Why 不抛：本层是命令封装，错误语义由调用方解释（冲突 vs 真错误）。
+        超时返回 returncode=124 + error 信息，由调用方作为失败处理。
         """
-        return subprocess.run(
-            ["git", *args],
-            cwd=cwd,
-            capture_output=True,
-            text=True,
-        )
+        try:
+            return subprocess.run(
+                ["git", *args],
+                cwd=cwd,
+                capture_output=True,
+                text=True,
+                timeout=self._CMD_TIMEOUT,
+            )
+        except subprocess.TimeoutExpired as e:
+            # 构造一个失败的 CompletedProcess 返回，保持调用方处理路径统一
+            return subprocess.CompletedProcess(
+                args=["git", *args],
+                returncode=124,
+                stdout="",
+                stderr=f"git 命令超时（{self._CMD_TIMEOUT}s）: {e}",
+            )
 
     def worktree_add(self, repo_path: str, worktree_path: str, branch_name: str, base_ref: str) -> WorktreeResult:
         """git worktree add <worktree_path> -b <branch_name> <base_ref>

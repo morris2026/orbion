@@ -633,8 +633,10 @@ test.describe('MVP-RE-9.x: 右栏文件编辑器 E2E', () => {
     await editBtn.click()
 
     // 验证 Monaco 编辑器加载（Monaco 渲染后编辑区域有 textarea）
+    // Why 30s：全量 E2E 并发跑时 Monaco 首次加载可能 >10s（worker 资源竞争），
+    // 10s timeout 在并发场景下 flaky。30s 覆盖最坏情况，单跑仍快速。
     const editorArea = page.locator('.monaco-editor')
-    await expect(editorArea).toBeVisible({ timeout: 10000 })
+    await expect(editorArea).toBeVisible({ timeout: 30000 })
 
     // 保存后验证 git status 有变更
     // 直接通过 API 修改文件内容模拟编辑保存
@@ -706,7 +708,7 @@ test.describe('MVP-RE-9.x: 右栏文件编辑器 E2E', () => {
     // 点击变更文件 → 主区域切换为 DiffEditor
     await changeFile.click()
     const diffEditor = page.locator('.monaco-diff-editor')
-    await expect(diffEditor).toBeVisible({ timeout: 10000 })
+    await expect(diffEditor).toBeVisible({ timeout: 30000 })
 
     // 通过 API stage 文件
     const stageResp = await page.request.post(
