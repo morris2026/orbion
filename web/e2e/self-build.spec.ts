@@ -965,3 +965,134 @@ test.describe('GW-3.x: 三方合并 E2E', () => {
     expect((await resp.json()).content).toContain('# v2')
   })
 })
+
+test.describe('GW-7.x: worktree 选择器 + file tab 集成', () => {
+  test.beforeAll(async ({ request }) => {
+    const adminResp = await request.post('/auth/register', {
+      data: { username: ADMIN.username, password: ADMIN.password, display_name: ADMIN.displayName },
+    })
+    if (adminResp.status() === 409) {
+      const loginResp = await request.post('/auth/login', {
+        data: { username: ADMIN.username, password: ADMIN.password },
+      })
+      expect(loginResp.ok()).toBeTruthy()
+      adminToken = (await loginResp.json()).access_token
+    } else {
+      expect(adminResp.ok()).toBeTruthy()
+      const adminData = await adminResp.json()
+      if (adminData.status === 'pending') {
+        throw new Error('admin注册返回pending，DB有残留数据未清理')
+      }
+      adminToken = adminData.access_token
+    }
+  })
+
+  test.beforeEach(async ({ page }) => {
+    await loginAs(page, ADMIN.username, ADMIN.password)
+  })
+
+  test('GW-7.1: worktree 选择器下拉显示 main + task worktree', async ({ page }) => {
+    const project = await createProject(page, '7_1')
+    const headers = await authHeaders(page)
+
+    // 添加仓库
+    await page.request.post(`/projects/${project.id}/repos`, {
+      data: { name: 'wt-repo' },
+      headers,
+    })
+
+    // Seed main worktree + 2 task worktree（带重试，防全量跑时 ECONNRESET）
+    async function seedWt(body: Record<string, string>) {
+      for (let attempt = 0; attempt < 5; attempt++) {
+        try {
+          const resp = await page.request.post('/test/seed-worktree', { data: body, headers, timeout: 15000 })
+          if (resp.ok()) return
+        } catch { /* retry */ }
+        await page.waitForTimeout(1000)
+      }
+      throw new Error(`seed-worktree failed after 5 attempts: ${JSON.stringify(body)}`)
+    }
+    await seedWt({ project_id: project.id, worktree_type: 'main', branch_name: 'main', path: '/tmp/main', created_by: '00000000-0000-0000-0000-000000000001' })
+    await seedWt({ project_id: project.id, worktree_type: 'task', branch_name: 'task/task_001', path: '/tmp/task_001', created_by: '00000000-0000-0000-0000-000000000001', task_id: '00000000-0000-0000-0000-000000000002' })
+    await seedWt({ project_id: project.id, worktree_type: 'task', branch_name: 'task/task_002', path: '/tmp/task_002', created_by: '00000000-0000-0000-0000-000000000001', task_id: '00000000-0000-0000-0000-000000000003' })
+
+    // 导航到 workspace 并选中项目
+    await page.goto('/workspace')
+    await page.getByText(project.name).click()
+    const fileTab = page.getByRole('tab', { name: /文件/ })
+    await fileTab.click()
+
+    // 验证 worktree 选择器下拉存在
+    const selector = page.getByTestId('worktree-selector')
+    await expect(selector).toBeVisible({ timeout: 10000 })
+
+    // 点击下拉，验证 3 个选项
+    await selector.click()
+    const options = page.locator('[data-testid="worktree-option"]')
+    await expect(options).toHaveCount(3)
+  })
+
+  test('GW-7.3: main worktree 只读模式', async ({ page }) => {
+    const project = await createProject(page, '7_3')
+    const headers = await authHeaders(page)
+
+    await page.request.post(`/projects/${project.id}/repos`, {
+      data: { name: 'ro-repo' },
+      headers,
+    })
+    // 创建文件 + seed main worktree
+    await page.request.put(
+      `/projects/${project.id}/repos/ro-repo/files?path=hello.py`,
+      { data: { content: '# hello\n' }, headers },
+    )
+    await page.request.post('/test/seed-worktree', {
+      data: { project_id: project.id, worktree_type: 'main', branch_name: 'main', path: '/tmp/ro_main', created_by: '00000000-0000-0000-0000-000000000001' },
+      headers,
+    })
+
+    await page.goto('/workspace')
+    await page.getByText(project.name).click()
+    const fileTab = page.getByRole('tab', { name: /文件/ })
+    await fileTab.click()
+
+    // 等待 worktree 选择器加载（main 默认选中 → 只读模式）
+    const selector = page.getByTestId('worktree-selector')
+    await expect(selector).toBeVisible({ timeout: 10000 })
+
+    // 编辑器顶部应显示只读标识
+    const readOnlyBadge = page.getByTestId('readonly-badge')
+    await expect(readOnlyBadge).toBeVisible({ timeout: 5000 })
+
+    // 打开文件后保存按钮应禁用
+    await page.getByText('hello.py').dblclick()
+    const saveBtn = page.getByRole('button', { name: /保存/ })
+    await expect(saveBtn).toBeDisabled({ timeout: 10000 })
+  })
+
+  test('GW-7.4: 无"新建 worktree"按钮', async ({ page }) => {
+    const project = await createProject(page, '7_4')
+    const headers = await authHeaders(page)
+
+    await page.request.post(`/projects/${project.id}/repos`, {
+      data: { name: 'no-create-repo' },
+      headers,
+    })
+    await page.request.post('/test/seed-worktree', {
+      data: { project_id: project.id, worktree_type: 'main', branch_name: 'main', path: '/tmp/nc_main', created_by: '00000000-0000-0000-0000-000000000001' },
+      headers,
+    })
+
+    await page.goto('/workspace')
+    await page.getByText(project.name).click()
+    const fileTab = page.getByRole('tab', { name: /文件/ })
+    await fileTab.click()
+
+    // 验证 worktree 选择器存在
+    const selector = page.getByTestId('worktree-selector')
+    await expect(selector).toBeVisible({ timeout: 10000 })
+
+    // 验证无"新建 worktree"按钮
+    const newWorktreeBtn = page.getByRole('button', { name: /新建.*worktree|创建.*worktree/i })
+    await expect(newWorktreeBtn).toHaveCount(0)
+  })
+})

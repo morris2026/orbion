@@ -149,3 +149,15 @@ export interface CreateCredentialRequest {
   name: string
   token: string
 }
+export interface WorktreeInfo {
+  id: string
+  project_id: string
+  repo_name: string
+  worktree_type: 'main' | 'task'
+  branch_name: string
+  path: string
+  status: string
+  created_by: string
+  task_id: string | null
+  conflict_regen_count: number
+}

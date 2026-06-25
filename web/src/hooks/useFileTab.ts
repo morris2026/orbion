@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { apiGet, apiPost, apiPutRaw } from '@/lib/api'
-import type { FileNode, RepoInfo, GitStatusResult } from '@/types/api'
+import type { FileNode, RepoInfo, GitStatusResult, WorktreeInfo } from '@/types/api'
 
 export type ViewMode = 'edit' | 'diff'
 
@@ -23,6 +23,8 @@ export interface UseFileTabOptions {
 export function useFileTab({ projectId, refreshKey }: UseFileTabOptions) {
   const [repos, setRepos] = useState<RepoInfo[]>([])
   const [selectedRepo, setSelectedRepo] = useState<string | null>(null)
+  const [worktrees, setWorktrees] = useState<WorktreeInfo[]>([])
+  const [selectedWorktreeId, setSelectedWorktreeId] = useState<string | null>(null)
   const [fileTree, setFileTree] = useState<FileNode[]>([])
   const [selectedFile, setSelectedFile] = useState<string | null>(null)
   const [fileContent, setFileContent] = useState<string | null>(null)
@@ -55,7 +57,40 @@ export function useFileTab({ projectId, refreshKey }: UseFileTabOptions) {
     return { [selectedRepo]: count }
   }, [selectedRepo, gitStatus])
 
-  // 加载仓库列表
+  // main worktree 只读（设计 §10.1：main 对所有用户只读）
+  // 无 worktree 数据时不强制只读（兼容旧项目无 worktree 的场景）
+  const selectedWorktree = worktrees.find((w) => w.id === selectedWorktreeId) ?? null
+  const isReadOnly = worktrees.length > 0 && selectedWorktree?.worktree_type === 'main'
+
+  const selectWorktree = useCallback((id: string) => {
+    setSelectedWorktreeId(id)
+    setSelectedFile(null)
+    setFileContent(null)
+    setOriginalContent(null)
+    fileMtimeRef.current = null
+    loadedAtRef.current = null
+    setStaleAcknowledged(false)
+    setConflictInfo(null)
+    setViewMode('edit')
+  }, [])
+
+  // 当前选中的 worktree 的 API 上下文路径
+  // main worktree → 用旧 repo 端点（与非 bare 仓库兼容）
+  // task worktree → 用 worktree 上下文端点（§13.2）
+  const fileApiBase = useMemo(() => {
+    if (!projectId) return null
+    // task worktree → 用 worktree 上下文端点
+    if (selectedWorktree?.worktree_type === 'task' && selectedWorktreeId) {
+      return `/projects/${projectId}/worktrees/${selectedWorktreeId}`
+    }
+    // main worktree 或无 worktree 数据 → 旧 repo 端点（兼容旧项目）
+    if (selectedRepo) {
+      return `/projects/${projectId}/repos/${selectedRepo}`
+    }
+    return null
+  }, [projectId, selectedWorktree, selectedWorktreeId, selectedRepo])
+
+  // 加载仓库列表 + worktree 列表
   useEffect(() => {
     if (!projectId) {
       setRepos([])
@@ -66,6 +101,8 @@ export function useFileTab({ projectId, refreshKey }: UseFileTabOptions) {
       setOriginalContent(null)
       setGitStatus({ staged: [], changes: [] })
       setViewMode('edit')
+      setWorktrees([])
+      setSelectedWorktreeId(null)
       return
     }
 
@@ -83,6 +120,19 @@ export function useFileTab({ projectId, refreshKey }: UseFileTabOptions) {
         setSelectedRepo(null)
       })
 
+    // 加载 worktree 列表（设计 §4 worktree 选择器）
+    apiGet<WorktreeInfo[]>(`/projects/${projectId}/worktrees`)
+      .then((wtList) => {
+        setWorktrees(wtList)
+        // 默认选中 main worktree
+        const mainWt = wtList.find((w) => w.worktree_type === 'main')
+        setSelectedWorktreeId(mainWt ? mainWt.id : (wtList.length > 0 ? wtList[0].id : null))
+      })
+      .catch(() => {
+        setWorktrees([])
+        setSelectedWorktreeId(null)
+      })
+
     if (prevProjectIdRef.current !== null && prevProjectIdRef.current !== projectId) {
       setSelectedFile(null)
       setFileContent(null)
@@ -93,22 +143,31 @@ export function useFileTab({ projectId, refreshKey }: UseFileTabOptions) {
     prevProjectIdRef.current = projectId
   }, [projectId, refreshKey])
 
-  // 加载文件树和 git status
+  // 加载文件树和 git status（切换 worktree 时重新加载）
   useEffect(() => {
-    if (!projectId || !selectedRepo) {
+    if (!fileApiBase) {
       setFileTree([])
       setGitStatus({ staged: [], changes: [] })
       return
     }
 
-    apiGet<FileNode[]>(`/projects/${projectId}/repos/${selectedRepo}/tree`)
+    // worktree 上下文用 /files/tree，repo 上下文用 /tree
+    const treeUrl = selectedWorktree?.worktree_type === 'task'
+      ? `${fileApiBase}/files/tree`
+      : `${fileApiBase}/tree`
+    apiGet<FileNode[]>(treeUrl)
       .then(setFileTree)
       .catch(() => setFileTree([]))
 
-    apiGet<GitStatusResult>(`/projects/${projectId}/repos/${selectedRepo}/status`)
-      .then(setGitStatus)
-      .catch(() => setGitStatus({ staged: [], changes: [] }))
-  }, [projectId, selectedRepo, refreshKey])
+    // git status 仅 repo 上下文有端点（worktree SC 端点待 step 6+ 扩展）
+    if (selectedWorktree?.worktree_type !== 'task') {
+      apiGet<GitStatusResult>(`${fileApiBase}/status`)
+        .then(setGitStatus)
+        .catch(() => setGitStatus({ staged: [], changes: [] }))
+    } else {
+      setGitStatus({ staged: [], changes: [] })
+    }
+  }, [fileApiBase, selectedWorktree, refreshKey])
 
   const selectRepo = useCallback((repoName: string) => {
     setSelectedRepo(repoName)
@@ -124,12 +183,11 @@ export function useFileTab({ projectId, refreshKey }: UseFileTabOptions) {
 
   // Explorer 点击文件 → 编辑模式
   const selectFile = useCallback((path: string) => {
-    if (!projectId || !selectedRepo) return
+    if (!fileApiBase) return
 
     const thisFetch = ++fetchIdRef.current
     setSelectedFile(path)
     setViewMode('edit')
-    // 先清空内容，isDirty 自动变 false；异步加载后同步更新
     setFileContent(null)
     setOriginalContent(null)
     fileMtimeRef.current = null
@@ -138,7 +196,7 @@ export function useFileTab({ projectId, refreshKey }: UseFileTabOptions) {
     setConflictInfo(null)
 
     apiGet<{ path: string; content: string; mtime?: number }>(
-      `/projects/${projectId}/repos/${selectedRepo}/files`,
+      `${fileApiBase}/files`,
       { path }
     )
       .then((result) => {
@@ -153,16 +211,15 @@ export function useFileTab({ projectId, refreshKey }: UseFileTabOptions) {
         setFileContent(null)
         setOriginalContent(null)
       })
-  }, [projectId, selectedRepo])
+  }, [fileApiBase])
 
   // Source Control 点击文件 → Diff 模式
   const selectFileFromSC = useCallback((path: string) => {
-    if (!projectId || !selectedRepo) return
+    if (!fileApiBase) return
 
     const thisFetch = ++fetchIdRef.current
     setSelectedFile(path)
     setViewMode('diff')
-    // 先清空内容，isDirty 自动变 false
     setFileContent(null)
     setOriginalContent(null)
     fileMtimeRef.current = null
@@ -172,7 +229,7 @@ export function useFileTab({ projectId, refreshKey }: UseFileTabOptions) {
 
     // 工作区版本（modified）
     apiGet<{ path: string; content: string; mtime?: number }>(
-      `/projects/${projectId}/repos/${selectedRepo}/files`,
+      `${fileApiBase}/files`,
       { path }
     )
       .then((result) => {
@@ -186,33 +243,35 @@ export function useFileTab({ projectId, refreshKey }: UseFileTabOptions) {
         setFileContent(null)
       })
 
-    // HEAD 版本（original for DiffEditor）
-    apiGet<{ path: string; content: string }>(
-      `/projects/${projectId}/repos/${selectedRepo}/files`,
-      { path, ref: 'HEAD' }
-    )
-      .then((result) => {
-        if (fetchIdRef.current !== thisFetch) return
-        setOriginalContent(result.content)
-      })
-      .catch(() => {
-        if (fetchIdRef.current !== thisFetch) return
-        setOriginalContent('')
-      })
-  }, [projectId, selectedRepo])
+    // HEAD 版本（original for DiffEditor）— 仅 repo 上下文有 ref=HEAD 支持
+    if (selectedWorktree?.worktree_type !== 'task') {
+      apiGet<{ path: string; content: string }>(
+        `${fileApiBase}/files`,
+        { path, ref: 'HEAD' }
+      )
+        .then((result) => {
+          if (fetchIdRef.current !== thisFetch) return
+          setOriginalContent(result.content)
+        })
+        .catch(() => {
+          if (fetchIdRef.current !== thisFetch) return
+          setOriginalContent('')
+        })
+    }
+  }, [fileApiBase, selectedWorktree])
 
   const refreshGitStatus = useCallback(() => {
-    if (!projectId || !selectedRepo) return
-    apiGet<GitStatusResult>(`/projects/${projectId}/repos/${selectedRepo}/status`)
+    if (!fileApiBase || selectedWorktree?.worktree_type === 'task') return
+    apiGet<GitStatusResult>(`${fileApiBase}/status`)
       .then(setGitStatus)
       .catch(() => {})
-  }, [projectId, selectedRepo])
+  }, [fileApiBase, selectedWorktree])
 
   /** 重新加载当前文件（放弃当前编辑） */
   const reloadFile = useCallback(async () => {
-    if (!projectId || !selectedRepo || !selectedFile) return
+    if (!fileApiBase || !selectedFile) return
     const result = await apiGet<{ path: string; content: string; mtime?: number }>(
-      `/projects/${projectId}/repos/${selectedRepo}/files`,
+      `${fileApiBase}/files`,
       { path: selectedFile }
     )
     setFileContent(result.content)
@@ -221,7 +280,7 @@ export function useFileTab({ projectId, refreshKey }: UseFileTabOptions) {
     loadedAtRef.current = Date.now()
     setStaleAcknowledged(false)
     setConflictInfo(null)
-  }, [projectId, selectedRepo, selectedFile])
+  }, [fileApiBase, selectedFile])
 
   /**
    * 保存文件：发送 expected_mtime + original_content，处理 409 冲突
@@ -232,7 +291,7 @@ export function useFileTab({ projectId, refreshKey }: UseFileTabOptions) {
    */
   const saveFile = useCallback(
     async (opts?: { force?: boolean }) => {
-      if (!projectId || !selectedRepo || !selectedFile || fileContent === null) return
+      if (!fileApiBase || !selectedFile || fileContent === null) return
 
       // 30 分钟过期检测（非 force 路径）
       if (!opts?.force && loadedAtRef.current !== null && !staleAcknowledged) {
@@ -256,7 +315,7 @@ export function useFileTab({ projectId, refreshKey }: UseFileTabOptions) {
       }
 
       const result = await apiPutRaw<{ path: string; content: string; mtime?: number }>(
-        `/projects/${projectId}/repos/${selectedRepo}/files?path=${encodeURIComponent(selectedFile)}`,
+        `${fileApiBase}/files?path=${encodeURIComponent(selectedFile)}`,
         payload
       )
 
@@ -284,8 +343,7 @@ export function useFileTab({ projectId, refreshKey }: UseFileTabOptions) {
       throw new Error(`保存失败: ${result.status}`)
     },
     [
-      projectId,
-      selectedRepo,
+      fileApiBase,
       selectedFile,
       fileContent,
       originalContent,
@@ -324,23 +382,27 @@ export function useFileTab({ projectId, refreshKey }: UseFileTabOptions) {
     if (!projectId || !selectedRepo) return
     await apiPost(`/projects/${projectId}/repos/${selectedRepo}/stage`, { paths })
     refreshGitStatus()
-  }, [projectId, selectedRepo, refreshGitStatus])
+  }, [fileApiBase, refreshGitStatus])
 
   const unstageFiles = useCallback(async (paths: string[]) => {
     if (!projectId || !selectedRepo) return
     await apiPost(`/projects/${projectId}/repos/${selectedRepo}/unstage`, { paths })
     refreshGitStatus()
-  }, [projectId, selectedRepo, refreshGitStatus])
+  }, [fileApiBase, refreshGitStatus])
 
   const commitChanges = useCallback(async (message: string) => {
     if (!projectId || !selectedRepo) return
     await apiPost(`/projects/${projectId}/repos/${selectedRepo}/commit`, { message })
     refreshGitStatus()
-  }, [projectId, selectedRepo, refreshGitStatus])
+  }, [fileApiBase, refreshGitStatus])
 
   return {
     repos,
     selectedRepo,
+    worktrees,
+    selectedWorktreeId,
+    selectedWorktree,
+    isReadOnly,
     fileTree,
     selectedFile,
     fileContent,
@@ -353,6 +415,7 @@ export function useFileTab({ projectId, refreshKey }: UseFileTabOptions) {
     conflictInfo,
     staleAcknowledged,
     selectRepo,
+    selectWorktree,
     selectFile,
     selectFileFromSC,
     saveFile,

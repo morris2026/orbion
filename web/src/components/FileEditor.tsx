@@ -17,6 +17,8 @@ interface FileEditorProps {
   onContentChange: (value: string) => void
   /** Monaco 加载失败时为 true，渲染降级 textarea；由 FileTab 层通过 loader.init().catch() + 超时检测 */
   monacoError?: boolean
+  /** 只读模式（main worktree 时为 true，设计 §10.1） */
+  readOnly?: boolean
 }
 
 export function FileEditor({
@@ -28,6 +30,7 @@ export function FileEditor({
   onSave,
   onContentChange,
   monacoError = false,
+  readOnly = false,
 }: FileEditorProps) {
   const isMarkdown = filePath?.endsWith('.md') ?? false
   const [showEditor, setShowEditor] = useState(!isMarkdown)
@@ -63,15 +66,16 @@ export function FileEditor({
     }
   }, [fileContent, showPreview, showEditor])
 
-  // Ctrl+S 快捷键
+  // Ctrl+S 快捷键（只读模式下跳过）
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
+      if (readOnly) return
       if ((e.ctrlKey || e.metaKey) && e.key === 's') {
         e.preventDefault()
         onSave()
       }
     },
-    [onSave]
+    [onSave, readOnly]
   )
 
   const handleEditorMount = useCallback((editor: editor.IStandaloneCodeEditor) => {
@@ -98,6 +102,7 @@ export function FileEditor({
           className="w-full h-full p-2 bg-background text-foreground font-mono text-sm resize-none border-0 outline-none"
           value={fileContent}
           onChange={(e) => onContentChange(e.target.value)}
+          readOnly={readOnly}
         />
       )
     }
@@ -127,6 +132,7 @@ export function FileEditor({
           lineNumbers: 'on',
           scrollBeyondLastLine: false,
           wordWrap: 'on',
+          readOnly,
         }}
       />
     )
@@ -204,7 +210,7 @@ export function FileEditor({
             size="sm"
             className="h-7 text-xs"
             onClick={onSave}
-            disabled={!isDirty}
+            disabled={!isDirty || readOnly}
             aria-label="保存"
           >
             <Save className="h-3.5 w-3.5" />

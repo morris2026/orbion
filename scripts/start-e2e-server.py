@@ -126,6 +126,36 @@ async def _clean_db() -> None:
 
 asyncio.run(_clean_db())
 
+# E2E 测试专用端点：seed worktree 记录（worktree 无创建 API，系统在 dispatch 时自动创建）
+from fastapi import APIRouter as _AR
+_test_router = _AR()
+
+
+@_test_router.post("/test/seed-worktree")
+async def _seed_worktree(body: dict) -> dict:
+    """E2E 测试专用：直接插入 worktree 记录到 DB（复用 app.state 的连接池）"""
+    from fastapi import Request as _Req
+    # 用 app.state.worktree_service.pool 复用连接池，避免每次新建连接导致 ECONNRESET
+    pool = app.main.app.state.worktree_service.pool
+    async with pool.acquire() as conn:
+        wt_id = uuid.uuid4()
+        await conn.execute(
+            "INSERT INTO worktrees (id, project_id, repo_name, worktree_type, branch_name, path, status, "
+            "created_by, task_id) VALUES ($1, $2, $3, $4, $5, $6, 'active', $7, $8)",
+            wt_id,
+            uuid.UUID(body["project_id"]),
+            body.get("repo_name", "orbion"),
+            body.get("worktree_type", "task"),
+            body.get("branch_name", f"task/{uuid.uuid4()}"),
+            body.get("path", f"/tmp/wt_{wt_id}"),
+            uuid.UUID(body["created_by"]),
+            uuid.UUID(body["task_id"]) if body.get("task_id") else None,
+        )
+    return {"id": str(wt_id)}
+
+
+app.main.app.include_router(_test_router, tags=["test"])
+
 # 启动服务器
 import uvicorn
 

@@ -31,6 +31,7 @@ class WorktreeOut(BaseModel):
     branch_name: str
     path: str
     status: str
+    created_by: str
     task_id: str | None
     conflict_regen_count: int
 
@@ -55,6 +56,7 @@ def _worktree_to_out(wt: Worktree) -> WorktreeOut:
         branch_name=wt.branch_name,
         path=wt.path,
         status=wt.status,
+        created_by=str(wt.created_by),
         task_id=str(wt.task_id) if wt.task_id else None,
         conflict_regen_count=wt.conflict_regen_count,
     )
