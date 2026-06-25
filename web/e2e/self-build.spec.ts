@@ -733,3 +733,235 @@ test.describe('MVP-RE-9.x: 右栏文件编辑器 E2E', () => {
     expect(status.staged.length).toBe(0)
   })
 })
+test.describe('GW-3.x: 三方合并 E2E', () => {
+  test.beforeAll(async ({ request }) => {
+    // 复用第一 describe 的 ADMIN 凭据，确保用户已注册
+    const adminResp = await request.post('/auth/register', {
+      data: { username: ADMIN.username, password: ADMIN.password, display_name: ADMIN.displayName },
+    })
+    if (adminResp.status() === 409) {
+      const loginResp = await request.post('/auth/login', {
+        data: { username: ADMIN.username, password: ADMIN.password },
+      })
+      expect(loginResp.ok()).toBeTruthy()
+      adminToken = (await loginResp.json()).access_token
+    } else {
+      expect(adminResp.ok()).toBeTruthy()
+      const adminData = await adminResp.json()
+      if (adminData.status === 'pending') {
+        throw new Error('admin注册返回pending，DB有残留数据未清理')
+      }
+      adminToken = adminData.access_token
+    }
+  })
+
+  test.beforeEach(async ({ page }) => {
+    await loginAs(page, ADMIN.username, ADMIN.password)
+  })
+
+  test('GW-3.4: 409 冲突对话框三选项', async ({ page }) => {
+    const project = await createProject(page, '3_4')
+    const headers = await authHeaders(page)
+
+    // 添加仓库 + 创建文件（用 .py 避开 md 预览模式，直接进编辑器）
+    const repoResp = await page.request.post(`/projects/${project.id}/repos`, {
+      data: { name: 'merge-repo' },
+      headers,
+    })
+    expect(repoResp.ok()).toBeTruthy()
+    await page.request.put(
+      `/projects/${project.id}/repos/merge-repo/files?path=conflict.py`,
+      { data: { content: 'line1\nline2\nline3\n' }, headers },
+    )
+
+    // 导航到 workspace 并选中项目，切到"文件"tab
+    await page.goto('/workspace')
+    await page.getByText(project.name).click()
+    const fileTab = page.getByRole('tab', { name: /文件/ })
+    await fileTab.click()
+
+    // 打开 conflict.py（.py 直接进编辑器模式）
+    await page.getByText('conflict.py').dblclick()
+
+    // 等待 Monaco 编辑器加载
+    await page.locator('.monaco-editor').waitFor({ state: 'visible', timeout: 30000 })
+
+    // 模拟 B 修改同位置（mtime 变化）
+    await page.request.put(
+      `/projects/${project.id}/repos/merge-repo/files?path=conflict.py`,
+      { data: { content: 'line1\nB_VERSION\nline3\n' }, headers },
+    )
+    // 等 1.1s 确保磁盘 mtime 精度不吞差异（某些 FS mtime 精度为 1s）
+    await page.waitForTimeout(1100)
+
+    // A 在 UI 编辑同位置——用 Monaco editor executeEdits 触发 onChange
+    await page.evaluate((newContent) => {
+      const w = window as any
+      const editors = w.monaco?.editor?.getEditors?.() ?? []
+      if (editors.length === 0) {
+        throw new Error('Monaco editor 未找到')
+      }
+      const editor = editors[0]
+      const model = editor.getModel()
+      if (!model) throw new Error('Monaco model 未找到')
+      editor.executeEdits('e2e-test', [{
+        range: model.getFullModelRange(),
+        text: newContent,
+        forceMoveMarkers: true,
+      }])
+    }, 'line1\nA_VERSION\nline3\n')
+
+    // 等待 isDirty 变 true（保存按钮启用）
+    await expect(page.getByRole('button', { name: /保存/ })).toBeEnabled({ timeout: 5000 })
+
+    // 点保存按钮
+    await page.getByRole('button', { name: /保存/ }).click()
+
+    // 验证冲突对话框出现
+    const dialog = page.getByTestId('conflict-dialog')
+    await expect(dialog).toBeVisible({ timeout: 10000 })
+
+    // 验证三选项都存在
+    await expect(page.getByTestId('btn-conflict-merge')).toBeVisible()
+    await expect(page.getByTestId('btn-conflict-overwrite')).toBeVisible()
+    await expect(page.getByTestId('btn-conflict-cancel')).toBeVisible()
+
+    // 选择"取消"——编辑器内容保留
+    await page.getByTestId('btn-conflict-cancel').click()
+    await expect(dialog).not.toBeVisible({ timeout: 5000 })
+  })
+
+  test('GW-3.5: 30 分钟未保存提示重新加载', async ({ page }) => {
+    const project = await createProject(page, '3_5')
+    const headers = await authHeaders(page)
+
+    await page.request.post(`/projects/${project.id}/repos`, {
+      data: { name: 'stale-repo' },
+      headers,
+    })
+    await page.request.put(
+      `/projects/${project.id}/repos/stale-repo/files?path=notes.py`,
+      { data: { content: '# v1\n' }, headers },
+    )
+
+    // 导航到 workspace 并选中项目，切到"文件"tab
+    await page.goto('/workspace')
+    await page.getByText(project.name).click()
+    const fileTab = page.getByRole('tab', { name: /文件/ })
+    await fileTab.click()
+
+    // 打开 notes.py（.py 直接进编辑器模式）
+    await page.getByText('notes.py').dblclick()
+    await page.locator('.monaco-editor').waitFor({ state: 'visible', timeout: 30000 })
+
+    // 注入 Date.now 偏移：让后续 Date.now() 返回 31 分钟后
+    // Why 在打开文件后注入：loadedAt 已用真实时间记录，偏移后 Date.now() - loadedAt > 30min
+    await page.evaluate(() => {
+      const realNow = Date.now
+      Date.now = function () {
+        return realNow.call(Date) + 31 * 60 * 1000
+      }
+    })
+
+    // 编辑内容——用 Monaco editor executeEdits 触发 onChange
+    await page.evaluate((newContent) => {
+      const w = window as any
+      const editors = w.monaco?.editor?.getEditors?.() ?? []
+      if (editors.length === 0) {
+        throw new Error('Monaco editor 未找到')
+      }
+      const editor = editors[0]
+      const model = editor.getModel()
+      if (!model) throw new Error('Monaco model 未找到')
+      editor.executeEdits('e2e-test', [{
+        range: model.getFullModelRange(),
+        text: newContent,
+        forceMoveMarkers: true,
+      }])
+    }, '# v2\n')
+
+    // 等待保存按钮启用
+    await expect(page.getByRole('button', { name: /保存/ })).toBeEnabled({ timeout: 5000 })
+
+    // 点保存——应触发过期提示
+    await page.getByRole('button', { name: /保存/ }).click()
+
+    // 验证过期提示出现
+    const prompt = page.getByTestId('stale-file-prompt')
+    await expect(prompt).toBeVisible({ timeout: 10000 })
+
+    // 验证两选项
+    await expect(page.getByTestId('btn-stale-reload')).toBeVisible()
+    await expect(page.getByTestId('btn-stale-keep')).toBeVisible()
+
+    // 点"重新加载"——放弃当前编辑，文件重载
+    await page.getByTestId('btn-stale-reload').click()
+    await expect(prompt).not.toBeVisible({ timeout: 5000 })
+  })
+
+  test('GW-3.5a: 30 分钟过期后选择"仍要保存"', async ({ page }) => {
+    const project = await createProject(page, '3_5a')
+    const headers = await authHeaders(page)
+
+    await page.request.post(`/projects/${project.id}/repos`, {
+      data: { name: 'stale-repo-keep' },
+      headers,
+    })
+    await page.request.put(
+      `/projects/${project.id}/repos/stale-repo-keep/files?path=keep.py`,
+      { data: { content: '# v1\n' }, headers },
+    )
+
+    await page.goto('/workspace')
+    await page.getByText(project.name).click()
+    const fileTab = page.getByRole('tab', { name: /文件/ })
+    await fileTab.click()
+
+    await page.getByText('keep.py').dblclick()
+    await page.locator('.monaco-editor').waitFor({ state: 'visible', timeout: 30000 })
+
+    // 注入 Date.now 偏移 31 分钟
+    await page.evaluate(() => {
+      const realNow = Date.now
+      Date.now = function () {
+        return realNow.call(Date) + 31 * 60 * 1000
+      }
+    })
+
+    // 编辑内容
+    await page.evaluate((newContent) => {
+      const w = window as any
+      const editors = w.monaco?.editor?.getEditors?.() ?? []
+      if (editors.length === 0) throw new Error('Monaco editor 未找到')
+      const editor = editors[0]
+      const model = editor.getModel()
+      if (!model) throw new Error('Monaco model 未找到')
+      editor.executeEdits('e2e-test', [{
+        range: model.getFullModelRange(),
+        text: newContent,
+        forceMoveMarkers: true,
+      }])
+    }, '# v2\n')
+
+    await expect(page.getByRole('button', { name: /保存/ })).toBeEnabled({ timeout: 5000 })
+
+    // 点保存——触发过期提示
+    await page.getByRole('button', { name: /保存/ }).click()
+    const prompt = page.getByTestId('stale-file-prompt')
+    await expect(prompt).toBeVisible({ timeout: 10000 })
+
+    // 点"仍要保存"——跳过过期守卫继续保存
+    await page.getByTestId('btn-stale-keep').click()
+
+    // 过期提示消失（saveFile 再次执行，staleAcknowledged 已 true 不再拦截）
+    await expect(prompt).not.toBeVisible({ timeout: 5000 })
+
+    // 验证文件已保存（磁盘内容为 v2）
+    const resp = await page.request.get(
+      `/projects/${project.id}/repos/stale-repo-keep/files?path=keep.py`,
+      { headers },
+    )
+    expect(resp.ok()).toBeTruthy()
+    expect((await resp.json()).content).toContain('# v2')
+  })
+})

@@ -83,3 +83,32 @@ export async function apiPut<T = unknown>(path: string, body: unknown): Promise<
   }
   return resp.json() as Promise<T>
 }
+
+/**
+ * apiPutRaw：返回判别联合，让调用方处理非 2xx 响应体（如 409 Conflict 的结构化 body）
+ * 成功 → { ok: true, data }
+ * 失败 → { ok: false, status, data }（data 为已解析的响应体，可能是 string detail 或对象）
+ */
+export type ApiPutResult<T> =
+  | { ok: true; data: T }
+  | { ok: false; status: number; data: unknown }
+
+export async function apiPutRaw<T = unknown>(path: string, body: unknown): Promise<ApiPutResult<T>> {
+  const headers: Record<string, string> = { 'Content-Type': 'application/json', ...buildHeaders() }
+  const resp = await fetch(path, {
+    method: 'PUT',
+    headers,
+    body: JSON.stringify(body),
+  })
+  if (resp.ok) {
+    return { ok: true, data: (await resp.json()) as T }
+  }
+  // 非 2xx：尝试解析响应体（结构化对象或 string detail）
+  let data: unknown
+  try {
+    data = await resp.json()
+  } catch {
+    data = resp.statusText
+  }
+  return { ok: false, status: resp.status, data }
+}

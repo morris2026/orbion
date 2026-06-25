@@ -387,15 +387,18 @@ describe('MVP-RE-5.7: useFileTab — 保存文件', () => {
     vi.restoreAllMocks()
   })
 
-  it('修改 fileContent 后 saveFile → apiPut 被调用、isDirty 变 false、git status 刷新', async () => {
+  it('修改 fileContent 后 saveFile → apiPutRaw 被调用、isDirty 变 false、git status 刷新', async () => {
     vi.spyOn(apiModule, 'apiGet').mockImplementation((url: string) => {
       if (url === '/projects/proj-1/repos') return Promise.resolve(mockRepos)
       if (url === '/projects/proj-1/repos/orbion/tree') return Promise.resolve(mockFileTree)
       if (url === '/projects/proj-1/repos/orbion/status') return Promise.resolve(mockGitStatus)
-      if (url.includes('/files')) return Promise.resolve({ path: 'README.md', content: '# Hello' })
+      if (url.includes('/files')) return Promise.resolve({ path: 'README.md', content: '# Hello', mtime: 1234567890 })
       return Promise.resolve([])
     })
-    vi.spyOn(apiModule, 'apiPut').mockResolvedValue({})
+    vi.spyOn(apiModule, 'apiPutRaw').mockResolvedValue({
+      ok: true,
+      data: { path: 'README.md', content: '# Hello World', mtime: 1234567891 },
+    })
 
     const { result } = renderHook(() => useFileTab({ projectId: 'proj-1' }))
 
@@ -426,10 +429,10 @@ describe('MVP-RE-5.7: useFileTab — 保存文件', () => {
       await result.current.saveFile()
     })
 
-    // apiPut 被调用
-    expect(apiModule.apiPut).toHaveBeenCalledWith(
+    // apiPutRaw 被调用
+    expect(apiModule.apiPutRaw).toHaveBeenCalledWith(
       expect.stringContaining('/files?path=README.md'),
-      { content: '# Hello World' }
+      expect.objectContaining({ content: '# Hello World' })
     )
 
     // isDirty 变 false

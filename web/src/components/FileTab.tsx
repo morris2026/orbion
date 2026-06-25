@@ -5,6 +5,8 @@ import { ActivityBar } from '@/components/ActivityBar'
 import { ExplorerPanel } from '@/components/ExplorerPanel'
 import { SourceControlPanel } from '@/components/SourceControlPanel'
 import { FileEditor } from '@/components/FileEditor'
+import { ConflictDialog } from '@/components/ConflictDialog'
+import { StaleFilePrompt } from '@/components/StaleFilePrompt'
 import { useFileTab } from '@/hooks/useFileTab'
 import type { ActivityPanel } from '@/components/ActivityBar'
 
@@ -26,10 +28,16 @@ export function FileTab({ projectId, refreshKey }: FileTabProps) {
     gitStatus,
     changeCounts,
     viewMode,
+    conflictInfo,
+    staleAcknowledged,
     selectRepo,
     selectFile,
     selectFileFromSC,
     saveFile,
+    reloadFile,
+    resolveConflictManually,
+    overwriteConflict,
+    cancelConflict,
     stageFiles,
     unstageFiles,
     commitChanges,
@@ -148,6 +156,18 @@ export function FileTab({ projectId, refreshKey }: FileTabProps) {
           </div>
         </Panel>
       </Group>
+
+      {/* 409 冲突对话框与 30 分钟过期提示互斥渲染（避免叠加） */}
+      {conflictInfo ? (
+        <ConflictDialog
+          conflictInfo={conflictInfo}
+          onResolveManually={resolveConflictManually}
+          onOverwrite={overwriteConflict}
+          onCancel={cancelConflict}
+        />
+      ) : staleAcknowledged ? (
+        <StaleFilePrompt onReload={reloadFile} onKeep={() => saveFile({ force: false })} />
+      ) : null}
     </div>
   )
 }

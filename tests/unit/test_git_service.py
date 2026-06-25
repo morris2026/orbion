@@ -216,3 +216,44 @@ def test_fetch_wraps_subprocess(git_service: GitCommandService, bare_repo: Path)
     assert isinstance(result, WorktreeResult)
     assert result.success is False
     assert result.error
+
+
+# GW-3.x GitCommandService.merge_file 封装 git merge-file --diff3
+def test_merge_file_no_conflict(git_service: GitCommandService) -> None:
+    """GW-3.x 子用例：不同位置修改，git merge-file 返回 0，merged_content 含两边修改"""
+    original = "line1\nline2\nline3\nline4\nline5\n"
+    mine = "line1\nMY_EDIT\nline3\nline4\nline5\n"
+    theirs = "line1\nline2\nline3\nline4\nTHEIR_EDIT\n"
+
+    result = git_service.merge_file(mine=mine, original=original, theirs=theirs)
+
+    assert result.success is True
+    assert "MY_EDIT" in result.merged_content
+    assert "THEIR_EDIT" in result.merged_content
+    assert result.conflict_markers == []
+
+
+def test_merge_file_conflict_returns_markers(git_service: GitCommandService) -> None:
+    """GW-3.x 子用例：同位置修改，git merge-file 返回非 0，merged_content 含冲突标记"""
+    original = "line1\nline2\nline3\n"
+    mine = "line1\nMY_VERSION\nline3\n"
+    theirs = "line1\nTHEIR_VERSION\nline3\n"
+
+    result = git_service.merge_file(mine=mine, original=original, theirs=theirs)
+
+    assert result.success is False
+    assert "<<<<<<<" in result.merged_content
+    assert ">>>>>>>" in result.merged_content
+    assert "|||||||" in result.merged_content  # --diff3 标记
+    assert "MY_VERSION" in result.merged_content
+    assert "THEIR_VERSION" in result.merged_content
+    assert len(result.conflict_markers) >= 1
+    assert "<<<<<<<" in result.conflict_markers[0]
+
+
+def test_merge_file_identical_inputs(git_service: GitCommandService) -> None:
+    """GW-3.x 子用例：三者相同，无冲突，merged_content 等于输入"""
+    content = "same\ncontent\n"
+    result = git_service.merge_file(mine=content, original=content, theirs=content)
+    assert result.success is True
+    assert result.merged_content == content

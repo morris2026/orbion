@@ -16,6 +16,7 @@ from __future__ import annotations
 import os
 import subprocess
 from dataclasses import dataclass, field
+from pathlib import Path
 
 
 @dataclass
@@ -38,6 +39,21 @@ class MergeResult:
     success: bool
     has_conflicts: bool = False
     conflict_files: list[str] = field(default_factory=list)
+    error: str = ""
+
+
+@dataclass
+class MergeFileResult:
+    """git merge-file 命令的返回结构（单文件三方合并）
+
+    success=True 时 merged_content 为合并结果；
+    success=False 时 merged_content 含冲突标记（<<<<<<< / ||||||| / ======= / >>>>>>>），
+    conflict_markers 列出每个冲突块（含完整标记的字符串）。
+    """
+
+    success: bool
+    merged_content: str = ""
+    conflict_markers: list[str] = field(default_factory=list)
     error: str = ""
 
 
@@ -138,6 +154,59 @@ class GitCommandService:
         if proc.returncode != 0:
             return WorktreeResult(success=False, error=proc.stderr.strip())
         return WorktreeResult(success=True, message=proc.stdout.strip())
+
+    def merge_file(self, mine: str, original: str, theirs: str) -> MergeFileResult:
+        """git merge-file --diff3 <mine> <original> <theirs>
+
+        单文件三方合并（设计 §5.2.1）。把三个字符串写入临时文件，调 git merge-file：
+        - 返回 0：无冲突，mine 文件变为合并结果
+        - 返回非 0：有冲突，mine 文件含冲突标记（<<<<<<< / ||||||| / ======= / >>>>>>>）
+
+        临时文件用完即删。冲突时 merged_content 含完整标记，conflict_markers 列出每个冲突块。
+        """
+        import re
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            mine_path = Path(tmpdir) / "mine"
+            orig_path = Path(tmpdir) / "orig"
+            theirs_path = Path(tmpdir) / "theirs"
+            mine_path.write_text(mine, encoding="utf-8")
+            orig_path.write_text(original, encoding="utf-8")
+            theirs_path.write_text(theirs, encoding="utf-8")
+
+            # git merge-file 不需要仓库上下文，cwd 用 tmpdir
+            proc = self._run(
+                ["merge-file", "--diff3", str(mine_path), str(orig_path), str(theirs_path)],
+                cwd=tmpdir,
+            )
+            # git merge-file 返回冲突数（0=无冲突，>0=冲突数，<0=错误）
+            merged = mine_path.read_text(encoding="utf-8")
+
+            if proc.returncode == 0:
+                return MergeFileResult(success=True, merged_content=merged)
+
+            if proc.returncode > 0:
+                # 冲突：提取每个冲突块。git merge-file --diff3 的标记格式：
+                # `<<<<<<< <label>` / `||||||| <label>` / `=======` / `>>>>>>> <label>`
+                # 用 `<<<<<<< ` (带空格) 收紧匹配，避免用户原文含 `<<<<<<<` 字面量误匹配
+                conflict_blocks = re.findall(
+                    r"<<<<<<< .*?>>>>>>> .*?(?:\n|$)",
+                    merged,
+                    flags=re.DOTALL,
+                )
+                return MergeFileResult(
+                    success=False,
+                    merged_content=merged,
+                    conflict_markers=conflict_blocks,
+                )
+
+            # returncode < 0：真错误（如临时文件 IO 失败）
+            return MergeFileResult(
+                success=False,
+                merged_content=merged,
+                error=proc.stderr.strip() or proc.stdout.strip(),
+            )
 
     def merge(self, target_worktree: str, branch: str) -> MergeResult:
         """git merge --no-edit <branch> 到 target_worktree 当前分支

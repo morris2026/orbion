@@ -1,8 +1,19 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
-import { apiGet, apiPut, apiPost } from '@/lib/api'
+import { apiGet, apiPost, apiPutRaw } from '@/lib/api'
 import type { FileNode, RepoInfo, GitStatusResult } from '@/types/api'
 
 export type ViewMode = 'edit' | 'diff'
+
+/** 30 分钟阈值（毫秒）：打开超过此时长未保存，提示重新加载（设计 §5.2.2 适用边界） */
+const STALE_THRESHOLD_MS = 30 * 60 * 1000
+
+/** 409 Conflict 响应体（后端 FileConflictResponse） */
+export interface FileConflictInfo {
+  path: string
+  merged_content: string
+  conflict_markers: string[]
+  current_mtime: number
+}
 
 export interface UseFileTabOptions {
   projectId: string | null
@@ -16,12 +27,20 @@ export function useFileTab({ projectId, refreshKey }: UseFileTabOptions) {
   const [selectedFile, setSelectedFile] = useState<string | null>(null)
   const [fileContent, setFileContent] = useState<string | null>(null)
   const [originalContent, setOriginalContent] = useState<string | null>(null)
+  /** 打开文件时记录的 mtime（Unix 秒），保存时作为 expected_mtime 回传 */
+  const fileMtimeRef = useRef<number | null>(null)
+  /** 打开文件时的时间戳（毫秒），用于 30 分钟过期检测 */
+  const loadedAtRef = useRef<number | null>(null)
+  /** 用户主动声明文件已过期需重新加载（点确认后置 true，阻止重复弹窗） */
+  const [staleAcknowledged, setStaleAcknowledged] = useState(false)
   const isDirty = useMemo(
     () => fileContent !== null && originalContent !== null && fileContent !== originalContent,
     [fileContent, originalContent]
   )
   const [gitStatus, setGitStatus] = useState<GitStatusResult>({ staged: [], changes: [] })
   const [viewMode, setViewMode] = useState<ViewMode>('edit')
+  /** 409 冲突信息（非 null 时显示冲突对话框） */
+  const [conflictInfo, setConflictInfo] = useState<FileConflictInfo | null>(null)
 
   const prevProjectIdRef = useRef<string | null>(null)
   // 防止竞态：快速切换文件时旧响应覆盖新响应
@@ -97,6 +116,10 @@ export function useFileTab({ projectId, refreshKey }: UseFileTabOptions) {
     setFileContent(null)
     setOriginalContent(null)
     setViewMode('edit')
+    fileMtimeRef.current = null
+    loadedAtRef.current = null
+    setStaleAcknowledged(false)
+    setConflictInfo(null)
   }, [])
 
   // Explorer 点击文件 → 编辑模式
@@ -109,12 +132,21 @@ export function useFileTab({ projectId, refreshKey }: UseFileTabOptions) {
     // 先清空内容，isDirty 自动变 false；异步加载后同步更新
     setFileContent(null)
     setOriginalContent(null)
+    fileMtimeRef.current = null
+    loadedAtRef.current = null
+    setStaleAcknowledged(false)
+    setConflictInfo(null)
 
-    apiGet<{ path: string; content: string }>(`/projects/${projectId}/repos/${selectedRepo}/files`, { path })
+    apiGet<{ path: string; content: string; mtime?: number }>(
+      `/projects/${projectId}/repos/${selectedRepo}/files`,
+      { path }
+    )
       .then((result) => {
         if (fetchIdRef.current !== thisFetch) return
         setFileContent(result.content)
         setOriginalContent(result.content)
+        fileMtimeRef.current = result.mtime ?? null
+        loadedAtRef.current = Date.now()
       })
       .catch(() => {
         if (fetchIdRef.current !== thisFetch) return
@@ -133,12 +165,21 @@ export function useFileTab({ projectId, refreshKey }: UseFileTabOptions) {
     // 先清空内容，isDirty 自动变 false
     setFileContent(null)
     setOriginalContent(null)
+    fileMtimeRef.current = null
+    loadedAtRef.current = null
+    setStaleAcknowledged(false)
+    setConflictInfo(null)
 
     // 工作区版本（modified）
-    apiGet<{ path: string; content: string }>(`/projects/${projectId}/repos/${selectedRepo}/files`, { path })
+    apiGet<{ path: string; content: string; mtime?: number }>(
+      `/projects/${projectId}/repos/${selectedRepo}/files`,
+      { path }
+    )
       .then((result) => {
         if (fetchIdRef.current !== thisFetch) return
         setFileContent(result.content)
+        fileMtimeRef.current = result.mtime ?? null
+        loadedAtRef.current = Date.now()
       })
       .catch(() => {
         if (fetchIdRef.current !== thisFetch) return
@@ -146,7 +187,10 @@ export function useFileTab({ projectId, refreshKey }: UseFileTabOptions) {
       })
 
     // HEAD 版本（original for DiffEditor）
-    apiGet<{ path: string; content: string }>(`/projects/${projectId}/repos/${selectedRepo}/files`, { path, ref: 'HEAD' })
+    apiGet<{ path: string; content: string }>(
+      `/projects/${projectId}/repos/${selectedRepo}/files`,
+      { path, ref: 'HEAD' }
+    )
       .then((result) => {
         if (fetchIdRef.current !== thisFetch) return
         setOriginalContent(result.content)
@@ -164,16 +208,117 @@ export function useFileTab({ projectId, refreshKey }: UseFileTabOptions) {
       .catch(() => {})
   }, [projectId, selectedRepo])
 
-  const saveFile = useCallback(async () => {
-    if (!projectId || !selectedRepo || !selectedFile || fileContent === null) return
+  /** 重新加载当前文件（放弃当前编辑） */
+  const reloadFile = useCallback(async () => {
+    if (!projectId || !selectedRepo || !selectedFile) return
+    const result = await apiGet<{ path: string; content: string; mtime?: number }>(
+      `/projects/${projectId}/repos/${selectedRepo}/files`,
+      { path: selectedFile }
+    )
+    setFileContent(result.content)
+    setOriginalContent(result.content)
+    fileMtimeRef.current = result.mtime ?? null
+    loadedAtRef.current = Date.now()
+    setStaleAcknowledged(false)
+    setConflictInfo(null)
+  }, [projectId, selectedRepo, selectedFile])
 
-    await apiPut(`/projects/${projectId}/repos/${selectedRepo}/files?path=${encodeURIComponent(selectedFile)}`, {
-      content: fileContent,
-    })
+  /**
+   * 保存文件：发送 expected_mtime + original_content，处理 409 冲突
+   * - expected_mtime 与磁盘一致 → 直接保存
+   * - expected_mtime 过期 → 后端三方合并；成功 200 / 冲突 409
+   * - 30 分钟未保存 → 提示重新加载（设计 §5.2.2 适用边界）
+   * - force=true → 跳过 mtime 检测，直接覆盖（"覆盖"选项用）
+   */
+  const saveFile = useCallback(
+    async (opts?: { force?: boolean }) => {
+      if (!projectId || !selectedRepo || !selectedFile || fileContent === null) return
 
-    setOriginalContent(fileContent)
-    refreshGitStatus()
-  }, [projectId, selectedRepo, selectedFile, fileContent, refreshGitStatus])
+      // 30 分钟过期检测（非 force 路径）
+      if (!opts?.force && loadedAtRef.current !== null && !staleAcknowledged) {
+        const elapsed = Date.now() - loadedAtRef.current
+        if (elapsed > STALE_THRESHOLD_MS) {
+          // 标记过期，UI 层会展示提示对话框
+          setStaleAcknowledged(true)
+          return
+        }
+      }
+
+      // force=true 时跳过 mtime/original（直接覆盖）
+      const payload: Record<string, unknown> = { content: fileContent }
+      if (!opts?.force) {
+        if (fileMtimeRef.current !== null) {
+          payload.expected_mtime = fileMtimeRef.current
+        }
+        if (originalContent !== null) {
+          payload.original_content = originalContent
+        }
+      }
+
+      const result = await apiPutRaw<{ path: string; content: string; mtime?: number }>(
+        `/projects/${projectId}/repos/${selectedRepo}/files?path=${encodeURIComponent(selectedFile)}`,
+        payload
+      )
+
+      if (result.ok) {
+        // 200：保存成功，更新 originalContent + mtime
+        setOriginalContent(result.data.content)
+        fileMtimeRef.current = result.data.mtime ?? fileMtimeRef.current
+        loadedAtRef.current = Date.now()
+        setStaleAcknowledged(false)
+        setConflictInfo(null)
+        refreshGitStatus()
+        return
+      }
+
+      if (result.status === 409) {
+        // 三方合并冲突：展示冲突对话框
+        // 同时清掉 staleAcknowledged，避免 StaleFilePrompt 与 ConflictDialog 叠加
+        const conflict = result.data as FileConflictInfo
+        setStaleAcknowledged(false)
+        setConflictInfo(conflict)
+        return
+      }
+
+      // 其他错误：抛出让调用方处理
+      throw new Error(`保存失败: ${result.status}`)
+    },
+    [
+      projectId,
+      selectedRepo,
+      selectedFile,
+      fileContent,
+      originalContent,
+      staleAcknowledged,
+      refreshGitStatus,
+    ]
+  )
+
+  /**
+   * 冲突对话框：用户选择"对比并合并"
+   * MVP 偏差：设计 §5.2.3 要求 Monaco Diff Editor 展示冲突，当前实现退化为
+   * edit 模式 + 冲突标记（<<<<<<< / ======= / >>>>>>>）可见。用户手动删除标记后重存。
+   * Why：Diff Editor 需要 originalContent=磁盘版本 / fileContent=merged_content 的
+   * 双输入，与现有 selectFileFromSC 的 diff 模式状态管理冲突。MVP 接受退化，
+   * SaaS 阶段引入专用冲突解决视图。
+   */
+  const resolveConflictManually = useCallback(() => {
+    if (!conflictInfo) return
+    setFileContent(conflictInfo.merged_content)
+    setViewMode('edit')
+    setConflictInfo(null)
+  }, [conflictInfo])
+
+  /** 冲突对话框：用户选择"覆盖"——用当前编辑覆盖磁盘 */
+  const overwriteConflict = useCallback(async () => {
+    setConflictInfo(null)
+    await saveFile({ force: true })
+  }, [saveFile])
+
+  /** 冲突对话框：用户选择"取消"——保留编辑器内容 */
+  const cancelConflict = useCallback(() => {
+    setConflictInfo(null)
+  }, [])
 
   const stageFiles = useCallback(async (paths: string[]) => {
     if (!projectId || !selectedRepo) return
@@ -205,10 +350,16 @@ export function useFileTab({ projectId, refreshKey }: UseFileTabOptions) {
     gitStatus,
     changeCounts,
     viewMode,
+    conflictInfo,
+    staleAcknowledged,
     selectRepo,
     selectFile,
     selectFileFromSC,
     saveFile,
+    reloadFile,
+    resolveConflictManually,
+    overwriteConflict,
+    cancelConflict,
     stageFiles,
     unstageFiles,
     commitChanges,
