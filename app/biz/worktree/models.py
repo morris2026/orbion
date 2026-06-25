@@ -27,6 +27,7 @@ class Worktree:
     status: WorktreeStatus
     created_by: uuid.UUID
     task_id: uuid.UUID | None
+    conflict_regen_count: int
     created_at: datetime
     updated_at: datetime
 

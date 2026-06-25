@@ -72,7 +72,7 @@ class GitCommandService:
         """执行 git 命令，返回 CompletedProcess（不抛异常，由调用方判断 returncode）
 
         Why 不抛：本层是命令封装，错误语义由调用方解释（冲突 vs 真错误）。
-        超时返回 returncode=124 + error 信息，由调用方作为失败处理。
+        超时/目录不存在返回非 0 returncode + error 信息，由调用方作为失败处理。
         """
         try:
             return subprocess.run(
@@ -83,12 +83,19 @@ class GitCommandService:
                 timeout=self._CMD_TIMEOUT,
             )
         except subprocess.TimeoutExpired as e:
-            # 构造一个失败的 CompletedProcess 返回，保持调用方处理路径统一
             return subprocess.CompletedProcess(
                 args=["git", *args],
                 returncode=124,
                 stdout="",
                 stderr=f"git 命令超时（{self._CMD_TIMEOUT}s）: {e}",
+            )
+        except FileNotFoundError as e:
+            # cwd 目录不存在（如 main worktree 未初始化）
+            return subprocess.CompletedProcess(
+                args=["git", *args],
+                returncode=127,
+                stdout="",
+                stderr=f"工作目录不存在: {cwd} ({e})",
             )
 
     def worktree_add(self, repo_path: str, worktree_path: str, branch_name: str, base_ref: str) -> WorktreeResult:
