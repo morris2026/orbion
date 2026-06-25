@@ -18,6 +18,7 @@ import logging
 import re
 import uuid
 from pathlib import Path
+from typing import Any
 
 import asyncpg
 
@@ -25,6 +26,8 @@ from app.biz.git.git_lock import get_global_git_lock
 from app.biz.git.git_service import GitCommandService, MergeResult
 from app.biz.worktree.models import TaskContext, TaskResolver, Worktree
 from app.config import Settings
+from app.hub.events.bus import EventBus
+from app.hub.events.types import Event
 
 logger = logging.getLogger(__name__)
 
@@ -34,14 +37,15 @@ _REPO_NAME_PATTERN = re.compile(r"^[a-zA-Z0-9_.\-]+$")
 
 
 class WorktreeService:
-    """worktree 生命周期管理（create_or_reuse / archive / merge / regenerate / get / list_by_project）
+    """worktree 生命周期管理（create_or_reuse / archive / merge / regenerate / delete_by_owner / get / list_by_project）
 
     依赖：
     - GitCommandService：git 命令封装（worktree add/remove、branch create/delete、merge）
     - Settings：定位 bare 仓库路径
     - asyncpg.Pool：worktrees 表读写
-    - TaskResolver：task_id → TaskContext（project_id / repo_name / owner_user_id）
+    - TaskResolver：task_id → TaskContext（project_id / repo_name / owner_user_id / task_status）
     - max_conflict_regenerations：合并冲突重生成次数上限（§8.1，默认 3）
+    - event_bus：事件总线（可选，None 时跳过事件发布；§12）
     """
 
     def __init__(
@@ -51,12 +55,32 @@ class WorktreeService:
         pool: asyncpg.Pool,
         task_resolver: TaskResolver,
         max_conflict_regenerations: int = 3,
+        event_bus: EventBus | None = None,
     ) -> None:
         self._git = git
         self._settings = settings
         self._pool = pool
         self._task_resolver = task_resolver
         self._max_conflict_regenerations = max_conflict_regenerations
+        self._event_bus = event_bus
+
+    # -- 事件发布 ---------------------------------------------------------
+
+    async def _publish(self, event_type: str, project_id: uuid.UUID, payload: dict[str, Any]) -> None:
+        """发布 worktree 事件（§12）。event_bus 为 None 时跳过。"""
+        if self._event_bus is None:
+            return
+        event = Event(
+            event_id=str(uuid.uuid4()),
+            project_id=str(project_id),
+            event_type=event_type,
+            participant_id="system",
+            participant_type="system",
+            participant_display_name="WorktreeService",
+            payload=payload,
+            correlation_id=str(uuid.uuid4()),
+        )
+        await self._event_bus.publish(event)
 
     # -- 只读访问（供测试/上层诊断） ------------------------------------
 
@@ -133,6 +157,17 @@ class WorktreeService:
                 raise WorktreeCreateError(f"DB INSERT 失败 (task={task_id}): {e}") from e
 
             logger.info("task %s 创建 worktree %s at %s", task_id, wt.id, worktree_path)
+            await self._publish(
+                "WorktreeCreated",
+                ctx.project_id,
+                {
+                    "worktree_id": str(wt.id),
+                    "project_id": str(ctx.project_id),
+                    "type": "task",
+                    "branch_name": branch_name,
+                    "created_by": str(ctx.owner_user_id),
+                },
+            )
             return wt
 
     async def archive(self, task_id: uuid.UUID) -> None:
@@ -173,6 +208,7 @@ class WorktreeService:
                 wt.id,
             )
             logger.info("task %s worktree %s archived", task_id, wt.id)
+            await self._publish("WorktreeArchived", wt.project_id, {"worktree_id": str(wt.id)})
 
     async def merge(self, task_id: uuid.UUID, target_branch: str = _BASE_BRANCH) -> MergeResult:
         """合并 task worktree 到目标分支（设计 §6.4、§8）
@@ -210,11 +246,25 @@ class WorktreeService:
             if result.success:
                 # 合并成功：archive task worktree（main 已含 task commits）
                 await self._archive_inside_lock(wt, task_id)
+                await self._publish(
+                    "WorktreeMerged",
+                    ctx.project_id,
+                    {"worktree_id": str(wt.id), "target_branch": target_branch, "commit_sha": result.commit_sha},
+                )
                 return result
 
             # 冲突：merge 已自动 abort，main 回到合并前状态
             if result.has_conflicts:
                 logger.info("task %s merge 冲突，触发 regenerate", task_id)
+                await self._publish(
+                    "WorktreeConflictDetected",
+                    ctx.project_id,
+                    {
+                        "worktree_id": str(wt.id),
+                        "target_branch": target_branch,
+                        "conflict_files": result.conflict_files,
+                    },
+                )
                 await self._regenerate_inside_lock(wt, task_id, ctx)
                 return result
 

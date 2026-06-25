@@ -30,6 +30,10 @@ class EventType(StrEnum):
     AgentRegistered = "AgentRegistered"
     UserRegistered = "UserRegistered"
     ProjectDeleted = "ProjectDeleted"
+    WorktreeCreated = "WorktreeCreated"
+    WorktreeMerged = "WorktreeMerged"
+    WorktreeConflictDetected = "WorktreeConflictDetected"
+    WorktreeArchived = "WorktreeArchived"
 
 
 class Event(BaseModel):

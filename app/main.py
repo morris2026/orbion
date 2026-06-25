@@ -3,6 +3,7 @@
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 
+import asyncpg
 from fastapi import FastAPI
 
 from app.biz.agents.adapters.base import ModelAdapter, ModelOutput, PromptInput
@@ -33,6 +34,8 @@ from app.biz.repos.service import RepoService
 from app.biz.threads.read_repo import load_thread_read_impl
 from app.biz.threads.routes import message_router, thread_router
 from app.biz.threads.service import ThreadService
+from app.biz.worktree.routes import router as worktree_router
+from app.biz.worktree.worktree_service import WorktreeService
 from app.config import get_settings
 from app.hub.auth.repository import load_user_repo_provider
 from app.hub.auth.routes import router as auth_router
@@ -110,8 +113,25 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     app.state.repo_service = RepoService(settings, app.state.credential_service, app.state.thread_service)
     # FileService 初始化（文件树/读取/保存）
     app.state.file_service = FileService(settings)
+    # WorktreeService 初始化（worktree 生命周期管理 + 事件发布）
+    # MVP: TaskResolver 用 stub（tasks 表尚未实现），list/get/file 操作可用；
+    # create_or_reuse/delete_by_owner/merge 需 agent-runtime 提供 PostgresTaskResolver
+    import uuid as _uuid
+
+    from app.biz.git.git_service import GitCommandService as _GitCmd
+    from app.biz.worktree.models import TaskContext, TaskResolver
+
+    class _StubTaskResolver(TaskResolver):
+        async def resolve(self, task_id: _uuid.UUID) -> TaskContext:
+            raise KeyError(f"task {task_id} 未注册（MVP stub，agent-runtime 未集成）")
+
+    _wt_pool = await asyncpg.create_pool(settings.postgres.url, min_size=1, max_size=5)
+    app.state.worktree_service = WorktreeService(
+        _GitCmd(), settings, _wt_pool, _StubTaskResolver(), event_bus=app.state.event_bus
+    )
     yield
     app.state.agent_scheduler.close()
+    await _wt_pool.close()
     await app.state.thread_read.close()
     await app.state.event_projections.close()
     await app.state.event_store.close()
@@ -150,6 +170,9 @@ app.include_router(git_router, prefix="/git", tags=["git"])
 
 # Source Control模块 — status/stage/unstage/commit端点嵌套在项目路径下
 app.include_router(git_sc_router, prefix="/projects", tags=["source-control"])
+
+# Worktree模块 — worktree管理 + 文件操作 API 嵌套在项目路径下
+app.include_router(worktree_router, prefix="/projects", tags=["worktrees"])
 
 # 线程模块 — 线程端点嵌套在项目路径下
 app.include_router(thread_router, prefix="/projects/{project_id}/threads", tags=["threads"])

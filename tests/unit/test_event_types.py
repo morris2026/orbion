@@ -131,6 +131,10 @@ class TestEventTypeEnum:
             "AgentRegistered",
             "UserRegistered",
             "ProjectDeleted",
+            "WorktreeCreated",
+            "WorktreeMerged",
+            "WorktreeConflictDetected",
+            "WorktreeArchived",
         ]
         actual_names = [e.value for e in EventType]
         assert set(expected_types) == set(actual_names), f"缺少事件类型: {set(expected_types) - set(actual_names)}"

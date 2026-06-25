@@ -34,11 +34,13 @@ class MergeResult:
 
     success=False 且 has_conflicts=True 时，conflict_files 列出冲突文件路径；
     merge 已自动 abort，目标 worktree 回到合并前状态。
+    success=True 时 commit_sha 为合并后的 HEAD commit SHA。
     """
 
     success: bool
     has_conflicts: bool = False
     conflict_files: list[str] = field(default_factory=list)
+    commit_sha: str = ""
     error: str = ""
 
 
@@ -226,7 +228,10 @@ class GitCommandService:
         """
         proc = self._run(["merge", "--no-edit", branch], cwd=target_worktree)
         if proc.returncode == 0:
-            return MergeResult(success=True, has_conflicts=False)
+            # 查合并后的 HEAD commit SHA（设计 §12 WorktreeMerged payload 要求）
+            rev_proc = self._run(["rev-parse", "HEAD"], cwd=target_worktree)
+            commit_sha = rev_proc.stdout.strip() if rev_proc.returncode == 0 else ""
+            return MergeResult(success=True, has_conflicts=False, commit_sha=commit_sha)
 
         # 非 0 退出：用 status -z 判断是否冲突（NUL 分隔，路径不引号转义）
         status_proc = self._run(["status", "--porcelain", "-z"], cwd=target_worktree)
