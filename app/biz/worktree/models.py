@@ -40,11 +40,15 @@ class TaskContext:
     需要 project_id + repo_name（定位 bare 仓库）+ owner_user_id（worktrees 表
     created_by 字段）。这些信息存于 tasks 表（agent-runtime §3.4），本步骤通过
     TaskResolver 协议注入，未来 agent-runtime 重构时实现 PostgresTaskResolver。
+
+    task_status：task 当前状态（pending/running/paused/completed/timeout/cancelled），
+    delete_by_owner 用此校验是否允许放弃（§6.4）。None 表示未知，不做状态校验。
     """
 
     project_id: uuid.UUID
     repo_name: str
     owner_user_id: uuid.UUID
+    task_status: str | None = None
 
 
 class TaskResolver(Protocol):

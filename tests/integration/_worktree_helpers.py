@@ -20,8 +20,20 @@ class StubTaskResolver(TaskResolver):
     def __init__(self) -> None:
         self._contexts: dict[uuid.UUID, TaskContext] = {}
 
-    def register(self, task_id: uuid.UUID, project_id: uuid.UUID, repo_name: str, owner_user_id: uuid.UUID) -> None:
-        self._contexts[task_id] = TaskContext(project_id=project_id, repo_name=repo_name, owner_user_id=owner_user_id)
+    def register(
+        self,
+        task_id: uuid.UUID,
+        project_id: uuid.UUID,
+        repo_name: str,
+        owner_user_id: uuid.UUID,
+        task_status: str | None = None,
+    ) -> None:
+        self._contexts[task_id] = TaskContext(
+            project_id=project_id,
+            repo_name=repo_name,
+            owner_user_id=owner_user_id,
+            task_status=task_status,
+        )
 
     async def resolve(self, task_id: uuid.UUID) -> TaskContext:
         if task_id not in self._contexts:

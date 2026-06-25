@@ -4,10 +4,10 @@
 
 实现 step 2 范围：create_or_reuse / archive / get / list_by_project。
 实现 step 4 范围：merge / regenerate。
+实现 step 5 范围：delete_by_owner。
 全局 git 锁（§5.4）串行化所有 git 操作。worktrees 表 status 三态流转
 （active / conflicting / archived）。
 
-merge / regenerate / delete_by_owner 在后续步骤实现。
 事件发布（WorktreeCreated 等）在 step 6 实现，本步骤不发布事件。
 """
 
@@ -340,6 +340,52 @@ class WorktreeService:
                 logger.warning("回滚 branch_delete 失败，可能残留分支: %s", del_r.error)
             raise WorktreeCreateError(f"DB INSERT 失败 (task={task_id}): {e}") from e
 
+    async def delete_by_owner(self, worktree_id: uuid.UUID, user_id: uuid.UUID) -> None:
+        """task 执行者主动放弃（设计 §6.4、§10.3）
+
+        AgentRuntime.cancel(task_id) 的 worktree 层入口——AgentRuntime.cancel 负责
+        task 状态流转（→cancelled）+ artifact 处理（→rejected），内部调用本方法完成
+        worktree archive。本方法只负责 worktree 层操作。
+
+        - 校验 worktree 存在
+        - 校验 worktree_type='task'（main 不可删）
+        - 校验 user_id 是 worktree owner（created_by）
+        - 校验 task 状态为 pending/running/paused/timeout（completed/cancelled 不允许）
+        - 调用 archive() 清理 worktree
+
+        异常：
+          - WorktreeNotFoundError（worktree_id 不存在）
+          - PermissionError（非 owner 或 main worktree）
+          - TaskStateError（task 状态不允许放弃）
+        """
+        wt = await self.get(worktree_id)
+        if wt is None:
+            raise WorktreeNotFoundError(f"worktree {worktree_id} 不存在")
+
+        # main worktree 不可删
+        if wt.worktree_type == "main":
+            raise PermissionError(f"main worktree {worktree_id} 不可删除")
+
+        # owner 校验
+        if wt.created_by != user_id:
+            raise PermissionError(f"user {user_id} 不是 worktree {worktree_id} 的 owner（owner={wt.created_by}）")
+
+        # task 状态校验
+        if wt.task_id is None:
+            # task 类型 worktree 必有 task_id；None 表示数据完整性问题
+            logger.warning("worktree %s 类型为 task 但 task_id 为 None，数据异常", worktree_id)
+        else:
+            ctx = await self._resolve_task(wt.task_id)
+            forbidden = {"completed", "cancelled"}
+            if ctx.task_status in forbidden:
+                raise TaskStateError(
+                    f"task {wt.task_id} 状态为 {ctx.task_status}，不允许放弃（仅 pending/running/paused/timeout 允许）"
+                )
+
+        # archive 清理 worktree（task_id 非空才 archive，None 时无 task 关联无文件可删）
+        if wt.task_id is not None:
+            await self.archive(wt.task_id)
+
     async def get(self, worktree_id: uuid.UUID) -> Worktree | None:
         """按 id 查询 worktree"""
         row = await self._pool.fetchrow("SELECT * FROM worktrees WHERE id = $1", worktree_id)
@@ -440,6 +486,10 @@ class WorktreeNotFoundError(RuntimeError):
 
 class GitOperationError(RuntimeError):
     """git 命令执行异常（merge 内部错误等）"""
+
+
+class TaskStateError(RuntimeError):
+    """task 状态不允许此操作（如 completed/cancelled 不允许 delete_by_owner）"""
 
 
 def _row_to_worktree(row: asyncpg.Record) -> Worktree:
