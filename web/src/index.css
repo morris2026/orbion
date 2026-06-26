@@ -152,6 +152,12 @@
   padding: 1px 5px;
   border-radius: 4px;
 }
+/* Why: @tailwindcss/typography 默认给行内 code::before/after 加 content:'"`"'，
+   会把 markdown 源码里的反引号再次显示出来；这里覆盖掉 */
+.prose code::before,
+.prose code::after {
+  content: none;
+}
 .prose pre {
   background: #f6f8fa;
   border: 1px solid var(--color-border);
