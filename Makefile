@@ -25,7 +25,7 @@ test-integration:
 	.venv/bin/python -m pytest tests/integration/ --cov=app --cov-fail-under=80
 
 test-all:
-	.venv/bin/python -m pytest tests/ --cov=app --cov-fail-under=80
+	.venv/bin/python -m pytest tests/ --cov=app --cov-fail-under=80 -n 4
 
 test-random:
 	@for i in 1 2 3 4 5 6 7 8 9 10; do \

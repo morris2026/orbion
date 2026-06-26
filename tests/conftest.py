@@ -7,15 +7,65 @@
 测试常量集中定义于此，不在正式代码中放置测试专用值。
 """
 
+import asyncio
+import glob
 import os
 from collections.abc import AsyncGenerator, Generator
 
+import asyncpg
 import pytest
 
 # 测试专用常量——>=32 bytes，消除PyJWT InsecureKeyLengthWarning
 JWT_SECRET_TEST = "orbion-test-secret-key-at-least-32-by"
 
 _ENV_PREFIX = "ORBION_"
+
+
+def _ensure_worker_db(db_name: str) -> None:
+    """xdist worker 启动时创建独立 DB + 应用全部迁移（同步包装 asyncpg）
+
+    Why: 并行测试时多个 worker 共享同一 DB 会 TRUNCATE 互相干扰，
+    每个 worker 用 orbion_test_gw{N} 独立 DB 隔离。
+    """
+    from app.config import get_settings
+
+    settings = get_settings()
+
+    async def _setup() -> None:
+        # 连接 postgres 管理库创建 DB
+        admin_url = (
+            f"postgresql://{settings.postgres.user}:{settings.postgres.password}"
+            f"@{settings.postgres.host}:{settings.postgres.port}/postgres"
+        )
+        conn = await asyncpg.connect(admin_url)
+        try:
+            exists = await conn.fetchval("SELECT 1 FROM pg_database WHERE datname=$1", db_name)
+            if exists:
+                # 终止所有连接后 DROP，保证干净重建
+                await conn.execute(
+                    "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname=$1",
+                    db_name,
+                )
+                await conn.execute(f'DROP DATABASE "{db_name}"')
+            await conn.execute(f'CREATE DATABASE "{db_name}"')
+        finally:
+            await conn.close()
+
+        # 应用全部迁移
+        db_url = (
+            f"postgresql://{settings.postgres.user}:{settings.postgres.password}"
+            f"@{settings.postgres.host}:{settings.postgres.port}/{db_name}"
+        )
+        conn = await asyncpg.connect(db_url)
+        try:
+            for sql_file in sorted(glob.glob("migrations/*.sql")):
+                with open(sql_file) as f:
+                    await conn.execute(f.read())
+        finally:
+            await conn.close()
+
+    asyncio.run(_setup())
+
 
 # 测试必需环境变量——session级注入，不依赖Makefile
 _TEST_ENV_VARS = {
@@ -62,16 +112,26 @@ def _clear_app_state() -> None:
 
 
 @pytest.fixture(autouse=True, scope="session")
-def _inject_test_env_vars() -> Generator[None, None, None]:
+def _inject_test_env_vars(request: pytest.FixtureRequest) -> Generator[None, None, None]:
     """注入测试必需环境变量，确保直接pytest也能运行（不依赖Makefile）
 
     Why: jwt_secret无默认值，直接pytest时缺少ORBION_JWT_SECRET会ValidationError。
     session级注入一次，session结束时恢复原始环境。
+
+    xdist: 每个 worker 用独立 DB（orbion_test_gw0/gw1/...），避免并行 TRUNCATE 互相干扰。
     """
+    # 先注入全部测试环境变量
     saved = {}
     for key, value in _TEST_ENV_VARS.items():
         saved[key] = os.environ.get(key)
         os.environ[key] = value
+
+    # xdist worker 独立 DB（覆盖默认 orbion_test）
+    worker_id = getattr(request.config, "workerinput", {}).get("workerid", "master")
+    if worker_id != "master":
+        db_name = f"orbion_test_{worker_id}"
+        os.environ["ORBION_POSTGRES__DB"] = db_name
+        _ensure_worker_db(db_name)
     yield
     for key, orig in saved.items():
         if orig is None:
