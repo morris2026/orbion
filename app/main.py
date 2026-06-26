@@ -6,6 +6,12 @@ from contextlib import asynccontextmanager
 import asyncpg
 from fastapi import FastAPI
 
+from app.biz.agent_models.routes import (
+    project_router as agent_model_project_router,
+)
+from app.biz.agent_models.routes import (
+    user_router as agent_model_user_router,
+)
 from app.biz.agents.adapters.base import ModelAdapter, ModelOutput, PromptInput
 from app.biz.agents.adapters.claude import ClaudeAdapter
 from app.biz.agents.declarations import BUILTIN_AGENT_DECLARATIONS
@@ -34,6 +40,7 @@ from app.biz.repos.service import RepoService
 from app.biz.threads.read_repo import load_thread_read_impl
 from app.biz.threads.routes import message_router, thread_router
 from app.biz.threads.service import ThreadService
+from app.biz.user_models.routes import router as user_model_router
 from app.biz.worktree.routes import router as worktree_router
 from app.biz.worktree.worktree_service import WorktreeService
 from app.config import get_settings
@@ -57,6 +64,10 @@ class StubModelAdapter:
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     settings = get_settings()
+    # ORBION_ENCRYPTION_KEY 启动自检（AR-2.2）：缺失则拒绝启动
+    from app.biz.user_models.encryption import validate_encryption_key
+
+    validate_encryption_key()
     # EventStore + EventBus 初始化
     store_cls = load_store_impl(settings.event_store)
     app.state.event_store = store_cls()
@@ -109,6 +120,19 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     app.state.git_service = GitService(settings, app.state.event_bus, app.state.event_projections)
     # CredentialService 初始化（凭据加密存储）
     app.state.credential_service = CredentialService(settings)
+    # 主连接池（设计 §1.1：min_size=5, max_size=20，各 service 共享，避免连接数膨胀）
+    _db_pool = await asyncpg.create_pool(settings.postgres.url, min_size=5, max_size=20)
+    # UserModelService + AgentModelMappingService 初始化（AR-2.x）
+    from app.biz.agent_models.service import AgentModelMappingService
+    from app.biz.agent_models.store import AgentModelStore
+    from app.biz.user_models.service import UserModelService
+
+    app.state.user_model_service = UserModelService(_db_pool)
+    app.state.agent_model_mapping_service = AgentModelMappingService(
+        AgentModelStore(settings.root_dir),
+        app.state.user_model_service,
+        settings.projects_dir,
+    )
     # RepoService 初始化（仓库扫描/添加/删除，依赖CredentialService+ThreadService）
     app.state.repo_service = RepoService(settings, app.state.credential_service, app.state.thread_service)
     # FileService 初始化（文件树/读取/保存）
@@ -125,13 +149,12 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         async def resolve(self, task_id: _uuid.UUID) -> TaskContext:
             raise KeyError(f"task {task_id} 未注册（MVP stub，agent-runtime 未集成）")
 
-    _wt_pool = await asyncpg.create_pool(settings.postgres.url, min_size=1, max_size=5)
     app.state.worktree_service = WorktreeService(
-        _GitCmd(), settings, _wt_pool, _StubTaskResolver(), event_bus=app.state.event_bus
+        _GitCmd(), settings, _db_pool, _StubTaskResolver(), event_bus=app.state.event_bus
     )
     yield
     app.state.agent_scheduler.close()
-    await _wt_pool.close()
+    await _db_pool.close()
     await app.state.thread_read.close()
     await app.state.event_projections.close()
     await app.state.event_store.close()
@@ -161,6 +184,11 @@ app.include_router(output_action_router, prefix="/outputs", tags=["outputs"])
 # 仓库模块 — 仓库管理端点嵌套在项目路径下
 app.include_router(repo_router, prefix="/projects", tags=["repos"])
 app.include_router(credential_router, tags=["credentials"])
+
+# UserModel + AgentModelMapping 模块（AR-2.x）
+app.include_router(user_model_router, tags=["user-models"])
+app.include_router(agent_model_user_router, tags=["agent-models"])
+app.include_router(agent_model_project_router, tags=["agent-models"])
 
 # 文件模块 — 文件操作端点嵌套在项目路径下
 app.include_router(file_router, prefix="/projects", tags=["files"])

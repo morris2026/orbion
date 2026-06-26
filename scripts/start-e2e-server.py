@@ -13,6 +13,8 @@ JWT_SECRET_E2E = "orbion-e2e-secret-key-at-least-32-by"
 
 os.environ.setdefault("ORBION_JWT_SECRET", JWT_SECRET_E2E)
 os.environ.setdefault("ORBION_POSTGRES__DB", "orbion_test")
+# AES-256-GCM 加密密钥（32 字节 base64），用于 user_models.api_key_enc + agent_models.enc
+os.environ.setdefault("ORBION_ENCRYPTION_KEY", "YWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWE=")
 
 import asyncpg
 

@@ -21,6 +21,8 @@ _ENV_PREFIX = "ORBION_"
 _TEST_ENV_VARS = {
     "ORBION_JWT_SECRET": JWT_SECRET_TEST,
     "ORBION_POSTGRES__DB": "orbion_test",
+    # AES-256-GCM 加密密钥（32 字节 base64），用于 user_models.api_key_enc + agent_models.enc
+    "ORBION_ENCRYPTION_KEY": "YWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWE=",
 }
 
 # 懒初始化表名缓存——首次TRUNCATE时查询pg_tables并缓存，后续直接使用。

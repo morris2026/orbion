@@ -135,12 +135,26 @@ async def client(
     app.state.file_service = FileService(settings)
     app.state.git_service = GitService(settings, event_bus, projections)
 
+    # 主连接池（各 service 共享，与 main.py 一致）
+    from app.biz.agent_models.service import AgentModelMappingService
+    from app.biz.agent_models.store import AgentModelStore
+    from app.biz.user_models.service import UserModelService
+
+    db_pool = await asyncpg.create_pool(settings.postgres.url, min_size=1, max_size=5)
+    app.state.user_model_service = UserModelService(db_pool)
+    app.state.agent_model_mapping_service = AgentModelMappingService(
+        AgentModelStore(settings.root_dir),
+        app.state.user_model_service,
+        settings.projects_dir,
+    )
+
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as c:
         yield c
 
     # teardown: 关闭资源（逆序），app.state由根conftest兜底清理
     agent_scheduler.close()
+    await db_pool.close()
     await thread_read.close()
     await project_read.close()
     await projections.close()

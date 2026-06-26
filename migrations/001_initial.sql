@@ -179,6 +179,7 @@ CREATE TABLE user_models (
     base_url        VARCHAR(256) NOT NULL,
     api_key_enc     BYTEA NOT NULL,  -- AES-GCM: nonce(12B) || ciphertext || tag(16B)
     api_key_hash    VARCHAR(64) NOT NULL,  -- SHA-256 hash，用于"是否变更"判断
+    api_key_masked  VARCHAR(32) NOT NULL DEFAULT '',  -- 脱敏展示（create/update 时计算，list/get 不解密）
     extra_config    JSONB NOT NULL DEFAULT '{}',
     created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
