@@ -161,3 +161,208 @@ CREATE UNIQUE INDEX uq_worktrees_active_branch
 CREATE UNIQUE INDEX uq_worktrees_active_task
     ON worktrees (task_id)
     WHERE task_id IS NOT NULL AND status != 'archived';
+-- Orbion Agent Runtime 重构 迁移脚本
+-- 新增 8 张表 + event_log 加 payload_ref_url 字段
+-- 对应实施计划 1.11-mvp-agent-runtime-refactor-impl-plan.md 步骤 1
+
+-- 0. event_log 加 payload_ref_url 字段（L2 对象存储引用，AR-1.7）
+ALTER TABLE event_log ADD COLUMN payload_ref_url VARCHAR NULL;
+COMMENT ON COLUMN event_log.payload_ref_url IS 'L2 对象存储引用，>4KB payload 写入对象存储后指向 s3://orbion-events/{event_id}/{field}';
+
+-- 1. user_models — 用户接入的模型实例（AR-1.1）
+CREATE TABLE user_models (
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id         UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    model_id        VARCHAR(64) NOT NULL,  -- 用户自定义友好名（如"我的 GLM-4"）
+    provider        VARCHAR(32) NOT NULL CHECK (provider IN ('openai', 'anthropic', 'azure_openai', 'openai_compat')),
+    model_name      VARCHAR(128) NOT NULL,  -- 供方原始名（如 gpt-4o, claude-sonnet-4-6）
+    base_url        VARCHAR(256) NOT NULL,
+    api_key_enc     BYTEA NOT NULL,  -- AES-GCM: nonce(12B) || ciphertext || tag(16B)
+    api_key_hash    VARCHAR(64) NOT NULL,  -- SHA-256 hash，用于"是否变更"判断
+    extra_config    JSONB NOT NULL DEFAULT '{}',
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CONSTRAINT user_models_user_model_unique UNIQUE (user_id, model_id)
+);
+
+CREATE INDEX idx_user_models_user ON user_models (user_id);
+
+-- 2. artifacts — 产出物元数据（AR-1.1, AR-1.2）
+CREATE TABLE artifacts (
+    id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    project_id          UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    type                VARCHAR(32) NOT NULL CHECK (type IN ('requirement', 'system', 'subsystem', 'module')),
+    owner_user_id       UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    status              VARCHAR(32) NOT NULL DEFAULT 'draft'
+        CHECK (status IN ('draft', 'proposed', 'approved', 'rejected')),
+    version             INTEGER NOT NULL DEFAULT 1,
+    based_on_artifacts  JSONB NOT NULL DEFAULT '[]',  -- [{"artifact_id": "...", "version": N}]
+    content_ref         VARCHAR(512) NOT NULL,  -- git 文件路径
+    produced_by_task    UUID NULL,  -- FK 在 tasks 表创建后用 ALTER TABLE 添加（见下文）
+    generated_by_model  VARCHAR(64) NULL,
+    status_changed_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    status_changed_by   UUID NULL,
+    last_reminded_at    TIMESTAMPTZ NULL,
+    created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at          TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX idx_artifacts_project_type_status ON artifacts (project_id, type, status);
+CREATE INDEX idx_artifacts_owner ON artifacts (owner_user_id);
+CREATE INDEX idx_artifacts_produced_by_task ON artifacts (produced_by_task) WHERE produced_by_task IS NOT NULL;
+CREATE INDEX idx_artifacts_based_on_gin ON artifacts USING GIN (based_on_artifacts);
+
+-- 3. tasks — 任务工作单元（AR-1.1）
+CREATE TABLE tasks (
+    id                      UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    project_id              UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    type                    VARCHAR(16) NOT NULL CHECK (type IN ('analysis', 'design', 'development')),
+    status                  VARCHAR(16) NOT NULL DEFAULT 'pending'
+        CHECK (status IN ('pending', 'running', 'paused', 'completed', 'timeout', 'cancelled')),
+    owner_user_id           UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    instruction             TEXT NOT NULL,
+    based_on_artifacts      JSONB NOT NULL DEFAULT '[]',
+    based_on_tasks          JSONB NOT NULL DEFAULT '[]',
+    output_artifact_id      UUID NULL,
+    worktree_id             UUID NULL,  -- FK 在下方用 ALTER TABLE 添加（worktrees 表已存在于 001）
+    agent_type              VARCHAR(32) NOT NULL,
+    priority                INTEGER NULL,
+    due_date                TIMESTAMPTZ NULL,
+    revision_count          INTEGER NOT NULL DEFAULT 0,
+    conflict_regen_count    INTEGER NOT NULL DEFAULT 0,
+    created_at              TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    started_at              TIMESTAMPTZ NULL,
+    completed_at            TIMESTAMPTZ NULL,
+    updated_at              TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX idx_tasks_project_status_priority ON tasks (project_id, status, priority);
+CREATE INDEX idx_tasks_owner ON tasks (owner_user_id);
+CREATE INDEX idx_tasks_based_on_artifacts ON tasks (based_on_artifacts);
+CREATE INDEX idx_tasks_based_on_tasks_gin ON tasks USING GIN (based_on_tasks);
+
+-- 4. agent_runs — 执行记录（AR-1.1, AR-1.3, AR-1.4）
+CREATE TABLE agent_runs (
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    project_id      UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    run_kind        VARCHAR(16) NOT NULL CHECK (run_kind IN ('dispatch', 'chat', 'critic', 'lightweight')),
+    agent_type      VARCHAR(32) NOT NULL,
+    event_id        UUID NULL,
+    task_id         UUID NULL,
+    artifact_id     UUID NULL,
+    user_id         UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    model_id        VARCHAR(64) NOT NULL,
+    status          VARCHAR(16) NOT NULL DEFAULT 'running'
+        CHECK (status IN ('running', 'completed', 'failed', 'cancelled', 'interrupted')),
+    cancel_reason   VARCHAR(32) NULL
+        CHECK (cancel_reason IS NULL OR cancel_reason IN ('user_cancel', 'timeout', 'system_shutdown', 'crash_recovery')),
+    started_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    ended_at        TIMESTAMPTZ NULL,
+    token_total     INTEGER NOT NULL DEFAULT 0,
+    error_message   TEXT NULL,
+    trace_id        VARCHAR(64) NULL
+);
+
+CREATE INDEX idx_agent_runs_project_status_started ON agent_runs (project_id, status, started_at);
+CREATE INDEX idx_agent_runs_user_started ON agent_runs (user_id, started_at);
+CREATE INDEX idx_agent_runs_task_status ON agent_runs (task_id, status) WHERE task_id IS NOT NULL;
+-- 幂等键：同一事件 + 同一 agent 只能创建一个 run
+CREATE UNIQUE INDEX agent_runs_event_agent_unique ON agent_runs (event_id, agent_type) WHERE event_id IS NOT NULL;
+-- 同 task 串行化：同 task 只能有一个 running
+-- NULL task_id 不受约束（chat/lightweight run 无 task，可并发运行）
+CREATE UNIQUE INDEX agent_runs_task_running_idx ON agent_runs (task_id) WHERE status = 'running';
+
+-- 补充 FK 约束（tasks 表已创建，artifacts.produced_by_task 和 tasks.worktree_id 后置添加）
+ALTER TABLE artifacts ADD CONSTRAINT artifacts_produced_by_task_fk
+    FOREIGN KEY (produced_by_task) REFERENCES tasks(id) ON DELETE SET NULL;
+ALTER TABLE tasks ADD CONSTRAINT tasks_worktree_id_fk
+    FOREIGN KEY (worktree_id) REFERENCES worktrees(id) ON DELETE SET NULL;
+
+-- 5. model_usage_details — token 明细（热数据，AR-1.1）
+CREATE TABLE model_usage_details (
+    id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id             UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    model_id            VARCHAR(64) NOT NULL,
+    agent_type          VARCHAR(32) NOT NULL,
+    project_id          UUID NULL,
+    thread_id           UUID NULL,
+    input_tokens        INTEGER NOT NULL DEFAULT 0,
+    output_tokens       INTEGER NOT NULL DEFAULT 0,
+    cache_hit_tokens    INTEGER NOT NULL DEFAULT 0,
+    latency_ms          INTEGER NOT NULL DEFAULT 0,
+    status              VARCHAR(16) NOT NULL CHECK (status IN ('success', 'error')),
+    error_message       TEXT NULL,
+    created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX idx_model_usage_details_user_created ON model_usage_details (user_id, created_at);
+CREATE INDEX idx_model_usage_details_user_model_created ON model_usage_details (user_id, model_id, created_at);
+
+-- 6. model_usage_daily — 按天聚合（AR-1.1, AR-1.5）
+CREATE TABLE model_usage_daily (
+    user_id                 UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    model_id                VARCHAR(64) NOT NULL,
+    agent_type              VARCHAR(32) NOT NULL,
+    date                    DATE NOT NULL,
+    call_count              INTEGER NOT NULL DEFAULT 0,
+    input_tokens_sum        BIGINT NOT NULL DEFAULT 0,
+    output_tokens_sum       BIGINT NOT NULL DEFAULT 0,
+    cache_hit_tokens_sum    BIGINT NOT NULL DEFAULT 0,
+    latency_avg_ms          INTEGER NOT NULL DEFAULT 0,
+    error_count             INTEGER NOT NULL DEFAULT 0,
+    updated_at              TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CONSTRAINT model_usage_daily_unique UNIQUE (user_id, model_id, agent_type, date)
+);
+
+-- 7. model_usage_archive — 30 天前明细压缩包（AR-1.1, AR-1.6）
+CREATE TABLE model_usage_archive (
+    user_id         UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    date            DATE NOT NULL,
+    compressed_data BYTEA NOT NULL,  -- gzip + MessagePack
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CONSTRAINT model_usage_archive_unique UNIQUE (user_id, date)
+);
+
+-- 8. skill_calls — Skill 调用审计（AR-1.1）
+CREATE TABLE skill_calls (
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    run_id          UUID NOT NULL REFERENCES agent_runs(id) ON DELETE CASCADE,
+    skill_id        VARCHAR(64) NOT NULL,
+    params          JSONB NOT NULL DEFAULT '{}',
+    result_summary  TEXT NULL,
+    risk_level      VARCHAR(8) NOT NULL CHECK (risk_level IN ('low', 'medium', 'high')),
+    user_approved_at TIMESTAMPTZ NULL,
+    status          VARCHAR(16) NOT NULL CHECK (status IN ('success', 'failed', 'forbidden')),
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX idx_skill_calls_run ON skill_calls (run_id);
+
+-- 9. outbox_events — Outbox 模式事件发布（AR-1.1）
+CREATE TABLE outbox_events (
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    event_id        UUID NOT NULL UNIQUE,
+    event_type      VARCHAR(64) NOT NULL,
+    payload         JSONB NOT NULL DEFAULT '{}',
+    status          VARCHAR(16) NOT NULL DEFAULT 'pending'
+        CHECK (status IN ('pending', 'processed', 'dead_lettered')),
+    retry_count     INTEGER NOT NULL DEFAULT 0,
+    next_retry_at   TIMESTAMPTZ NULL,
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    processed_at    TIMESTAMPTZ NULL
+);
+
+CREATE INDEX idx_outbox_events_status_retry ON outbox_events (status, next_retry_at) WHERE status = 'pending';
+
+-- 10. dead_letter_events — 死信队列（AR-1.1）
+CREATE TABLE dead_letter_events (
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    event_id        UUID NOT NULL,
+    event_type      VARCHAR(64) NOT NULL,
+    payload         JSONB NOT NULL DEFAULT '{}',
+    error_message   TEXT NOT NULL,
+    retry_count     INTEGER NOT NULL,
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX idx_dead_letter_events_event ON dead_letter_events (event_id);
