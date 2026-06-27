@@ -39,3 +39,5 @@ pgdata_staging/
 .superpowers/
 temp/
 .VSCodeCounter
+
+docs/superpowers
