@@ -22,6 +22,7 @@ services:
     build: .
     environment:
       ORBION_JWT_SECRET: orbion-dev-secret
+      ORBION_ENCRYPTION_KEY: b3JiaW9uLXN0YWdpbmctZW5jcnlwdGlvbi1rZXktMzI=
       ORBION_ANTHROPIC_API_KEY: ${ORBION_ANTHROPIC_API_KEY:-}
       ORBION_POSTGRES__PASSWORD: orbion_dev
       ORBION_POSTGRES__HOST: postgres
