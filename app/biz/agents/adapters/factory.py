@@ -34,12 +34,17 @@ logger = logging.getLogger(__name__)
 class UserModelProtocol(Protocol):
     """UserModel 鸭子类型接口（避免 Adapter 层反向依赖 UserModel ORM 模型）。
 
-    AdapterFactory 只用这三个字段做缓存键与失效判定；_build 子类按需访问更多字段。
+    AdapterFactory 用 user_id / model_id / api_key_hash 做缓存键与失效判定；
+    _build 子类访问 provider / model_name / base_url / api_key_enc 构造 Adapter。
     """
 
     user_id: UUID
     model_id: str
     api_key_hash: str
+    provider: str
+    model_name: str
+    base_url: str | None
+    api_key_enc: bytes
 
 
 class _CacheEntry:

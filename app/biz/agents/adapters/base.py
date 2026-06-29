@@ -72,6 +72,10 @@ class BaseAdapter:
     def __init__(self, model_name: str) -> None:
         self._model_name = model_name
 
+    @property
+    def model_name(self) -> str:
+        return self._model_name
+
     async def complete(self, prompt: PromptInput) -> ModelOutput:
         text_parts: list[str] = []
         usage: UsageInfo | None = None

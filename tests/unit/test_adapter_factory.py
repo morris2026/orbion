@@ -43,6 +43,7 @@ class FakeUserModel:
     provider: str = "openai"
     model_name: str = "gpt-4o"
     base_url: str | None = None
+    api_key_enc: bytes = b""
 
 
 class FakeAdapterFactory(AdapterFactory):
