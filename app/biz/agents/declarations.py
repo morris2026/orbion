@@ -2,7 +2,7 @@
 
 from pydantic import BaseModel
 
-from app.biz.agents.adapters.base import ModelConfig
+from app.biz.agents.adapters._legacy.base import ModelConfig
 from app.biz.agents.skills import SkillDeclaration
 
 

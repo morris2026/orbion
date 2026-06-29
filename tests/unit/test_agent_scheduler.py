@@ -5,7 +5,7 @@ from typing import Any
 
 import pytest
 
-from app.biz.agents.adapters.base import ModelOutput, PromptInput
+from app.biz.agents.adapters._legacy.base import ModelOutput, PromptInput
 from app.biz.agents.declarations import DECOMPOSE_DECLARATION, EXECUTE_DECLARATION, SUMMARY_DECLARATION
 from app.biz.agents.runtime import AgentRuntime
 from app.biz.agents.scheduler import AgentScheduler

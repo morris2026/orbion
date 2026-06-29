@@ -5,8 +5,8 @@ from datetime import UTC, datetime
 from typing import Any, Literal
 from unittest.mock import AsyncMock
 
-from app.biz.agents.adapters.base import EventSummary, ModelConfig, ModelOutput, PromptInput
-from app.biz.agents.adapters.claude import ClaudeAdapter
+from app.biz.agents.adapters._legacy.base import EventSummary, ModelConfig, ModelOutput, PromptInput
+from app.biz.agents.adapters._legacy.claude import ClaudeAdapter
 from app.biz.agents.declarations import SUMMARY_DECLARATION
 from app.biz.agents.runtime import AgentRuntime
 from app.hub.events.bus import InProcessEventBus

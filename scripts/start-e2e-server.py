@@ -18,7 +18,7 @@ os.environ.setdefault("ORBION_ENCRYPTION_KEY", "YWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFh
 
 import asyncpg
 
-from app.biz.agents.adapters.base import ModelOutput, PromptInput
+from app.biz.agents.adapters._legacy.base import ModelOutput, PromptInput
 
 
 class TestModelAdapter:

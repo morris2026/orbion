@@ -5,7 +5,7 @@ from typing import Any
 import asyncpg
 from httpx import AsyncClient
 
-from app.biz.agents.adapters.base import ModelOutput, PromptInput
+from app.biz.agents.adapters._legacy.base import ModelOutput, PromptInput
 from app.config import get_settings
 from app.hub.auth.repository import UserRepositoryProvider
 from app.hub.auth.service import create_access_token, hash_password

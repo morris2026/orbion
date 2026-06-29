@@ -12,8 +12,8 @@ from app.biz.agent_models.routes import (
 from app.biz.agent_models.routes import (
     user_router as agent_model_user_router,
 )
-from app.biz.agents.adapters.base import ModelAdapter, ModelOutput, PromptInput
-from app.biz.agents.adapters.claude import ClaudeAdapter
+from app.biz.agents.adapters._legacy.base import ModelAdapter, ModelOutput, PromptInput
+from app.biz.agents.adapters._legacy.claude import ClaudeAdapter
 from app.biz.agents.declarations import BUILTIN_AGENT_DECLARATIONS
 from app.biz.agents.memory import AgentMemory
 from app.biz.agents.routes import router as agent_router

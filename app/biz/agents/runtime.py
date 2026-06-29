@@ -6,7 +6,7 @@ from collections import defaultdict
 from datetime import UTC, datetime
 from typing import Any
 
-from app.biz.agents.adapters.base import EventSummary, ModelAdapter, ModelOutput, PromptInput
+from app.biz.agents.adapters._legacy.base import EventSummary, ModelAdapter, ModelOutput, PromptInput
 from app.biz.agents.declarations import AgentDeclaration
 from app.biz.agents.memory import AgentMemory
 from app.hub.events.bus import EventBus

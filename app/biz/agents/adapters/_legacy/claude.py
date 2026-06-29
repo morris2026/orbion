@@ -5,7 +5,7 @@ from typing import Any, cast
 import anthropic
 from anthropic.types import MessageParam
 
-from app.biz.agents.adapters.base import ModelOutput, PromptInput
+from app.biz.agents.adapters._legacy.base import ModelOutput, PromptInput
 
 
 class ClaudeAdapter:
