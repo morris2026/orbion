@@ -1,5 +1,6 @@
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { FolderKanban, MessageCircleMore } from 'lucide-react'
+import { UserMenu } from '@/components/UserMenu'
 
 /** 自定义图标：台灯（lucide LampDesk 造型）+ 桌子，表示"工作台" */
 function WorkbenchIcon({ className }: { className?: string }) {
@@ -49,6 +50,14 @@ export function WorkspaceSidebar({ showLeft, showMiddle, showRight, onToggleLeft
   return (
     <TooltipProvider delay={300}>
       <div className="flex flex-col items-center gap-1 py-2 w-12 bg-muted/50 border-r" data-testid="workspace-sidebar">
+        {/* 顶部：Orbion 图标 */}
+        <div className="flex items-center justify-center h-10 w-10 mb-1" data-testid="sidebar-brand">
+          <div className="h-[22px] w-[22px] rounded bg-[#7c3aed] flex items-center justify-center text-white text-[13px] font-bold">
+            O
+          </div>
+        </div>
+
+        {/* 中间：栏切换图标 */}
         <Tooltip>
           <TooltipTrigger
             className={iconBtn}
@@ -87,6 +96,12 @@ export function WorkspaceSidebar({ showLeft, showMiddle, showRight, onToggleLeft
           </TooltipTrigger>
           <TooltipContent side="right">工作台</TooltipContent>
         </Tooltip>
+
+        {/* 底部：用户菜单 */}
+        <div className="flex-1" />
+        <div className="flex items-center justify-center h-10 w-10" data-testid="sidebar-user">
+          <UserMenu />
+        </div>
       </div>
     </TooltipProvider>
   )

@@ -7,35 +7,49 @@ global.ResizeObserver = class { observe() {} unobserve() {} disconnect() {} }
 Element.prototype.getAnimations = vi.fn().mockReturnValue([])
 
 import * as authModule from '@/lib/auth'
-import { TopBar } from '@/components/TopBar'
+import { WorkspaceSidebar } from '@/components/WorkspaceSidebar'
 
 function renderWithRouter(ui: React.ReactElement) {
   return render(<MemoryRouter>{ui}</MemoryRouter>)
 }
 
-describe('TopBar', () => {
+function renderSidebar() {
+  return renderWithRouter(
+    <WorkspaceSidebar
+      showLeft={true}
+      showMiddle={true}
+      showRight={true}
+      onToggleLeft={() => {}}
+      onToggleMiddle={() => {}}
+      onToggleRight={() => {}}
+    />,
+  )
+}
+
+describe('WorkspaceSidebar', () => {
   beforeEach(() => {
     vi.restoreAllMocks()
   })
 
-  it('渲染 Orbion 图标和名称', () => {
+  it('顶部渲染 Orbion 图标', () => {
     vi.spyOn(authModule, 'getUsername').mockReturnValue('testuser')
     vi.spyOn(authModule, 'getDisplayName').mockReturnValue(null)
     vi.spyOn(authModule, 'getIsAdmin').mockReturnValue(false)
 
-    renderWithRouter(<TopBar />)
+    renderSidebar()
 
-    expect(screen.getByText('Orbion')).toBeInTheDocument()
-    expect(screen.getByTestId('top-bar')).toBeInTheDocument()
+    expect(screen.getByTestId('sidebar-brand')).toBeInTheDocument()
+    expect(screen.getByText('O')).toBeInTheDocument()
   })
 
-  it('头像显示 display_name 首字母', () => {
+  it('底部渲染用户菜单头像（display_name 首字母）', () => {
     vi.spyOn(authModule, 'getUsername').mockReturnValue('testuser')
     vi.spyOn(authModule, 'getDisplayName').mockReturnValue('张三')
     vi.spyOn(authModule, 'getIsAdmin').mockReturnValue(false)
 
-    renderWithRouter(<TopBar />)
+    renderSidebar()
 
+    expect(screen.getByTestId('sidebar-user')).toBeInTheDocument()
     expect(screen.getByText('张')).toBeInTheDocument()
   })
 
@@ -44,7 +58,7 @@ describe('TopBar', () => {
     vi.spyOn(authModule, 'getDisplayName').mockReturnValue(null)
     vi.spyOn(authModule, 'getIsAdmin').mockReturnValue(false)
 
-    renderWithRouter(<TopBar />)
+    renderSidebar()
 
     expect(screen.getByText('A')).toBeInTheDocument()
   })
@@ -55,9 +69,8 @@ describe('TopBar', () => {
     vi.spyOn(authModule, 'getIsAdmin').mockReturnValue(true)
 
     // base-ui DropdownMenu 在 jsdom 中不渲染 popup，
-    // 但可以通过渲染 UserMenu 独立组件验证菜单项定义
-    // 此处验证 TopBar 渲染了头像按钮（admin 标识的 A）
-    renderWithRouter(<TopBar />)
+    // 此处验证 sidebar 渲染了头像按钮（admin 标识的 A）
+    renderSidebar()
 
     expect(screen.getByText('A')).toBeInTheDocument()
   })

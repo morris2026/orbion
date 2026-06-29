@@ -4,7 +4,6 @@ import { Group, Panel, Separator } from 'react-resizable-panels'
 import ProjectTree from '@/components/ProjectTree'
 import DiscussionPanel from '@/components/DiscussionPanel'
 import { RightPanelTabs } from '@/components/RightPanelTabs'
-import { TopBar } from '@/components/TopBar'
 import { WorkspaceSidebar } from '@/components/WorkspaceSidebar'
 import CreateProjectDialog from '@/components/CreateProjectDialog'
 import CreateThreadDialog from '@/components/CreateThreadDialog'
@@ -40,19 +39,17 @@ export default function Workspace({ workspaceOptions }: WorkspaceProps) {
   }
 
   return (
-    <div className="h-screen bg-background flex flex-col">
-      <TopBar />
-      <div className="flex-1 min-h-0 flex">
-        <WorkspaceSidebar
-          showLeft={showLeft}
-          showMiddle={showMiddle}
-          showRight={showRight}
-          onToggleLeft={() => setShowLeft((v) => !v)}
-          onToggleMiddle={() => setShowMiddle((v) => !v)}
-          onToggleRight={() => setShowRight((v) => !v)}
-        />
-        <Group orientation="horizontal" className="flex-1 min-h-0"
-          id="workspace-columns">
+    <div className="h-screen bg-background flex">
+      <WorkspaceSidebar
+        showLeft={showLeft}
+        showMiddle={showMiddle}
+        showRight={showRight}
+        onToggleLeft={() => setShowLeft((v) => !v)}
+        onToggleMiddle={() => setShowMiddle((v) => !v)}
+        onToggleRight={() => setShowRight((v) => !v)}
+      />
+      <Group orientation="horizontal" className="flex-1 min-h-0"
+        id="workspace-columns">
           {/* 左栏：项目树形导航 */}
           {showLeft && (
             <Panel id="workspace-left" minSize={256} defaultSize={256} maxSize={400}
@@ -134,8 +131,7 @@ export default function Workspace({ workspaceOptions }: WorkspaceProps) {
                 />
             </Panel>
           )}
-        </Group>
-      </div>
+      </Group>
 
       {/* Dialogs */}
       <CreateProjectDialog

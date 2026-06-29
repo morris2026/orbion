@@ -71,12 +71,12 @@ describe('App路由守卫', () => {
 
       // 等待工作区渲染
       await waitFor(() => {
-        expect(screen.getByTestId('top-bar')).toBeInTheDocument()
+        expect(screen.getByTestId('workspace-sidebar')).toBeInTheDocument()
       })
 
-      // 登出按钮已迁移到 TopBar 的 UserMenu 下拉菜单中
-      // 此处验证 Workspace 渲染成功且 TopBar 存在
-      // 登出的完整交互流程在 TopBar.test.tsx 中测试
+      // UserMenu 已迁移到 WorkspaceSidebar 底部
+      // 此处验证 Workspace 渲染成功且 sidebar 存在
+      // 登出的完整交互流程在 WorkspaceSidebar.test.tsx 中测试
       expect(authModule.getToken()).toBe(token)
     })
   })

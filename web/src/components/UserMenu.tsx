@@ -22,11 +22,11 @@ export function UserMenu() {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger aria-label="用户菜单" className="rounded-full outline-none focus-visible:ring-2 focus-visible:ring-primary">
-        <Avatar size="sm">
+        <Avatar size="default">
           <AvatarFallback className="text-xs">{fallback}</AvatarFallback>
         </Avatar>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-48">
+      <DropdownMenuContent align="start" className="w-48">
         {showName && (
           <>
             <div className="px-2 py-1.5">
