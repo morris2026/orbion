@@ -124,23 +124,26 @@ export default function DiscussionPanel({ messages, currentUserId, onSendMessage
           </div>
         )}
 
-        <div className="flex gap-2 items-stretch flex-1 min-h-0">
+        <div className="flex flex-col gap-2 flex-1 min-h-0">
           <textarea
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
             placeholder="输入消息，或 /summarize 请求总结..."
-            className="flex-1 px-3 py-2 text-sm border rounded-md bg-background resize-none focus:outline-none focus:ring-1 focus:ring-ring"
+            className="flex-1 min-h-20 px-3 py-2 text-sm border rounded-md bg-background resize-none focus:outline-none focus:ring-1 focus:ring-ring"
           />
-          <Button
-            variant="default"
-            size="sm"
-            onClick={handleSend}
-            disabled={!input.trim() || isOverLength}
-            className="self-end shrink-0"
-          >
-            发送
-          </Button>
+          <div className="flex items-center gap-2 shrink-0" data-testid="chat-input-toolbar">
+            {/* 工具按钮预留位置（左对齐，后续加入其他工具按钮） */}
+            <div className="flex-1" />
+            <Button
+              variant="default"
+              size="sm"
+              onClick={handleSend}
+              disabled={!input.trim() || isOverLength}
+            >
+              发送
+            </Button>
+          </div>
         </div>
       </Panel>
     </Group>
